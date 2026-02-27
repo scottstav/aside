@@ -147,6 +147,10 @@ int main(int argc, char *argv[])
     /* User scroll state: when true, auto-scroll-to-bottom is paused */
     bool user_scrolling = false;
 
+    /* Linger state: wait before starting fade after CMD_DONE */
+    uint64_t done_at = 0;        /* timestamp when CMD_DONE received, 0 = not waiting */
+    uint32_t linger_ms = 3000;   /* ms to wait after done before fading */
+
     while (!quit && !state.closed) {
         /* Only redraw when surface is visible and configured */
         if (state.needs_redraw && state.surface_visible && state.configured) {
@@ -168,8 +172,21 @@ int main(int argc, char *argv[])
 
         wl_display_flush(state.display);
 
-        /* Don't block if there's buffered socket data to drain */
-        int poll_timeout = socket_has_pending(&srv) ? 0 : -1;
+        /* Check linger timer: start fade after delay, unless pointer hovers */
+        if (done_at > 0 && !state.pointer_over) {
+            uint64_t now = anim_now_ms();
+            if (now - done_at >= linger_ms) {
+                done_at = 0;
+                anim_set_target(&fade_anim, 0.0, cfg.fade_duration);
+                ensure_timer(timer_fd, &timer_armed);
+                state.needs_redraw = true;
+            }
+        }
+
+        /* Don't block if there's buffered socket data to drain or linger pending */
+        int poll_timeout = socket_has_pending(&srv) ? 0
+                         : (done_at > 0) ? 100  /* poll frequently while lingering */
+                         : -1;
         if (poll(fds, nfds, poll_timeout) < 0) {
             if (quit || errno == EINTR)
                 break;
@@ -180,6 +197,14 @@ int main(int argc, char *argv[])
         if (fds[0].revents & POLLIN) {
             if (!wayland_dispatch(&state))
                 break;
+        }
+
+        /* --- Pointer hover pauses fade --- */
+        if (state.pointer_over && fade_anim.active && fade_anim.target < 0.5) {
+            /* Pause: snap opacity back to full, cancel the fade */
+            fade_anim.current = 1.0;
+            fade_anim.active = false;
+            state.needs_redraw = true;
         }
 
         /* --- Process user scroll input --- */
@@ -203,11 +228,12 @@ int main(int argc, char *argv[])
             /* If user scrolled away from bottom, pause auto-scroll */
             user_scrolling = (new_pos < max_scroll - 5.0);
 
-            /* If user scrolls during fade-out, cancel the fade */
+            /* If user scrolls during fade-out or linger, cancel it */
             if (fade_anim.active && fade_anim.target < 0.5) {
                 fade_anim.current = 1.0;
                 fade_anim.active = false;
             }
+            done_at = 0;
 
             state.needs_redraw = true;
         } else {
@@ -225,6 +251,7 @@ int main(int argc, char *argv[])
                 text_len = 0;
                 fade_anim.current = 1.0;
                 fade_anim.active = false;
+                done_at = 0;
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 user_scrolling = false;
@@ -240,6 +267,7 @@ int main(int argc, char *argv[])
                 text_len = 0;
                 fade_anim.current = 1.0;
                 fade_anim.active = false;
+                done_at = 0;
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 user_scrolling = false;
@@ -289,9 +317,10 @@ int main(int argc, char *argv[])
         case CMD_OPEN:
             text_buf[0] = '\0';
             text_len = 0;
-            /* Cancel fade, reset opacity */
+            /* Cancel fade/linger, reset opacity */
             fade_anim.current = 1.0;
             fade_anim.active = false;
+            done_at = 0;
             /* Reset scroll */
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
@@ -366,9 +395,8 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_DONE:
-            anim_set_target(&fade_anim, 0.0, cfg.fade_duration);
-            ensure_timer(timer_fd, &timer_armed);
-            state.needs_redraw = true;
+            /* Start linger period — fade begins after delay */
+            done_at = anim_now_ms();
             break;
 
         case CMD_CLEAR:
@@ -376,6 +404,7 @@ int main(int argc, char *argv[])
             text_len = 0;
             fade_anim.current = 1.0;
             fade_anim.active = false;
+            done_at = 0;
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
             user_scrolling = false;
