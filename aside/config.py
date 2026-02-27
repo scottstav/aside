@@ -1,0 +1,162 @@
+"""Configuration system — TOML loading, defaults, and XDG path resolution."""
+
+from __future__ import annotations
+
+import copy
+import os
+import tomllib
+from pathlib import Path
+from typing import Any
+
+# ---------------------------------------------------------------------------
+# Default configuration — every key the application understands.
+# ---------------------------------------------------------------------------
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    "model": {
+        "name": "anthropic/claude-sonnet-4-6",
+        "system_prompt": "",
+    },
+    "input": {
+        "terminal": "foot -e",
+    },
+    "voice": {
+        "enabled": False,
+        "wake_word_model": "",
+        "wake_word_threshold": 0.5,
+        "pre_roll_seconds": 0.5,
+        "stt_model": "base",
+        "stt_device": "cpu",
+        "smart_silence": True,
+        "silence_timeout": 2.5,
+        "no_speech_timeout": 3.0,
+        "force_send_phrases": ["send it", "that's it"],
+    },
+    "tts": {
+        "enabled": False,
+        "model": "af_heart",
+        "speed": 1.0,
+        "lang": "a",
+        "filter": {
+            "skip_code_blocks": True,
+            "skip_urls": True,
+        },
+    },
+    "overlay": {
+        "font": "Sans 13",
+        "width": 600,
+        "max_lines": 40,
+        "margin_top": 10,
+        "padding_x": 20,
+        "padding_y": 16,
+        "corner_radius": 12,
+        "border_width": 2,
+        "accent_height": 3,
+        "scroll_duration": 200,
+        "fade_duration": 400,
+        "colors": {
+            "background": "#1a1b26e6",
+            "foreground": "#c0caf5ff",
+            "border": "#414868ff",
+            "accent": "#7aa2f7ff",
+        },
+    },
+    "storage": {
+        "conversations_dir": "",
+        "archive_dir": "",
+    },
+    "plugins": {
+        "dirs": [],
+    },
+    "notifications": {
+        "reply_command": "",
+        "listen_command": "",
+    },
+    "status": {
+        "signal": 12,
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Deep merge
+# ---------------------------------------------------------------------------
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge *override* into a copy of *base*.
+
+    - Nested dicts are merged recursively.
+    - All other types are replaced by the override value.
+    - *base* is never mutated.
+    """
+    result = copy.deepcopy(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Config loading
+# ---------------------------------------------------------------------------
+
+
+def load_config(path: Path | str | None = None) -> dict[str, Any]:
+    """Load configuration from a TOML file and merge over defaults.
+
+    If *path* is ``None``, resolve via ``$XDG_CONFIG_HOME/aside/config.toml``
+    (falling back to ``~/.config/aside/config.toml``).  When the file does not
+    exist, the unmodified defaults are returned.
+    """
+    if path is None:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            config_dir = Path(xdg) / "aside"
+        else:
+            config_dir = Path.home() / ".config" / "aside"
+        path = config_dir / "config.toml"
+    else:
+        path = Path(path)
+
+    if not path.is_file():
+        return copy.deepcopy(DEFAULT_CONFIG)
+
+    with open(path, "rb") as fh:
+        user = tomllib.load(fh)
+
+    return _deep_merge(DEFAULT_CONFIG, user)
+
+
+# ---------------------------------------------------------------------------
+# XDG path resolution helpers
+# ---------------------------------------------------------------------------
+
+
+def resolve_state_dir(cfg: dict[str, Any]) -> Path:
+    """Return the aside state directory (``$XDG_STATE_HOME/aside``)."""
+    xdg = os.environ.get("XDG_STATE_HOME")
+    if xdg:
+        return Path(xdg) / "aside"
+    return Path.home() / ".local" / "state" / "aside"
+
+
+def resolve_conversations_dir(cfg: dict[str, Any]) -> Path:
+    """Return the conversations directory.
+
+    Uses ``cfg["storage"]["conversations_dir"]`` when set, otherwise
+    ``<state_dir>/conversations``.
+    """
+    custom = cfg.get("storage", {}).get("conversations_dir", "")
+    if custom:
+        return Path(custom)
+    return resolve_state_dir(cfg) / "conversations"
+
+
+def resolve_socket_path(name: str = "aside.sock") -> Path:
+    """Return the Unix socket path inside ``$XDG_RUNTIME_DIR``."""
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg:
+        return Path(xdg) / name
+    return Path(f"/run/user/{os.getuid()}") / name
