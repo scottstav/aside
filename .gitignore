@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+
+# C overlay build
+overlay/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
