@@ -263,12 +263,15 @@ def _overlay_close(sock: socket.socket | None) -> None:
 
 def notify(tag: str, text: str) -> None:
     """Fire-and-forget in-place notification update."""
-    subprocess.Popen(
-        ["notify-send", "-t", "0",
-         "-h", f"string:x-canonical-private-synchronous:{tag}",
-         "-a", "Aside", "Aside", text],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.Popen(
+            ["notify-send", "-t", "0",
+             "-h", f"string:x-canonical-private-synchronous:{tag}",
+             "-a", "Aside", "Aside", text],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        pass
 
 
 def notify_final(
