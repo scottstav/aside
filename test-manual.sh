@@ -66,18 +66,12 @@ sleep 12
 pause "2. Memory save + recall across conversations"
 
 # ─────────────────────────────────────────────────────────────────────
-header "3. Clipboard + cancel + rapid-fire"
-echo "Tests clipboard tool, then cancel, then rapid-fire query replacement."
+header "3. Cancel + rapid-fire"
+echo "Tests cancel mid-stream, then rapid-fire query replacement."
 echo -e "${YELLOW}Watch for:${NC}"
-echo "  - Clipboard: paste with Ctrl+V after first query"
 echo "  - Cancel: overlay dismissed mid-stream"
 echo "  - Rapid-fire: only the LAST query's answer shows"
 echo ""
-aside query "Copy 'clipboard-test-ok' to my clipboard using the clipboard tool."
-sleep 10
-echo "Try pasting (Ctrl+V) to verify clipboard. Then press any key."
-read -r -n1; echo ""
-
 echo "Sending long query, cancelling after 2s..."
 aside query "Count slowly from 1 to 100, one number per line." --new &
 sleep 2
@@ -91,7 +85,7 @@ aside query "Say only: SECOND" --new &
 sleep 0.3
 aside query "Say only: THIRD" --new
 sleep 12
-pause "3. Clipboard + cancel + rapid-fire"
+pause "3. Cancel + rapid-fire"
 
 # ─────────────────────────────────────────────────────────────────────
 header "4. Overlay interactions (scroll, click dismiss, right-click cancel)"
@@ -112,20 +106,17 @@ sleep 15
 pause "4. Scroll + left-click dismiss + right-click cancel"
 
 # ─────────────────────────────────────────────────────────────────────
-header "5. Screenshot + web search + fetch URL"
-echo "Plugin tests — each invokes an external tool."
+header "5. Shell tool edge cases"
+echo "More shell tool exercises."
 echo -e "${YELLOW}Watch for:${NC}"
-echo "  - Screenshot: LLM describes what it sees on your screen"
-echo "  - Web search: LLM searches and summarizes results"
-echo "  - Fetch URL: LLM fetches example.com and describes it"
+echo "  - LLM runs a command and reports output"
+echo "  - Unicode/special chars render correctly in overlay"
 echo ""
-aside query "Take a screenshot and describe what you see." --new
-sleep 18
-aside query "Search the web for 'Arch Linux' and give me one sentence." --new
-sleep 18
-aside query "Fetch https://example.com and summarize it in one sentence." --new
-sleep 18
-pause "5. Screenshot + web search + fetch URL"
+aside query "Use the shell tool to list files in /tmp and tell me how many there are." --new
+sleep 15
+aside query "List 3 animals with emoji. Use actual emoji characters." --new
+sleep 12
+pause "5. Shell tool + unicode rendering"
 
 # ─────────────────────────────────────────────────────────────────────
 header "6. Status + persistence + edge cases"
