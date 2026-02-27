@@ -1,0 +1,9 @@
+{
+    "custom/aside": {
+        "exec": "aside-status",
+        "return-type": "json",
+        "signal": 12,
+        "interval": "once",
+        "on-click": "aside-input"
+    }
+}
