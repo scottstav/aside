@@ -75,6 +75,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside status
     sub.add_parser("status", help="Print daemon status as JSON")
 
+    # aside daemon
+    sub.add_parser("daemon", help="Start the aside daemon (foreground)")
+
     return parser
 
 
@@ -121,6 +124,13 @@ def _cmd_status(args: argparse.Namespace) -> None:
     print(json.dumps(data, indent=2))
 
 
+def _cmd_daemon(args: argparse.Namespace) -> None:
+    """Start the aside daemon in the foreground."""
+    from aside.daemon import main as daemon_main
+
+    daemon_main()
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -130,6 +140,7 @@ _HANDLERS = {
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,
     "status": _cmd_status,
+    "daemon": _cmd_daemon,
 }
 
 
