@@ -25,6 +25,71 @@ from aside.state import ConversationStore, StatusState, UsageLog
 
 log = logging.getLogger("aside")
 
+# ---------------------------------------------------------------------------
+# API key caching — survive daemon restarts when env vars aren't re-set
+# ---------------------------------------------------------------------------
+
+# Env vars that may carry LLM API keys (LiteLLM convention).
+_API_KEY_VARS = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "MISTRAL_API_KEY",
+    "COHERE_API_KEY",
+    "TOGETHER_API_KEY",
+    "DEEPSEEK_API_KEY",
+]
+
+
+def _api_key_cache_path() -> Path:
+    """Return path to the runtime API key cache (tmpfs, lost on reboot)."""
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    return Path(runtime_dir) / "aside-api-keys"
+
+
+def _cache_api_keys() -> None:
+    """Persist current API key env vars to a runtime cache file.
+
+    Only writes keys that are actually set.  The file is mode 0600 on tmpfs
+    (``/run/user/$UID``), so it's user-only and lost on reboot.
+    """
+    keys = {k: os.environ[k] for k in _API_KEY_VARS if k in os.environ}
+    if not keys:
+        return
+    cache = _api_key_cache_path()
+    try:
+        tmp = cache.with_suffix(".tmp")
+        tmp.write_text(json.dumps(keys))
+        tmp.chmod(0o600)
+        tmp.rename(cache)
+        log.info("Cached %d API key(s) to %s", len(keys), cache)
+    except OSError:
+        pass  # non-fatal
+
+
+def _restore_api_keys() -> None:
+    """Restore API keys from runtime cache into env vars if missing.
+
+    Only sets vars that aren't already in the environment, so explicit env
+    always wins.
+    """
+    cache = _api_key_cache_path()
+    if not cache.exists():
+        return
+    try:
+        keys = json.loads(cache.read_text())
+        restored = 0
+        for k, v in keys.items():
+            if k not in os.environ:
+                os.environ[k] = v
+                restored += 1
+        if restored:
+            log.info("Restored %d API key(s) from runtime cache", restored)
+    except (OSError, json.JSONDecodeError):
+        pass  # non-fatal
+
+
 # Try to import optional heavy dependencies.  These are kept at module level
 # so tests can mock them easily, but failures are deferred to __init__.
 try:
@@ -419,6 +484,8 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    _restore_api_keys()
+    _cache_api_keys()
     config = load_config()
     Daemon(config).run()
 

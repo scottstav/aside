@@ -659,6 +659,15 @@ def send_query(
 
         return conv["id"]
 
+    except litellm.exceptions.AuthenticationError as e:
+        log.error("Authentication error: %s", e)
+        _overlay_send(overlay_sock, {"cmd": "clear"})
+        _overlay_close(overlay_sock)
+        notify(tag, "API key missing or invalid — check env vars")
+        if tts is not None:
+            tts.stop()
+        store.save(conv)
+        return conv["id"]
     except litellm.exceptions.APIError as e:
         log.error("API error: %s", e)
         _overlay_send(overlay_sock, {"cmd": "clear"})

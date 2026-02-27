@@ -5,8 +5,9 @@ After=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/aside-overlay
-Restart=on-failure
-RestartSec=2
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=default.target
