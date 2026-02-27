@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "aside"
+version = "0.1.0"
+description = "Wayland-native LLM desktop assistant"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "litellm>=1.30.0",
+]
+
+[project.optional-dependencies]
+tts = ["kokoro>=0.9.4", "soundfile", "sounddevice"]
+voice = ["openwakeword==0.6.0", "faster-whisper==1.2.1", "webrtcvad==2.0.10", "numpy>=2.0", "pyyaml>=6.0"]
+gtk = ["PyGObject>=3.50"]
+
+[project.scripts]
+aside = "aside.cli:main"
+aside-input = "aside.input.window:main"
+aside-status = "aside.status:main"
