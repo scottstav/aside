@@ -7,7 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from aside.plugins import load_tools, run_tool
+from aside.plugins import clear_cache, load_tools, run_tool
+
+
+@pytest.fixture(autouse=True)
+def _clean_plugin_cache():
+    """Clear the module cache before each test."""
+    clear_cache()
+    yield
+    clear_cache()
 
 
 @pytest.fixture()

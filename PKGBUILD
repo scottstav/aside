@@ -35,7 +35,7 @@ optdepends=(
     'grim: screenshot plugin'
     'slurp: screenshot region selection'
 )
-source=("$pkgname-$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
