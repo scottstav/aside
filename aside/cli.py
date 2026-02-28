@@ -37,6 +37,26 @@ def _send(msg: dict) -> None:
         sock.close()
 
 
+def _resolve_conv_id(conv_dir, prefix: str) -> str:
+    """Resolve a conversation ID prefix to the full ID.
+
+    Accepts full UUIDs or short prefixes (e.g. 7-char from ``ls``).
+    Exits with an error if the prefix is ambiguous or not found.
+    """
+    exact = conv_dir / f"{prefix}.json"
+    if exact.exists():
+        return prefix
+
+    matches = [p.stem for p in conv_dir.glob(f"{prefix}*.json")]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        print(f"Error: ambiguous prefix '{prefix}' matches {len(matches)} conversations", file=sys.stderr)
+        sys.exit(1)
+    print(f"Error: conversation {prefix} not found", file=sys.stderr)
+    sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -156,15 +176,20 @@ def _cmd_reply(args: argparse.Namespace) -> None:
         print("Error: --gui and --mic are mutually exclusive", file=sys.stderr)
         sys.exit(1)
 
+    # Resolve prefix to full conversation ID
+    cfg = load_config()
+    conv_dir = resolve_conversations_dir(cfg)
+    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+
     if args.gui:
-        subprocess.Popen(["aside-input", "-c", args.conversation_id])
+        subprocess.Popen(["aside-input", "-c", full_id])
     elif args.mic:
-        _send({"action": "query", "conversation_id": args.conversation_id, "mic": True})
+        _send({"action": "query", "conversation_id": full_id, "mic": True})
     elif args.text:
-        _send({"action": "query", "text": args.text, "conversation_id": args.conversation_id})
+        _send({"action": "query", "text": args.text, "conversation_id": full_id})
     else:
         text = input(">>> ")
-        _send({"action": "query", "text": text, "conversation_id": args.conversation_id})
+        _send({"action": "query", "text": text, "conversation_id": full_id})
 
 
 def _cmd_cancel(args: argparse.Namespace) -> None:
@@ -279,10 +304,8 @@ def _cmd_show(args: argparse.Namespace) -> None:
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
 
-    conv_path = conv_dir / f"{args.conversation_id}.json"
-    if not conv_path.exists():
-        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
-        sys.exit(1)
+    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    conv_path = conv_dir / f"{full_id}.json"
 
     with open(conv_path) as f:
         conv = json.load(f)
@@ -322,15 +345,13 @@ def _cmd_open(args: argparse.Namespace) -> None:
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
 
-    conv_path = conv_dir / f"{args.conversation_id}.json"
-    if not conv_path.exists():
-        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
-        sys.exit(1)
+    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    conv_path = conv_dir / f"{full_id}.json"
 
     with open(conv_path) as f:
         conv = json.load(f)
 
-    conv_id = conv.get("id", args.conversation_id)
+    conv_id = conv.get("id", full_id)
     lines = [f"# Conversation {conv_id[:8]}", ""]
 
     for msg in conv.get("messages", []):
@@ -364,13 +385,11 @@ def _cmd_rm(args: argparse.Namespace) -> None:
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
 
-    conv_path = conv_dir / f"{args.conversation_id}.json"
-    if not conv_path.exists():
-        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
-        sys.exit(1)
+    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    conv_path = conv_dir / f"{full_id}.json"
 
     conv_path.unlink()
-    print(f"Deleted {args.conversation_id[:7]}")
+    print(f"Deleted {full_id[:7]}")
 
 
 def _cmd_daemon(args: argparse.Namespace) -> None:

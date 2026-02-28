@@ -949,10 +949,13 @@ class TestQueryCommand:
 class TestReplyCommand:
     """Test the reply subcommand that continues a conversation."""
 
-    def test_reply_text_sends_correct_json(self, monkeypatch):
+    def test_reply_text_sends_correct_json(self, monkeypatch, tmp_path):
         """reply ID TEXT should send a query with text and conversation_id."""
         sent = []
         monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+        # Create conversation file so prefix resolution succeeds
+        (tmp_path / "conv-42.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
@@ -969,10 +972,12 @@ class TestReplyCommand:
             "conversation_id": "conv-42",
         }
 
-    def test_reply_mic_sends_mic_flag(self, monkeypatch):
+    def test_reply_mic_sends_mic_flag(self, monkeypatch, tmp_path):
         """reply ID --mic should send mic:true with conversation_id."""
         sent = []
         monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+        (tmp_path / "conv-42.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
@@ -989,10 +994,12 @@ class TestReplyCommand:
             "mic": True,
         }
 
-    def test_reply_gui_launches_subprocess(self, monkeypatch):
+    def test_reply_gui_launches_subprocess(self, monkeypatch, tmp_path):
         """reply ID --gui should launch aside-input subprocess."""
         sent = []
         monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+        (tmp_path / "conv-42.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
@@ -1006,11 +1013,13 @@ class TestReplyCommand:
         mock_popen.assert_called_once_with(["aside-input", "-c", "conv-42"])
         assert len(sent) == 0  # no socket message sent
 
-    def test_reply_bare_prompts_for_input(self, monkeypatch):
+    def test_reply_bare_prompts_for_input(self, monkeypatch, tmp_path):
         """Bare 'aside reply ID' should prompt for text, then send it."""
         sent = []
         monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
         monkeypatch.setattr("builtins.input", lambda prompt: "typed reply")
+        (tmp_path / "conv-42.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
@@ -1057,10 +1066,12 @@ class TestReplyCommand:
         captured = capsys.readouterr()
         assert "mutually exclusive" in captured.err.lower() or "--mic" in captured.err
 
-    def test_reply_dispatch_via_main(self, monkeypatch):
+    def test_reply_dispatch_via_main(self, monkeypatch, tmp_path):
         """aside reply conv-42 'text' via main() should dispatch correctly."""
         sent = []
         monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+        (tmp_path / "conv-42.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         with mock.patch("sys.argv", ["aside", "reply", "conv-42", "hello again"]):
             main()
