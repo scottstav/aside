@@ -17,6 +17,7 @@ enum overlay_cmd {
 struct overlay_command {
     enum overlay_cmd cmd;
     char data[4096];
+    char conv_id[64];  /* Conversation ID from daemon */
 };
 
 struct socket_server {

@@ -16,6 +16,7 @@
 #include "animation.h"
 
 static volatile sig_atomic_t quit = 0;
+static char current_conv_id[64] = "";
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
 
@@ -315,6 +316,9 @@ int main(int argc, char *argv[])
 
         switch (cmd.cmd) {
         case CMD_OPEN:
+            strncpy(current_conv_id, cmd.conv_id,
+                    sizeof(current_conv_id) - 1);
+            current_conv_id[sizeof(current_conv_id) - 1] = '\0';
             text_buf[0] = '\0';
             text_len = 0;
             /* Cancel fade/linger, reset opacity */

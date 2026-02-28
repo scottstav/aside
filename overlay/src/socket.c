@@ -13,6 +13,7 @@ static bool parse_command(const char *line, struct overlay_command *cmd)
 {
     cmd->cmd = CMD_NONE;
     cmd->data[0] = '\0';
+    cmd->conv_id[0] = '\0';
 
     struct json_object *root = json_tokener_parse(line);
     if (!root)
@@ -37,6 +38,13 @@ static bool parse_command(const char *line, struct overlay_command *cmd)
         if (data_str)
             snprintf(cmd->data, sizeof(cmd->data), "%s", data_str);
     }
+
+    struct json_object *jid;
+    if (json_object_object_get_ex(root, "conv_id", &jid))
+        snprintf(cmd->conv_id, sizeof(cmd->conv_id), "%s",
+                 json_object_get_string(jid));
+    else
+        cmd->conv_id[0] = '\0';
 
     json_object_put(root);
     return cmd->cmd != CMD_NONE;
@@ -120,6 +128,7 @@ bool socket_process(struct socket_server *srv, struct pollfd *fds, int offset,
 {
     cmd->cmd = CMD_NONE;
     cmd->data[0] = '\0';
+    cmd->conv_id[0] = '\0';
 
     /* Check for new connection on listen fd */
     if (fds[offset].revents & POLLIN) {

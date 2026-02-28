@@ -16,6 +16,7 @@ from aside.query import (
     _build_system_prompt,
     _parse_tool_calls,
     notify_error,
+    send_query,
     stream_response,
 )
 
@@ -481,3 +482,49 @@ class TestNewConversation:
     def test_sentinel_identity(self):
         """Sentinel should be compared with `is`, not `==`."""
         assert NEW_CONVERSATION is NEW_CONVERSATION
+
+
+# ---------------------------------------------------------------------------
+# send_query — overlay open includes conv_id
+# ---------------------------------------------------------------------------
+
+
+class TestSendQueryOverlay:
+    @mock.patch("aside.query.litellm.completion")
+    @mock.patch("aside.query._connect_overlay")
+    def test_overlay_open_includes_conv_id(self, mock_connect, mock_completion):
+        """The open command sent to the overlay must include conv_id."""
+        mock_completion.return_value = iter([
+            _make_chunk(content="hi"),
+            _make_usage_chunk(10, 5),
+        ])
+
+        sent = []
+        mock_sock = mock.Mock()
+        mock_sock.sendall = lambda data: sent.append(
+            json.loads(data.decode().strip())
+        )
+        mock_connect.return_value = mock_sock
+
+        # Minimal store mock
+        store = mock.Mock()
+        conv = {"id": "abc-123-def", "messages": []}
+        store.get_or_create.return_value = conv
+
+        status = mock.Mock()
+        status.speak_enabled = False
+
+        usage_log = mock.Mock()
+
+        send_query(
+            text="hello",
+            conversation_id=NEW_CONVERSATION,
+            config={"model": {"name": "test-model"}},
+            store=store,
+            status=status,
+            usage_log=usage_log,
+        )
+
+        open_cmds = [m for m in sent if m.get("cmd") == "open"]
+        assert len(open_cmds) == 1
+        assert open_cmds[0]["conv_id"] == "abc-123-def"
