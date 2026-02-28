@@ -9,6 +9,9 @@ a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, a
 - **actions bar** — mic, transcript, and reply buttons after every response.
 - **input popup** — GTK4 window with conversation history. continue one or start fresh.
 
+
+Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query. 
+
 ## tools
 
 aside ships with shell, memory, and web search built in. drop a Python file with a `TOOL_SPEC` + `run()` into a plugins directory and the daemon picks it up automatically.
