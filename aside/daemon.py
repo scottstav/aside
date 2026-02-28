@@ -98,9 +98,9 @@ except ImportError:
     TTSPipeline = None  # type: ignore[misc,assignment]
 
 try:
-    from aside.voice.listener import VoiceListener
+    from aside.voice.listener import capture_one_shot
 except ImportError:
-    VoiceListener = None  # type: ignore[misc,assignment]
+    capture_one_shot = None  # type: ignore[misc,assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -208,23 +208,9 @@ class Daemon:
                 log.warning("TTS deps not installed — TTS disabled", exc_info=True)
                 self.tts = None
 
-        # Optional voice
-        self.voice = None
-        if config.get("voice", {}).get("enabled", False):
-            try:
-                if VoiceListener is None:
-                    raise ImportError("VoiceListener not available")
-                self.voice = VoiceListener(config["voice"])
-                log.info("Voice listener initialised")
-            except (ImportError, Exception):
-                log.warning("Voice deps not installed — voice disabled", exc_info=True)
-                self.voice = None
-
         # Query cancel state
         self._cancel_event: threading.Event | None = None
         self._cancel_lock = threading.Lock()
-        self._muted = False
-        self._mute_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Tool loading (lazy)
@@ -300,14 +286,6 @@ class Daemon:
                 log.info("No query to cancel")
 
     # ------------------------------------------------------------------
-    # Voice callback (invoked by VoiceListener after STT)
-    # ------------------------------------------------------------------
-
-    def _voice_query_callback(self, text: str, conversation_id: str | None) -> None:
-        """Called by VoiceListener when speech has been transcribed."""
-        self.start_query(text, conversation_id=conversation_id)
-
-    # ------------------------------------------------------------------
     # Socket handler
     # ------------------------------------------------------------------
 
@@ -330,34 +308,46 @@ class Daemon:
             action = msg.get("action")
 
             if action == "query":
-                text = msg.get("text", "").strip()
-                if not text:
-                    log.warning("Socket: empty query text")
-                else:
+                if msg.get("mic"):
+                    # One-shot voice capture in a thread (blocking call)
                     raw_conv = msg.get("conversation_id")
                     if raw_conv == "__new__":
                         conv_id = NEW_CONVERSATION
                     else:
                         conv_id = raw_conv
-                    self.start_query(
-                        text,
-                        conversation_id=conv_id,
-                        image=msg.get("image"),
-                        file=msg.get("file"),
-                    )
-                    log.info("Socket: query (conv=%s)", raw_conv or "auto")
 
-            elif action == "listen":
-                if self.voice is not None:
-                    self.voice.request_listen(
-                        conversation_id=msg.get("conversation_id"),
-                    )
-                    log.info(
-                        "Socket: listen (conv=%s)",
-                        msg.get("conversation_id") or "new",
-                    )
+                    def _mic_capture():
+                        try:
+                            if capture_one_shot is None:
+                                log.warning("Voice deps not installed -- mic capture unavailable")
+                                return
+                            text = capture_one_shot(self.config.get("voice", {}))
+                            if text:
+                                self.start_query(text, conversation_id=conv_id)
+                            else:
+                                log.info("Mic capture returned empty, no query started")
+                        except Exception:
+                            log.exception("Mic capture error")
+
+                    threading.Thread(target=_mic_capture, daemon=True).start()
+                    log.info("Socket: mic capture started (conv=%s)", raw_conv or "auto")
                 else:
-                    log.warning("Socket: listen requested but voice is disabled")
+                    text = msg.get("text", "").strip()
+                    if not text:
+                        log.warning("Socket: empty query text")
+                    else:
+                        raw_conv = msg.get("conversation_id")
+                        if raw_conv == "__new__":
+                            conv_id = NEW_CONVERSATION
+                        else:
+                            conv_id = raw_conv
+                        self.start_query(
+                            text,
+                            conversation_id=conv_id,
+                            image=msg.get("image"),
+                            file=msg.get("file"),
+                        )
+                        log.info("Socket: query (conv=%s)", raw_conv or "auto")
 
             elif action == "cancel":
                 self.cancel_query()
@@ -378,33 +368,6 @@ class Daemon:
                 else:
                     self.status.set_status("idle")
 
-            elif action == "mute":
-                if self.voice is not None:
-                    self.voice.set_muted(True)
-                with self._mute_lock:
-                    self._muted = True
-                log.info("Socket: mute")
-
-            elif action == "unmute":
-                if self.voice is not None:
-                    self.voice.set_muted(False)
-                with self._mute_lock:
-                    self._muted = False
-                log.info("Socket: unmute")
-
-            elif action == "toggle-mute":
-                with self._mute_lock:
-                    new_state = not self._muted
-                    self._muted = new_state
-                if self.voice is not None:
-                    self.voice.set_muted(new_state)
-                try:
-                    writer.write(json.dumps({"muted": new_state}).encode("utf-8"))
-                    await writer.drain()
-                except Exception:
-                    pass
-                log.info("Socket: toggle-mute -> %s", "muted" if new_state else "unmuted")
-
             else:
                 log.warning("Socket: unknown action %r", action)
 
@@ -424,7 +387,7 @@ class Daemon:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """Start the daemon: write overlay config, start socket server, optionally start voice."""
+        """Start the daemon: write overlay config, start socket server."""
         # Ensure state directories exist
         state_dir = resolve_state_dir(self.config)
         state_dir.mkdir(parents=True, exist_ok=True)
@@ -437,16 +400,6 @@ class Daemon:
             config_dir = Path.home() / ".config" / "aside"
         overlay_conf = config_dir / "overlay.conf"
         _write_overlay_config(self.config.get("overlay", {}), overlay_conf)
-
-        # Start voice listener in background thread if enabled
-        if self.voice is not None:
-            voice_thread = threading.Thread(
-                target=self.voice.run_wake_word_loop,
-                args=(self._voice_query_callback,),
-                daemon=True,
-            )
-            voice_thread.start()
-            log.info("Voice listener started in background thread")
 
         # Run the socket server on the main thread (asyncio)
         asyncio.run(self._run_socket_server())

@@ -22,8 +22,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "voice": {
         "enabled": False,
-        "wake_word_model": "",
-        "wake_word_threshold": 0.5,
         "pre_roll_seconds": 0.5,
         "stt_model": "base",
         "stt_device": "cpu",

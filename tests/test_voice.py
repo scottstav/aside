@@ -1,11 +1,12 @@
 """Tests for aside.voice -- voice input module.
 
-These tests exercise the pure-logic components (SpeechEndDetector,
-VoiceListener construction) without importing heavy ML dependencies
-(openwakeword, faster-whisper, webrtcvad).
+These tests exercise the pure-logic components (SpeechEndDetector)
+and the capture_one_shot function (with mocked audio/STT deps).
 """
 
+import sys
 from pathlib import Path
+from types import ModuleType
 from unittest import mock
 
 import pytest
@@ -197,123 +198,393 @@ class TestSpeechEndDetector:
 
 
 # ---------------------------------------------------------------------------
-# VoiceListener construction
+# capture_one_shot
 # ---------------------------------------------------------------------------
 
 
-class TestVoiceListenerConstruction:
-    """Verify VoiceListener can be built with a config dict.
+class TestCaptureOneShot:
+    """Verify capture_one_shot records, transcribes, and returns text.
 
-    These tests must NOT trigger import of heavy ML deps (openwakeword,
-    faster-whisper, webrtcvad) -- only the listener module itself.
+    All audio/STT deps are mocked -- these tests verify the control flow
+    without needing a real microphone, numpy, or Whisper model.
     """
 
     @pytest.fixture(autouse=True)
     def _load(self):
         self.mod = _import_listener()
-        self.VoiceListener = self.mod.VoiceListener
+        self.capture_one_shot = self.mod.capture_one_shot
 
     def _make_config(self, **overrides):
         cfg = {
-            "wake_word_model": "~/.local/share/models/hey_jarvis.onnx",
-            "wake_word_threshold": 0.6,
             "pre_roll_seconds": 0.5,
-            "stt_model": "small",
+            "stt_model": "base",
             "stt_device": "cpu",
             "smart_silence": True,
             "silence_timeout": 2.5,
             "no_speech_timeout": 3.0,
-            "force_send_phrases": ["send it"],
+            "force_send_phrases": [],
         }
         cfg.update(overrides)
         return cfg
 
-    def test_construction_stores_config(self):
-        cfg = self._make_config()
-        vl = self.VoiceListener(cfg)
-        assert vl._config is cfg
+    def test_capture_one_shot_is_importable(self):
+        """capture_one_shot should be importable from aside.voice.listener."""
+        from aside.voice.listener import capture_one_shot as fn
+        assert callable(fn)
 
-    def test_whisper_config_from_voice_config(self):
-        cfg = self._make_config(stt_model="large", stt_device="cuda")
-        vl = self.VoiceListener(cfg)
-        assert vl._whisper_config == {"model": "large", "device": "cuda"}
+    def test_capture_one_shot_calls_audio_start_stop(self):
+        """capture_one_shot should start and stop the audio pipeline."""
+        mock_audio = mock.MagicMock()
 
-    def test_components_not_loaded_at_construction(self):
-        """Heavy deps should be lazy-loaded, not at __init__ time."""
-        cfg = self._make_config()
-        vl = self.VoiceListener(cfg)
-        assert vl._audio is None
-        assert vl._wake_word is None
-        assert vl._detector is None
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock.MagicMock(
+                        AudioPipeline=mock.MagicMock(return_value=mock_audio),
+                        RATE=16000,
+                        VAD_FRAME_MS=30,
+                    ),
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                    "aside.voice.stt": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(
+                self.mod, "_do_capture", return_value="test"
+            ),
+        ):
+            result = self.mod.capture_one_shot(self._make_config())
 
-    def test_request_listen(self):
-        cfg = self._make_config()
-        vl = self.VoiceListener(cfg)
-        vl.request_listen("conv-123")
-        req = vl._check_listen_request()
-        assert req == {"conversation_id": "conv-123"}
+        assert result == "test"
+        mock_audio.start.assert_called_once()
+        mock_audio.stop.assert_called_once()
 
-    def test_request_listen_consumed(self):
-        cfg = self._make_config()
-        vl = self.VoiceListener(cfg)
-        vl.request_listen("conv-123")
-        vl._check_listen_request()
-        assert vl._check_listen_request() is None
+    def test_capture_one_shot_stops_audio_on_exception(self):
+        """Audio pipeline should be stopped even if _do_capture raises."""
+        mock_audio = mock.MagicMock()
 
-    def test_set_muted(self):
-        cfg = self._make_config()
-        vl = self.VoiceListener(cfg)
-        assert vl._muted is False
-        vl.set_muted(True)
-        assert vl._muted is True
-        vl.set_muted(False)
-        assert vl._muted is False
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock.MagicMock(
+                        AudioPipeline=mock.MagicMock(return_value=mock_audio),
+                        RATE=16000,
+                        VAD_FRAME_MS=30,
+                    ),
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                    "aside.voice.stt": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(
+                self.mod, "_do_capture",
+                side_effect=RuntimeError("boom"),
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            self.mod.capture_one_shot(self._make_config())
 
-    def test_default_stt_values(self):
-        """Config with no stt_model/stt_device uses defaults."""
-        cfg = {"wake_word_model": "/some/model.onnx"}
-        vl = self.VoiceListener(cfg)
-        assert vl._whisper_config == {"model": "base", "device": "cpu"}
+        mock_audio.start.assert_called_once()
+        mock_audio.stop.assert_called_once()
 
+    def test_do_capture_returns_text_on_silence_timeout(self):
+        """_do_capture should return transcribed text when silence timeout fires."""
+        # Create mock objects for audio and detector
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.return_value = (b"\x00" * 960, False)
 
-# ---------------------------------------------------------------------------
-# Notification helpers
-# ---------------------------------------------------------------------------
+        # Mock get_captured_audio to return a mock with len > 0
+        mock_captured = mock.MagicMock()
+        mock_captured.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.get_captured_audio.return_value = mock_captured
 
+        # Mock end_capture to return something with len >= RATE * 0.3
+        mock_final = mock.MagicMock()
+        mock_final.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.end_capture.return_value = mock_final
 
-class TestNotificationHelpers:
-    """Verify notification functions call notify-send correctly."""
+        mock_detector = mock.MagicMock()
+        mock_detector.is_done.return_value = True  # silence timeout immediately
+        mock_detector.check_force_send.return_value = None
 
-    @pytest.fixture(autouse=True)
-    def _load(self):
-        self.mod = _import_listener()
+        # Mock time and transcribe
+        call_count = [0]
 
-    @mock.patch("subprocess.Popen")
-    def test_notify_listening(self, mock_popen):
-        self.mod.notify_listening()
-        mock_popen.assert_called_once()
-        args = mock_popen.call_args[0][0]
-        assert "notify-send" in args
-        assert "Listening..." in args
-        assert "aside-voice" in " ".join(args)
+        def fake_monotonic():
+            call_count[0] += 1
+            return 100.0 + call_count[0] * 0.03
 
-    @mock.patch("subprocess.Popen")
-    def test_notify_transcription(self, mock_popen):
-        self.mod.notify_transcription("hello world")
-        args = mock_popen.call_args[0][0]
-        assert "hello world" in args
+        # Create mock modules for the lazy imports inside _do_capture
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
 
-    @mock.patch("subprocess.Popen")
-    def test_notify_transcription_fallback(self, mock_popen):
-        self.mod.notify_transcription(None)
-        args = mock_popen.call_args[0][0]
-        assert "Listening..." in args
+        mock_stt_mod = mock.MagicMock()
+        mock_stt_mod.transcribe.return_value = "hello world"
 
-    @mock.patch("subprocess.Popen")
-    def test_notify_dismiss(self, mock_popen):
-        self.mod.notify_dismiss()
-        mock_popen.assert_called_once()
-        args = mock_popen.call_args[0][0]
-        assert "-t" in args
-        idx = args.index("-t")
-        assert args[idx + 1] == "1"
+        mock_sed_mod = mock.MagicMock()
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock_stt_mod,
+                    "aside.voice.speech_detector": mock_sed_mod,
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = fake_monotonic
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(),
+            )
+
+        assert result == "hello world"
+
+    def test_do_capture_returns_empty_on_no_speech(self):
+        """_do_capture should return '' when no speech before timeout."""
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.return_value = (b"\x00" * 960, False)
+
+        mock_captured = mock.MagicMock()
+        mock_captured.__len__ = mock.MagicMock(return_value=4800)
+        mock_audio.get_captured_audio.return_value = mock_captured
+        mock_audio.end_capture.return_value = mock.MagicMock()
+
+        mock_detector = mock.MagicMock()
+        mock_detector.is_done.return_value = False
+        mock_detector.check_force_send.return_value = None
+
+        # Time: after first 2s window, jump past no_speech_timeout
+        times = iter([0.0, 0.0] + [3.1] * 100)
+
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
+
+        mock_stt_mod = mock.MagicMock()
+        mock_stt_mod.transcribe.return_value = ""  # no speech detected
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock_stt_mod,
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = mock.MagicMock(side_effect=times)
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(no_speech_timeout=3.0),
+            )
+
+        assert result == ""
+
+    def test_do_capture_returns_empty_on_short_audio(self):
+        """Audio shorter than 0.3s should be discarded and return ''."""
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.return_value = (b"\x00" * 960, True)
+
+        mock_captured = mock.MagicMock()
+        mock_captured.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.get_captured_audio.return_value = mock_captured
+
+        # end_capture returns audio shorter than RATE * 0.3 = 4800
+        mock_final = mock.MagicMock()
+        mock_final.__len__ = mock.MagicMock(return_value=100)
+        mock_audio.end_capture.return_value = mock_final
+
+        mock_detector = mock.MagicMock()
+        mock_detector.is_done.return_value = True
+        mock_detector.check_force_send.return_value = None
+
+        call_count = [0]
+
+        def fake_monotonic():
+            call_count[0] += 1
+            return 100.0 + call_count[0] * 0.03
+
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
+
+        mock_stt_mod = mock.MagicMock()
+        mock_stt_mod.transcribe.return_value = "hello"
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock_stt_mod,
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = fake_monotonic
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(),
+            )
+
+        assert result == ""
+
+    def test_do_capture_returns_empty_on_exception(self):
+        """If an exception occurs during frame reading, return ''."""
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.side_effect = IOError("stream ended")
+        mock_audio.end_capture = mock.MagicMock()
+
+        mock_detector = mock.MagicMock()
+
+        call_count = [0]
+
+        def fake_monotonic():
+            call_count[0] += 1
+            return 100.0 + call_count[0] * 0.03
+
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock.MagicMock(),
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = fake_monotonic
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(),
+            )
+
+        assert result == ""
+        mock_audio.end_capture.assert_called_once()
+
+    def test_do_capture_force_send_returns_stripped_text(self):
+        """When force-send phrase detected, return text with phrase stripped."""
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.return_value = (b"\x00" * 960, True)
+
+        mock_captured = mock.MagicMock()
+        mock_captured.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.get_captured_audio.return_value = mock_captured
+
+        mock_final = mock.MagicMock()
+        mock_final.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.end_capture.return_value = mock_final
+
+        mock_detector = mock.MagicMock()
+        mock_detector.is_done.return_value = False
+        mock_detector.check_force_send.return_value = "send it"
+
+        call_count = [0]
+
+        def fake_monotonic():
+            call_count[0] += 1
+            return 100.0 + call_count[0] * 0.03
+
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
+
+        mock_stt_mod = mock.MagicMock()
+        mock_stt_mod.transcribe.return_value = "what is the weather send it"
+
+        mock_sed_mod = mock.MagicMock()
+        mock_sed_class = mock.MagicMock()
+        mock_sed_class.strip_force_phrase.return_value = "what is the weather"
+        mock_sed_mod.SpeechEndDetector = mock_sed_class
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock_stt_mod,
+                    "aside.voice.speech_detector": mock_sed_mod,
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = fake_monotonic
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(force_send_phrases=["send it"]),
+            )
+
+        assert result == "what is the weather"
+
+    def test_do_capture_empty_transcription_returns_empty(self):
+        """If final transcription is empty/whitespace, return ''."""
+        mock_audio = mock.MagicMock()
+        mock_audio.read_vad_frame.return_value = (b"\x00" * 960, True)
+
+        mock_captured = mock.MagicMock()
+        mock_captured.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.get_captured_audio.return_value = mock_captured
+
+        mock_final = mock.MagicMock()
+        mock_final.__len__ = mock.MagicMock(return_value=8000)
+        mock_audio.end_capture.return_value = mock_final
+
+        mock_detector = mock.MagicMock()
+        mock_detector.is_done.return_value = True
+        mock_detector.check_force_send.return_value = None
+
+        call_count = [0]
+
+        def fake_monotonic():
+            call_count[0] += 1
+            return 100.0 + call_count[0] * 0.03
+
+        mock_audio_mod = mock.MagicMock()
+        mock_audio_mod.RATE = 16000
+        mock_audio_mod.VAD_FRAME_MS = 30
+
+        mock_stt_mod = mock.MagicMock()
+        mock_stt_mod.transcribe.return_value = "   "  # whitespace only
+
+        with (
+            mock.patch.dict(
+                "sys.modules",
+                {
+                    "aside.voice.audio": mock_audio_mod,
+                    "aside.voice.stt": mock_stt_mod,
+                    "aside.voice.speech_detector": mock.MagicMock(),
+                },
+            ),
+            mock.patch.object(self.mod, "time") as mock_time,
+        ):
+            mock_time.monotonic = fake_monotonic
+            result = self.mod._do_capture(
+                mock_audio,
+                mock_detector,
+                {"model": "base", "device": "cpu"},
+                self._make_config(),
+            )
+
+        assert result == ""

@@ -119,25 +119,7 @@ class TestDaemonConstruction:
         assert d.store is not None
         assert d.usage_log is not None
         assert d.status is not None
-        assert d.voice is None  # voice disabled by default
         assert d.tts is None  # TTS disabled by default
-
-    def test_construct_with_voice_disabled(self, minimal_config, tmp_path):
-        """Voice should be None when config says disabled."""
-        minimal_config["voice"]["enabled"] = False
-        with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
-                d = Daemon(minimal_config)
-        assert d.voice is None
-
-    def test_construct_with_voice_enabled_import_error(self, minimal_config, tmp_path):
-        """Daemon should gracefully handle missing voice deps."""
-        minimal_config["voice"]["enabled"] = True
-        with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
-                with mock.patch("aside.daemon.VoiceListener", side_effect=ImportError("no voice deps")):
-                    d = Daemon(minimal_config)
-        assert d.voice is None
 
     def test_construct_with_tts_enabled_import_error(self, minimal_config, tmp_path):
         """Daemon should handle missing TTS deps gracefully."""
@@ -304,28 +286,38 @@ class TestCommandParsing:
             self._run_command(d, {"action": "cancel"})
         mock_cancel.assert_called_once()
 
-    def test_listen_command(self, minimal_config, tmp_path):
+    def test_query_mic_starts_capture_thread(self, minimal_config, tmp_path):
+        """query with mic:true should spawn a capture thread."""
         d = self._make_daemon(minimal_config, tmp_path)
-        # Voice is None (disabled), so listen should be a no-op but not crash
-        self._run_command(d, {"action": "listen", "conversation_id": "conv1"})
+        with mock.patch("aside.daemon.capture_one_shot", return_value="hello") as mock_cap:
+            with mock.patch.object(d, "start_query") as mock_sq:
+                self._run_command(d, {"action": "query", "mic": True})
+                # Give the thread time to run
+                import time
+                time.sleep(0.15)
+        mock_cap.assert_called_once_with(minimal_config.get("voice", {}))
+        mock_sq.assert_called_once_with("hello", conversation_id=None)
 
-    def test_listen_command_with_voice(self, minimal_config, tmp_path):
+    def test_query_mic_empty_no_query(self, minimal_config, tmp_path):
+        """query with mic:true returning empty should not start a query."""
         d = self._make_daemon(minimal_config, tmp_path)
-        d.voice = mock.MagicMock()
-        self._run_command(d, {"action": "listen", "conversation_id": "conv1"})
-        d.voice.request_listen.assert_called_once_with(conversation_id="conv1")
+        with mock.patch("aside.daemon.capture_one_shot", return_value="") as mock_cap:
+            with mock.patch.object(d, "start_query") as mock_sq:
+                self._run_command(d, {"action": "query", "mic": True})
+                import time
+                time.sleep(0.15)
+        mock_cap.assert_called_once()
+        mock_sq.assert_not_called()
 
-    def test_mute_command(self, minimal_config, tmp_path):
+    def test_query_mic_unavailable(self, minimal_config, tmp_path):
+        """query with mic:true when capture_one_shot is None should not crash."""
         d = self._make_daemon(minimal_config, tmp_path)
-        d.voice = mock.MagicMock()
-        self._run_command(d, {"action": "mute"})
-        d.voice.set_muted.assert_called_once_with(True)
-
-    def test_unmute_command(self, minimal_config, tmp_path):
-        d = self._make_daemon(minimal_config, tmp_path)
-        d.voice = mock.MagicMock()
-        self._run_command(d, {"action": "unmute"})
-        d.voice.set_muted.assert_called_once_with(False)
+        with mock.patch("aside.daemon.capture_one_shot", None):
+            with mock.patch.object(d, "start_query") as mock_sq:
+                self._run_command(d, {"action": "query", "mic": True})
+                import time
+                time.sleep(0.15)
+        mock_sq.assert_not_called()
 
     def test_stop_tts_with_tts(self, minimal_config, tmp_path):
         d = self._make_daemon(minimal_config, tmp_path)
@@ -337,14 +329,6 @@ class TestCommandParsing:
         d = self._make_daemon(minimal_config, tmp_path)
         # tts is None; should not crash
         self._run_command(d, {"action": "stop_tts"})
-
-    def test_toggle_mute_returns_state(self, minimal_config, tmp_path):
-        d = self._make_daemon(minimal_config, tmp_path)
-        d.voice = mock.MagicMock()
-        d._muted = False
-        writer = self._run_command(d, {"action": "toggle-mute"})
-        # Should have toggled mute and written response
-        d.voice.set_muted.assert_called_once_with(True)
 
     def test_unknown_action_does_not_crash(self, minimal_config, tmp_path):
         d = self._make_daemon(minimal_config, tmp_path)
