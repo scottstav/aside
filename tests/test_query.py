@@ -12,11 +12,9 @@ import pytest
 
 from aside.query import (
     NEW_CONVERSATION,
-    TOKEN_PRICES,
     _accumulate_tool_calls,
     _build_messages,
     _build_system_prompt,
-    _compute_cost,
     _parse_tool_calls,
     notify,
     notify_final,
@@ -254,29 +252,6 @@ class TestParseToolCalls:
         }
         result = _parse_tool_calls(acc)
         assert [r["name"] for r in result] == ["first", "second", "third"]
-
-
-# ---------------------------------------------------------------------------
-# _compute_cost
-# ---------------------------------------------------------------------------
-
-
-class TestComputeCost:
-    def test_known_model(self):
-        cost = _compute_cost("anthropic/claude-sonnet-4-6", 1000, 500)
-        # input: 1000 * 3.0 / 1M = 0.003, output: 500 * 15.0 / 1M = 0.0075
-        expected = (1000 * 3.0 + 500 * 15.0) / 1_000_000
-        assert abs(cost - expected) < 1e-10
-
-    def test_unknown_model_uses_default(self):
-        cost = _compute_cost("unknown/model", 1000, 1000)
-        # Default: 3.0 input, 15.0 output
-        expected = (1000 * 3.0 + 1000 * 15.0) / 1_000_000
-        assert abs(cost - expected) < 1e-10
-
-    def test_zero_tokens(self):
-        cost = _compute_cost("anthropic/claude-sonnet-4-6", 0, 0)
-        assert cost == 0.0
 
 
 # ---------------------------------------------------------------------------

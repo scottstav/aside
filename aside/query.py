@@ -30,18 +30,6 @@ log = logging.getLogger("aside")
 
 MAX_TOKENS = 4096
 
-# Per-million-token prices for cost tracking.
-TOKEN_PRICES: dict[str, dict[str, float]] = {
-    "anthropic/claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "anthropic/claude-opus-4-6":   {"input": 5.0, "output": 25.0},
-    "anthropic/claude-haiku-4-5":  {"input": 1.0, "output": 5.0},
-    "openai/gpt-4o":               {"input": 2.5, "output": 10.0},
-    "openai/gpt-4o-mini":          {"input": 0.15, "output": 0.6},
-}
-
-# Fallback prices when model is not in TOKEN_PRICES.
-_DEFAULT_PRICES = {"input": 3.0, "output": 15.0}
-
 # Sentinel for explicit "start a new conversation"
 NEW_CONVERSATION = object()
 
@@ -418,17 +406,6 @@ def stream_response(
 
 
 # ---------------------------------------------------------------------------
-# Usage cost calculation
-# ---------------------------------------------------------------------------
-
-
-def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Return estimated USD cost for the given token counts."""
-    prices = TOKEN_PRICES.get(model, _DEFAULT_PRICES)
-    return (input_tokens * prices["input"] + output_tokens * prices["output"]) / 1_000_000
-
-
-# ---------------------------------------------------------------------------
 # Main query pipeline
 # ---------------------------------------------------------------------------
 
@@ -577,10 +554,9 @@ def send_query(
             full_text += resp_text
 
             # Log usage.
-            cost = _compute_cost(usage["model"], usage["input_tokens"], usage["output_tokens"])
-            usage_log.log(usage["model"], usage["input_tokens"], usage["output_tokens"], cost)
+            usage_log.log(usage["model"], usage["input_tokens"], usage["output_tokens"])
             session_tokens += usage["input_tokens"] + usage["output_tokens"]
-            status.update_usage(cost, session_tokens)
+            status.update_usage(session_tokens)
 
             # Build assistant message for conversation history.
             assistant_msg: dict = {"role": "assistant", "content": resp_text or ""}

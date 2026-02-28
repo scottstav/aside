@@ -2,8 +2,6 @@
 
 import json
 import time
-import textwrap
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -195,12 +193,12 @@ class TestUsageLog:
         self.usage = self.mod.UsageLog(self.log_path)
 
     def test_log_creates_file(self):
-        self.usage.log("claude-sonnet-4-6", 100, 200, 0.001)
+        self.usage.log("claude-sonnet-4-6", 100, 200)
         assert self.log_path.exists()
 
     def test_log_appends_jsonl(self):
-        self.usage.log("claude-sonnet-4-6", 100, 200, 0.001)
-        self.usage.log("claude-sonnet-4-6", 300, 400, 0.002)
+        self.usage.log("claude-sonnet-4-6", 100, 200)
+        self.usage.log("claude-sonnet-4-6", 300, 400)
 
         lines = self.log_path.read_text().strip().splitlines()
         assert len(lines) == 2
@@ -209,74 +207,19 @@ class TestUsageLog:
         assert entry["model"] == "claude-sonnet-4-6"
         assert entry["input_tokens"] == 100
         assert entry["output_tokens"] == 200
-        assert entry["cost_usd"] == 0.001
+        assert "cost_usd" not in entry
         assert "ts" in entry
 
     def test_log_entry_has_timestamp(self):
-        self.usage.log("model", 10, 20, 0.0001)
+        self.usage.log("model", 10, 20)
         entry = json.loads(self.log_path.read_text().strip())
         # Timestamp should be ISO-ish format with YYYY-MM prefix
         assert entry["ts"][:4].isdigit()
 
-    def test_month_cost_empty(self):
-        assert self.usage.month_cost() == 0.0
-
-    def test_month_cost_sums_current_month(self):
-        now = datetime.now(timezone.utc)
-        prefix = now.strftime("%Y-%m")
-
-        # Write entries for current month
-        for cost in [0.01, 0.02, 0.03]:
-            entry = {
-                "ts": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "model": "test",
-                "input_tokens": 100,
-                "output_tokens": 200,
-                "cost_usd": cost,
-            }
-            with open(self.log_path, "a") as f:
-                f.write(json.dumps(entry) + "\n")
-
-        assert abs(self.usage.month_cost() - 0.06) < 1e-9
-
-    def test_month_cost_ignores_other_months(self):
-        # Write an entry from a different month
-        entry = {
-            "ts": "2020-01-15T12:00:00Z",
-            "model": "test",
-            "input_tokens": 100,
-            "output_tokens": 200,
-            "cost_usd": 99.99,
-        }
-        with open(self.log_path, "a") as f:
-            f.write(json.dumps(entry) + "\n")
-
-        # Also write one for current month
-        now = datetime.now(timezone.utc)
-        entry2 = {
-            "ts": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "model": "test",
-            "input_tokens": 100,
-            "output_tokens": 200,
-            "cost_usd": 0.05,
-        }
-        with open(self.log_path, "a") as f:
-            f.write(json.dumps(entry2) + "\n")
-
-        assert abs(self.usage.month_cost() - 0.05) < 1e-9
-
-    def test_month_cost_handles_malformed_lines(self):
-        with open(self.log_path, "w") as f:
-            f.write("not json\n")
-            f.write("\n")
-            f.write("{bad json\n")
-
-        assert self.usage.month_cost() == 0.0
-
     def test_log_creates_parent_dirs(self, tmp_path):
         deep_path = tmp_path / "a" / "b" / "c" / "usage.jsonl"
         usage = self.mod.UsageLog(deep_path)
-        usage.log("model", 10, 20, 0.001)
+        usage.log("model", 10, 20)
         assert deep_path.exists()
 
 
@@ -341,10 +284,11 @@ class TestStatusState:
 
     def test_update_usage(self):
         with mock.patch("subprocess.Popen"):
-            self.status.update_usage(query_cost=0.0123, total_tokens=5000)
+            self.status.update_usage(total_tokens=5000)
         data = json.loads((self.state_dir / "status.json").read_text())
-        assert data["usage"]["last_query_cost"] == "$0.0123"
         assert data["usage"]["total_tokens"] == 5000
+        assert "month_cost" not in data["usage"]
+        assert "last_query_cost" not in data["usage"]
 
     def test_reload_model(self, tmp_path):
         config_path = tmp_path / "config.toml"

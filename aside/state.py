@@ -146,7 +146,7 @@ class ConversationStore:
 
 
 class UsageLog:
-    """Append-only JSONL log of API usage and costs.
+    """Append-only JSONL log of API usage.
 
     All paths are explicit — no hardcoded defaults.
     """
@@ -159,7 +159,6 @@ class UsageLog:
         model: str,
         input_tokens: int,
         output_tokens: int,
-        cost_usd: float,
     ) -> None:
         """Append one JSON line with a timestamp."""
         entry = {
@@ -167,7 +166,6 @@ class UsageLog:
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "cost_usd": round(cost_usd, 6),
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,28 +173,6 @@ class UsageLog:
                 f.write(json.dumps(entry) + "\n")
         except OSError:
             log.exception("Failed to write usage log")
-
-    def month_cost(self) -> float:
-        """Sum ``cost_usd`` for entries matching the current month (YYYY-MM prefix)."""
-        try:
-            if not self.path.exists():
-                return 0.0
-            prefix = datetime.now(timezone.utc).strftime("%Y-%m")
-            total = 0.0
-            with open(self.path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line[0] != "{":
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    if entry.get("ts", "").startswith(prefix):
-                        total += entry.get("cost_usd", 0.0)
-            return total
-        except OSError:
-            return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -220,18 +196,14 @@ class StatusState:
     ) -> None:
         self._state_dir = Path(state_dir)
         self._signal_num = signal_num
-        self._usage_log = UsageLog(usage_log_path) if usage_log_path else None
         self._lock = threading.Lock()
 
-        month_cost = self._usage_log.month_cost() if self._usage_log else 0.0
         self._state: dict = {
             "status": "idle",
             "tool_name": "",
             "model": model,
             "speak_enabled": False,
             "usage": {
-                "month_cost": f"${month_cost:.2f}",
-                "last_query_cost": "$0.00",
                 "total_tokens": 0,
             },
         }
@@ -260,12 +232,9 @@ class StatusState:
             self._state["tool_name"] = tool_name
             self._write()
 
-    def update_usage(self, query_cost: float, total_tokens: int) -> None:
-        """Update usage after an API call.  Reads monthly total from usage log."""
+    def update_usage(self, total_tokens: int) -> None:
+        """Update token count after an API call."""
         with self._lock:
-            month_cost = self._usage_log.month_cost() if self._usage_log else 0.0
-            self._state["usage"]["month_cost"] = f"${month_cost:.2f}"
-            self._state["usage"]["last_query_cost"] = f"${query_cost:.4f}"
             self._state["usage"]["total_tokens"] = total_tokens
             self._write()
 
