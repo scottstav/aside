@@ -135,6 +135,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Maximum number of conversations to list (default: 20)",
     )
 
+    # aside set-key PROVIDER [KEY]
+    sk = sub.add_parser("set-key", help="Store an API key in the system keyring")
+    sk.add_argument("provider", help="Provider name (anthropic, openai, etc.)")
+    sk.add_argument("key", nargs="?", default=None, help="API key (reads stdin if omitted)")
+
+    # aside get-key PROVIDER
+    gk = sub.add_parser("get-key", help="Show a stored API key (masked)")
+    gk.add_argument("provider", help="Provider name (anthropic, openai, etc.)")
+
     return parser
 
 
@@ -406,6 +415,43 @@ def _cmd_daemon(args: argparse.Namespace) -> None:
     daemon_main()
 
 
+def _cmd_set_key(args: argparse.Namespace) -> None:
+    """Store an API key in the system keyring."""
+    import aside.keyring
+
+    key = args.key
+    if key is None:
+        key = sys.stdin.read().strip()
+    if not key:
+        print("Error: no key provided", file=sys.stderr)
+        sys.exit(1)
+
+    backend = aside.keyring.set_key(args.provider, key)
+    print(f"Stored {args.provider} key in {backend}")
+
+
+def _cmd_get_key(args: argparse.Namespace) -> None:
+    """Show a stored API key (masked)."""
+    import os
+    import aside.keyring
+
+    # Check env first, then keyring
+    env_var = aside.keyring._PROVIDER_TO_ENV.get(
+        args.provider, f"{args.provider.upper()}_API_KEY"
+    )
+    key = os.environ.get(env_var) or aside.keyring.get_key(args.provider)
+
+    if key:
+        # Mask: show first 4 and last 4 chars
+        if len(key) > 10:
+            masked = key[:4] + "..." + key[-4:]
+        else:
+            masked = key[:2] + "..." + key[-2:]
+        print(f"{args.provider}: {masked}")
+    else:
+        print(f"{args.provider}: not found")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -421,6 +467,8 @@ _HANDLERS = {
     "open": _cmd_open,
     "rm": _cmd_rm,
     "daemon": _cmd_daemon,
+    "set-key": _cmd_set_key,
+    "get-key": _cmd_get_key,
 }
 
 

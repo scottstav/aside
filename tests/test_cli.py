@@ -130,6 +130,23 @@ class TestArgumentParsing:
         assert args.mic is True
         assert args.text is None
 
+    def test_set_key_basic(self):
+        args = self.parser.parse_args(["set-key", "anthropic", "sk-test"])
+        assert args.command == "set-key"
+        assert args.provider == "anthropic"
+        assert args.key == "sk-test"
+
+    def test_set_key_no_key_arg(self):
+        args = self.parser.parse_args(["set-key", "openai"])
+        assert args.command == "set-key"
+        assert args.provider == "openai"
+        assert args.key is None
+
+    def test_get_key_basic(self):
+        args = self.parser.parse_args(["get-key", "anthropic"])
+        assert args.command == "get-key"
+        assert args.provider == "anthropic"
+
     def test_no_subcommand_exits(self):
         """Calling with no subcommand should cause an error."""
         with pytest.raises(SystemExit):
@@ -1080,3 +1097,51 @@ class TestReplyCommand:
         assert sent[0]["action"] == "query"
         assert sent[0]["text"] == "hello again"
         assert sent[0]["conversation_id"] == "conv-42"
+
+
+# ---------------------------------------------------------------------------
+# set-key command
+# ---------------------------------------------------------------------------
+
+from aside.cli import _cmd_set_key, _cmd_get_key
+
+
+class TestSetKeyCommand:
+    def test_set_key_with_arg(self, capsys):
+        args = mock.Mock(provider="anthropic", key="sk-123")
+        with mock.patch("aside.keyring.set_key", return_value="kwallet") as mock_set:
+            _cmd_set_key(args)
+        mock_set.assert_called_once_with("anthropic", "sk-123")
+        assert "kwallet" in capsys.readouterr().out
+
+    def test_set_key_from_stdin(self, capsys):
+        args = mock.Mock(provider="openai", key=None)
+        with mock.patch("aside.keyring.set_key", return_value="gnome-keyring") as mock_set:
+            with mock.patch("sys.stdin") as mock_stdin:
+                mock_stdin.read.return_value = "sk-stdin-key\n"
+                _cmd_set_key(args)
+        mock_set.assert_called_once_with("openai", "sk-stdin-key")
+
+
+# ---------------------------------------------------------------------------
+# get-key command
+# ---------------------------------------------------------------------------
+
+
+class TestGetKeyCommand:
+    def test_get_key_found(self, capsys):
+        args = mock.Mock(provider="anthropic")
+        with mock.patch("aside.keyring.get_key", return_value="sk-ant-1234567890abcdef"):
+            _cmd_get_key(args)
+        out = capsys.readouterr().out
+        assert "sk-a..." in out
+        assert "cdef" in out
+
+    def test_get_key_not_found(self, capsys):
+        args = mock.Mock(provider="openai")
+        with mock.patch("aside.keyring.get_key", return_value=None):
+            with mock.patch("aside.keyring._PROVIDER_TO_ENV", {"openai": "OPENAI_API_KEY"}):
+                with mock.patch.dict(os.environ, {}, clear=True):
+                    _cmd_get_key(args)
+        out = capsys.readouterr().out
+        assert "not found" in out.lower()
