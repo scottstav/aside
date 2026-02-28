@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +71,11 @@ class TestArgumentParsing:
     def test_show(self):
         args = self.parser.parse_args(["show", "abc-123"])
         assert args.command == "show"
+        assert args.conversation_id == "abc-123"
+
+    def test_open(self):
+        args = self.parser.parse_args(["open", "abc-123"])
+        assert args.command == "open"
         assert args.conversation_id == "abc-123"
 
     def test_no_subcommand_exits(self):
@@ -570,3 +575,118 @@ class TestShowCommand:
         lines = captured.out.strip().splitlines()
         assert lines[0] == "assistant: [calling web_search]"
         assert lines[1] == "assistant: [calling read_file]"
+
+
+# ---------------------------------------------------------------------------
+# open command
+# ---------------------------------------------------------------------------
+
+
+class TestOpenCommand:
+    """Test the open subcommand that exports a conversation to markdown."""
+
+    def _make_conv(self, conv_dir, conv_id, created, messages):
+        """Write a conversation JSON file."""
+        data = {"id": conv_id, "created": created, "messages": messages}
+        (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
+
+    def test_open_creates_markdown(self, tmp_path):
+        """open should write a markdown file at /tmp/aside-{id[:8]}.md."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "aaaa-1111", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "aaaa-1111"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
+                    _cmd_open(args)
+
+        md_path = "/tmp/aside-aaaa-111.md"
+        assert os.path.exists(md_path)
+
+        content = Path(md_path).read_text()
+        assert "# Conversation aaaa-111" in content
+        assert "## User" in content
+        assert "Hello" in content
+        assert "## Assistant" in content
+        assert "Hi there!" in content
+
+        # Clean up
+        os.unlink(md_path)
+
+    def test_open_calls_xdg_open(self, tmp_path):
+        """open should call xdg-open with the markdown file path."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "bbbb-2222", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Hello"},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "bbbb-2222"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
+                    _cmd_open(args)
+
+        mock_popen.assert_called_once_with(["xdg-open", "/tmp/aside-bbbb-222.md"])
+
+        # Clean up
+        md_path = "/tmp/aside-bbbb-222.md"
+        if os.path.exists(md_path):
+            os.unlink(md_path)
+
+    def test_open_not_found(self, tmp_path, capsys):
+        """open should print an error and exit 1 if conversation not found."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        args = mock.MagicMock()
+        args.conversation_id = "nonexistent-id"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with pytest.raises(SystemExit) as exc_info:
+                    _cmd_open(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower()
+
+    def test_open_multimodal_content(self, tmp_path):
+        """Multimodal user content should extract text parts in the markdown."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "cccc-3333", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;..."}},
+                {"type": "text", "text": "What is in this image?"},
+            ]},
+            {"role": "assistant", "content": "I see a cat."},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "cccc-3333"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with mock.patch("aside.cli.subprocess.Popen"):
+                    _cmd_open(args)
+
+        md_path = "/tmp/aside-cccc-333.md"
+        content = Path(md_path).read_text()
+        assert "What is in this image?" in content
+        assert "I see a cat." in content
+
+        # Clean up
+        os.unlink(md_path)

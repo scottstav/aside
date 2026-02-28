@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import socket
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -81,6 +82,10 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside show CONVERSATION_ID
     show = sub.add_parser("show", help="Print a full conversation transcript")
     show.add_argument("conversation_id", help="Conversation ID to display")
+
+    # aside open CONVERSATION_ID
+    open_cmd = sub.add_parser("open", help="Export conversation to markdown and open it")
+    open_cmd.add_argument("conversation_id", help="Conversation ID to export and open")
 
     # aside ls [-n LIMIT]
     ls = sub.add_parser("ls", help="List recent conversations")
@@ -263,6 +268,48 @@ def _cmd_show(args: argparse.Namespace) -> None:
             print(f"tool({name}): {content}")
 
 
+def _cmd_open(args: argparse.Namespace) -> None:
+    """Export conversation to markdown and open with xdg-open."""
+    cfg = load_config()
+    conv_dir = resolve_conversations_dir(cfg)
+
+    conv_path = conv_dir / f"{args.conversation_id}.json"
+    if not conv_path.exists():
+        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
+        sys.exit(1)
+
+    with open(conv_path) as f:
+        conv = json.load(f)
+
+    conv_id = conv.get("id", args.conversation_id)
+    lines = [f"# Conversation {conv_id[:8]}", ""]
+
+    for msg in conv.get("messages", []):
+        role = msg.get("role", "")
+
+        if role == "user":
+            lines.append("## User")
+            lines.append("")
+            content = msg.get("content", "")
+            text = _extract_user_preview(content)
+            lines.append(text)
+            lines.append("")
+
+        elif role == "assistant":
+            content = msg.get("content")
+            if content:
+                lines.append("## Assistant")
+                lines.append("")
+                lines.append(content)
+                lines.append("")
+
+    md_path = f"/tmp/aside-{conv_id[:8]}.md"
+    with open(md_path, "w") as f:
+        f.write("\n".join(lines))
+
+    subprocess.Popen(["xdg-open", md_path])
+
+
 def _cmd_daemon(args: argparse.Namespace) -> None:
     """Start the aside daemon in the foreground."""
     from aside.daemon import main as daemon_main
@@ -281,6 +328,7 @@ _HANDLERS = {
     "status": _cmd_status,
     "ls": _cmd_ls,
     "show": _cmd_show,
+    "open": _cmd_open,
     "daemon": _cmd_daemon,
 }
 
