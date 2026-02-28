@@ -461,6 +461,10 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
     _restore_api_keys()
+
+    from aside.keyring import load_keyring_keys
+    load_keyring_keys()
+
     _cache_api_keys()
     config = load_config()
     Daemon(config).run()
