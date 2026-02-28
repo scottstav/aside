@@ -95,15 +95,10 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 git clone https://github.com/scottstav/aside.git
 cd aside
 make install
-systemctl --user enable --now aside-daemon aside-overlay
-```
-
-optional extras:
-
-```bash
 make install-extras-voice  # faster-whisper + VAD
 make install-extras-tts    # kokoro TTS
 make install-extras-gtk    # input popup
+systemctl --user enable --now aside-daemon aside-overlay
 ```
 
 ## docs
