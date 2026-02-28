@@ -2,7 +2,7 @@
 
 Wayland-native LLM assistant. You ask it something, it streams the answer onto a floating overlay on your desktop, then fades away.
 
-![aside web search](screenshots/web-search.png)
+![aside overlay](screenshots/overlay-streaming.png)
 
 - **Overlay** — C layer-shell surface. Streams tokens in real time, auto-dismisses. Hover to keep it around, right-click to cancel.
 - **Voice** — STT via faster-whisper, TTS via Kokoro. Talk to it, it talks back.
@@ -10,6 +10,10 @@ Wayland-native LLM assistant. You ask it something, it streams the answer onto a
 - **Input popup** — GTK4 window with conversation history. Continue one or start fresh.
 - **Tools** — ships with shell, memory, and web search. Drop a Python file with `TOOL_SPEC` + `run()` into a plugins directory to add more.
 - **Any LLM** — [LiteLLM](https://github.com/BerriAI/litellm) under the hood. Claude, GPT, Gemini, Ollama, whatever you want.
+
+![aside input](screenshots/input-popup.png)
+
+![aside web search](screenshots/web-search.png)
 
 ## Install
 
