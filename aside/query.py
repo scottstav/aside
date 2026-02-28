@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import socket
 import subprocess
 import threading
@@ -245,74 +244,19 @@ def _overlay_close(sock: socket.socket | None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Notifications
+# Error notification
 # ---------------------------------------------------------------------------
 
 
-def notify(tag: str, text: str) -> None:
-    """Fire-and-forget in-place notification update."""
+def notify_error(message: str) -> None:
+    """Fire-and-forget critical error notification via notify-send."""
     try:
         subprocess.Popen(
-            ["notify-send", "-t", "0",
-             "-h", f"string:x-canonical-private-synchronous:{tag}",
-             "-a", "Aside", "Aside", text],
+            ["notify-send", "-u", "critical", "-a", "Aside", "Aside", message],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except FileNotFoundError:
         pass
-
-
-def notify_final(
-    tag: str,
-    text: str,
-    conv_id: str,
-    config: dict,
-    tools_used: list[str] | None = None,
-) -> None:
-    """Show final notification with optional Reply action.
-
-    Runs in a background thread because ``--wait`` blocks.
-    The reply action command is read from ``config["notifications"]["reply_command"]``.
-    """
-    def _run() -> None:
-        # Truncate to last ~2 sentences for the notification body.
-        sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-        body = " ".join(sentences[-2:]) if len(sentences) > 2 else text.strip()
-        if tools_used:
-            body += "\n\n<small>" + " \u2192 ".join(tools_used) + "</small>"
-
-        cmd = [
-            "notify-send", "-t", "0",
-            "-h", f"string:x-canonical-private-synchronous:{tag}",
-            "-a", "Aside",
-        ]
-
-        reply_cmd = config.get("notifications", {}).get("reply_command", "")
-        listen_cmd = config.get("notifications", {}).get("listen_command", "")
-
-        if reply_cmd:
-            cmd.extend(["-A", "reply=Reply"])
-        if listen_cmd:
-            cmd.extend(["-A", "mic=Listen"])
-
-        cmd.extend(["--wait", "Aside", body])
-
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            action = result.stdout.strip()
-            if action == "reply" and reply_cmd:
-                # Substitute {conv_id} in the command template.
-                final_cmd = reply_cmd.replace("{conv_id}", conv_id)
-                subprocess.Popen(final_cmd, shell=True,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif action == "mic" and listen_cmd:
-                final_cmd = listen_cmd.replace("{conv_id}", conv_id)
-                subprocess.Popen(final_cmd, shell=True,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            log.exception("Error in final notification handler")
-
-    threading.Thread(target=_run, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -468,7 +412,6 @@ def send_query(
         resolved = store.auto_resolve()
         conv = store.get_or_create(resolved) if resolved else store.get_or_create()
 
-    tag = f"aside-{conv['id'][:8]}"
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
     system_extra = config.get("model", {}).get("system_prompt", "")
     system_prompt = _build_system_prompt(extra=system_extra)
@@ -516,7 +459,6 @@ def send_query(
     # ------------------------------------------------------------------
     # Streaming loop with tool execution
     # ------------------------------------------------------------------
-    tools_used: list[str] = []
     full_text = ""
     overlay_sock = _connect_overlay()
     _overlay_send(overlay_sock, {"cmd": "open"})
@@ -584,7 +526,6 @@ def send_query(
             for tc in tool_calls:
                 if cancel_event and cancel_event.is_set():
                     break
-                tools_used.append(tc["name"])
                 log.info("Executing tool: %s", tc["name"])
                 status.set_status("tool_use", tool_name=tc["name"])
                 result = run_tool(tc["name"], tc["arguments"], dirs)
@@ -632,17 +573,13 @@ def send_query(
         _overlay_send(overlay_sock, {"cmd": "done"})
         _overlay_close(overlay_sock)
 
-        # Final notification.
-        notify_final(tag, full_text, conv["id"], config,
-                     tools_used=tools_used or None)
-
         return conv["id"]
 
     except litellm.exceptions.AuthenticationError as e:
         log.error("Authentication error: %s", e)
         _overlay_send(overlay_sock, {"cmd": "clear"})
         _overlay_close(overlay_sock)
-        notify(tag, "API key missing or invalid — check env vars")
+        notify_error("API key missing or invalid — check env vars")
         if tts is not None:
             tts.stop()
         store.save(conv)
@@ -651,7 +588,7 @@ def send_query(
         log.error("API error: %s", e)
         _overlay_send(overlay_sock, {"cmd": "clear"})
         _overlay_close(overlay_sock)
-        notify(tag, f"API error: {e}")
+        notify_error(f"API error: {e}")
         if tts is not None:
             tts.stop()
         store.save(conv)
@@ -660,7 +597,7 @@ def send_query(
         log.exception("Unexpected error during query")
         _overlay_send(overlay_sock, {"cmd": "clear"})
         _overlay_close(overlay_sock)
-        notify(tag, "Unexpected error (check logs)")
+        notify_error("Unexpected error (check logs)")
         if tts is not None:
             tts.stop()
         store.save(conv)

@@ -98,8 +98,7 @@ class TestDefaultConfig:
 
     def test_notifications_defaults(self):
         n = self.defaults["notifications"]
-        assert n["reply_command"] == ""
-        assert n["listen_command"] == ""
+        assert n == {}
 
     def test_status_defaults(self):
         assert self.defaults["status"]["signal"] == 12

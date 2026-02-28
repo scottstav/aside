@@ -68,10 +68,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "plugins": {
         "dirs": [],
     },
-    "notifications": {
-        "reply_command": "",
-        "listen_command": "",
-    },
+    "notifications": {},
     "status": {
         "signal": 12,
     },

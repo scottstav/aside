@@ -1,9 +1,8 @@
-"""Tests for aside.query — message building, tool accumulation, notifications."""
+"""Tests for aside.query — message building, tool accumulation, error notifications."""
 
 from __future__ import annotations
 
 import json
-import re
 import threading
 from types import SimpleNamespace
 from unittest import mock
@@ -16,8 +15,7 @@ from aside.query import (
     _build_messages,
     _build_system_prompt,
     _parse_tool_calls,
-    notify,
-    notify_final,
+    notify_error,
     stream_response,
 )
 
@@ -255,81 +253,33 @@ class TestParseToolCalls:
 
 
 # ---------------------------------------------------------------------------
-# Notifications
+# notify_error
 # ---------------------------------------------------------------------------
 
 
-class TestNotify:
+class TestNotifyError:
     @mock.patch("aside.query.subprocess.Popen")
-    def test_notify_sends_notification(self, mock_popen):
-        notify("test-tag", "Hello world")
+    def test_sends_critical_notification(self, mock_popen):
+        notify_error("Something went wrong")
         mock_popen.assert_called_once()
         args = mock_popen.call_args[0][0]
         assert "notify-send" in args
-        assert "test-tag" in " ".join(args)
-        assert "Hello world" in args
+        assert "-u" in args
+        assert "critical" in args
+        assert "Something went wrong" in args
 
     @mock.patch("aside.query.subprocess.Popen")
-    def test_notify_uses_aside_app_name(self, mock_popen):
-        notify("tag", "msg")
+    def test_uses_aside_app_name(self, mock_popen):
+        notify_error("error")
         args = mock_popen.call_args[0][0]
         assert "-a" in args
         idx = args.index("-a")
         assert args[idx + 1] == "Aside"
 
-
-class TestNotifyFinal:
-    @mock.patch("aside.query.subprocess.run")
-    def test_truncates_long_text(self, mock_run):
-        mock_run.return_value = mock.Mock(stdout="", returncode=0)
-        long_text = "First sentence. Second sentence. Third sentence. Fourth sentence."
-        config = {"notifications": {}}
-        notify_final("tag", long_text, "conv-id", config)
-        # Wait for the background thread.
-        import time
-        time.sleep(0.2)
-        assert mock_run.called
-        args = mock_run.call_args[0][0]
-        body = args[-1]
-        # Should contain last 2 sentences.
-        assert "Third sentence." in body
-        assert "Fourth sentence." in body
-
-    @mock.patch("aside.query.subprocess.run")
-    def test_includes_tools_used(self, mock_run):
-        mock_run.return_value = mock.Mock(stdout="", returncode=0)
-        config = {"notifications": {}}
-        notify_final("tag", "Answer.", "conv-id", config, tools_used=["shell", "clipboard"])
-        import time
-        time.sleep(0.2)
-        assert mock_run.called
-        args = mock_run.call_args[0][0]
-        body = args[-1]
-        assert "shell" in body
-        assert "clipboard" in body
-
-    @mock.patch("aside.query.subprocess.run")
-    def test_reply_action_with_command(self, mock_run):
-        mock_run.return_value = mock.Mock(stdout="reply\n", returncode=0)
-        config = {"notifications": {"reply_command": "echo {conv_id}"}}
-        with mock.patch("aside.query.subprocess.Popen") as mock_popen:
-            notify_final("tag", "Answer.", "abc-123", config)
-            import time
-            time.sleep(0.3)
-            if mock_popen.called:
-                cmd = mock_popen.call_args[0][0]
-                assert "abc-123" in cmd
-
-    @mock.patch("aside.query.subprocess.run")
-    def test_no_actions_without_config(self, mock_run):
-        mock_run.return_value = mock.Mock(stdout="", returncode=0)
-        config = {"notifications": {}}
-        notify_final("tag", "Answer.", "conv-id", config)
-        import time
-        time.sleep(0.2)
-        args = mock_run.call_args[0][0]
-        # Should not have -A flags.
-        assert "-A" not in args
+    @mock.patch("aside.query.subprocess.Popen", side_effect=FileNotFoundError)
+    def test_handles_missing_notify_send(self, mock_popen):
+        # Should not raise.
+        notify_error("error")
 
 
 # ---------------------------------------------------------------------------
