@@ -13,19 +13,19 @@ from aside.keyring import _kwallet_available, _gnome_available
 
 class TestBackendDetection:
     def test_kwallet_available_when_installed(self):
-        with mock.patch("shutil.which", return_value="/usr/bin/kwalletcli-getentry"):
+        with mock.patch("aside.keyring.shutil.which", return_value="/usr/bin/kwalletcli-getentry"):
             assert _kwallet_available() is True
 
     def test_kwallet_unavailable_when_missing(self):
-        with mock.patch("shutil.which", return_value=None):
+        with mock.patch("aside.keyring.shutil.which", return_value=None):
             assert _kwallet_available() is False
 
     def test_gnome_available_when_installed(self):
-        with mock.patch("shutil.which", return_value="/usr/bin/secret-tool"):
+        with mock.patch("aside.keyring.shutil.which", return_value="/usr/bin/secret-tool"):
             assert _gnome_available() is True
 
     def test_gnome_unavailable_when_missing(self):
-        with mock.patch("shutil.which", return_value=None):
+        with mock.patch("aside.keyring.shutil.which", return_value=None):
             assert _gnome_available() is False
 
 

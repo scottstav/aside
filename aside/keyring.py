@@ -61,8 +61,8 @@ def get_key(provider: str) -> str | None:
             if result.returncode == 0 and result.stdout.strip():
                 log.info("Retrieved %s key from KWallet", provider)
                 return result.stdout.strip()
-        except subprocess.TimeoutExpired:
-            log.warning("KWallet lookup timed out for %s", provider)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("KWallet lookup failed for %s: %s", provider, e)
 
     if _gnome_available():
         try:
@@ -75,8 +75,8 @@ def get_key(provider: str) -> str | None:
             if result.returncode == 0 and result.stdout.strip():
                 log.info("Retrieved %s key from GNOME Keyring", provider)
                 return result.stdout.strip()
-        except subprocess.TimeoutExpired:
-            log.warning("secret-tool lookup timed out for %s", provider)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("secret-tool lookup failed for %s: %s", provider, e)
 
     return None
 
@@ -98,8 +98,8 @@ def set_key(provider: str, key: str) -> str:
             if result.returncode == 0:
                 log.info("Stored %s key in KWallet", provider)
                 return "kwallet"
-        except subprocess.TimeoutExpired:
-            log.warning("KWallet store timed out for %s", provider)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("KWallet store failed for %s: %s", provider, e)
 
     if _gnome_available():
         try:
@@ -118,8 +118,8 @@ def set_key(provider: str, key: str) -> str:
             if result.returncode == 0:
                 log.info("Stored %s key in GNOME Keyring", provider)
                 return "gnome-keyring"
-        except subprocess.TimeoutExpired:
-            log.warning("secret-tool store timed out for %s", provider)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("secret-tool store failed for %s: %s", provider, e)
 
     # Fall back to env file
     env_var = _PROVIDER_TO_ENV.get(provider, f"{provider.upper()}_API_KEY")
