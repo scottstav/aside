@@ -49,7 +49,7 @@ class TestOverlayConfig:
         # Spot-check some expected keys
         assert "font=Sans 13" in content
         assert "width=600" in content
-        assert "max_lines=10" in content
+        assert "max_lines=5" in content
 
     def test_overlay_config_maps_color_keys(self, tmp_path, minimal_config):
         """Colors should be remapped: foreground->text_color, etc."""
