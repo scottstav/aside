@@ -37,6 +37,56 @@ from aside.state import ConversationStore  # noqa: E402
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# CSS
+# ---------------------------------------------------------------------------
+
+CSS = """
+window {
+    background-color: transparent;
+}
+window.background {
+    background-color: transparent;
+}
+.input-container {
+    background-color: alpha(@window_bg_color, 0.92);
+    border-radius: 16px;
+    border: 1px solid alpha(@accent_color, 0.25);
+    padding: 0;
+}
+.input-title {
+    font-weight: bold;
+    padding: 14px 0 8px 0;
+    color: @window_fg_color;
+}
+.input-listbox {
+    background: transparent;
+    border-radius: 0;
+}
+.input-listbox row {
+    border-radius: 8px;
+    margin: 2px 8px;
+}
+.input-listbox row:selected {
+    background-color: alpha(@accent_color, 0.15);
+}
+.input-textview {
+    background-color: alpha(@window_fg_color, 0.04);
+    border-radius: 10px;
+    border: 1px solid alpha(@accent_color, 0.4);
+    padding: 8px;
+    caret-color: @accent_color;
+}
+.input-textview:focus {
+    border-color: @accent_color;
+    box-shadow: 0 0 0 1px alpha(@accent_color, 0.3);
+}
+.input-hint {
+    font-size: 0.8em;
+    color: alpha(@window_fg_color, 0.35);
+}
+"""
+
+# ---------------------------------------------------------------------------
 # Socket communication
 # ---------------------------------------------------------------------------
 
@@ -133,7 +183,7 @@ def _make_new_conversation_row() -> Gtk.ListBoxRow:
 # ---------------------------------------------------------------------------
 
 
-class AsideInputWindow(Adw.ApplicationWindow):
+class AsideInputWindow(Gtk.Window):
     """The popup input window."""
 
     def __init__(self, app: Adw.Application, config: dict) -> None:
@@ -151,6 +201,26 @@ class AsideInputWindow(Adw.ApplicationWindow):
             self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
         )
 
+        # CSS
+        css_text = CSS
+        font = config.get("input", {}).get("font", "")
+        if font:
+            from gi.repository import Pango
+            desc = Pango.FontDescription.from_string(font)
+            family = desc.get_family()
+            parts = [f'font-family: "{family}"']
+            size = desc.get_size()
+            if size:
+                pts = size / Pango.SCALE
+                parts.append(f"font-size: {pts}pt")
+            css_text += "\n* { " + "; ".join(parts) + "; }"
+        provider = Gtk.CssProvider()
+        provider.load_from_string(css_text)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
         # Build UI
         self._build_ui()
 
@@ -159,51 +229,48 @@ class AsideInputWindow(Adw.ApplicationWindow):
 
     def _build_ui(self) -> None:
         """Construct the widget tree."""
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.set_content(vbox)
+        # Outer container with rounded corners and semi-transparent bg
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        container.add_css_class("input-container")
+        self.set_child(container)
 
-        # -- Header bar --
-        header = Adw.HeaderBar()
-        header.set_title_widget(Gtk.Label(label="aside"))
-        vbox.append(header)
+        # -- Title --
+        title = Gtk.Label(label="aside")
+        title.add_css_class("input-title")
+        container.append(title)
 
         # -- Conversation list --
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        vbox.append(scrolled)
+        container.append(scrolled)
 
         self._listbox = Gtk.ListBox()
         self._listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self._listbox.add_css_class("boxed-list")
+        self._listbox.add_css_class("input-listbox")
         self._listbox.connect("row-selected", self._on_row_selected)
         scrolled.set_child(self._listbox)
 
         self._populate_conversations()
 
-        # -- Separator --
-        vbox.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-
         # -- Text input area --
-        input_frame = Gtk.Frame()
-        input_frame.set_margin_start(8)
-        input_frame.set_margin_end(8)
-        input_frame.set_margin_top(8)
-        input_frame.set_margin_bottom(8)
-        vbox.append(input_frame)
-
         input_scroll = Gtk.ScrolledWindow()
         input_scroll.set_min_content_height(80)
         input_scroll.set_max_content_height(160)
         input_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        input_frame.set_child(input_scroll)
+        input_scroll.set_margin_start(12)
+        input_scroll.set_margin_end(12)
+        input_scroll.set_margin_top(8)
+        input_scroll.set_margin_bottom(4)
+        input_scroll.add_css_class("input-textview")
+        container.append(input_scroll)
 
         self._textview = Gtk.TextView()
         self._textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self._textview.set_left_margin(8)
-        self._textview.set_right_margin(8)
-        self._textview.set_top_margin(6)
-        self._textview.set_bottom_margin(6)
+        self._textview.set_left_margin(4)
+        self._textview.set_right_margin(4)
+        self._textview.set_top_margin(4)
+        self._textview.set_bottom_margin(4)
         self._textview.grab_focus()
         input_scroll.set_child(self._textview)
 
@@ -214,9 +281,10 @@ class AsideInputWindow(Adw.ApplicationWindow):
 
         # -- Hint label --
         hint = Gtk.Label(label="Enter to send  |  Shift+Enter for newline  |  Escape to close")
-        hint.add_css_class("dim-label")
-        hint.set_margin_bottom(6)
-        vbox.append(hint)
+        hint.add_css_class("input-hint")
+        hint.set_margin_top(4)
+        hint.set_margin_bottom(10)
+        container.append(hint)
 
     def _populate_conversations(self) -> None:
         """Load recent conversations into the list box."""

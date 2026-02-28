@@ -19,6 +19,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "input": {
         "terminal": "foot -e",
+        "font": "",
     },
     "voice": {
         "enabled": False,
