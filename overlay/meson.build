@@ -11,7 +11,6 @@ dep_wayland_protocols = dependency('wayland-protocols')
 dep_cairo = dependency('cairo')
 dep_pangocairo = dependency('pangocairo')
 dep_json_c = dependency('json-c')
-dep_xkbcommon = dependency('xkbcommon')
 dep_rt = cc.find_library('rt')
 
 # Wayland scanner for protocol code generation
@@ -56,7 +55,6 @@ executable('aside-overlay',
     dep_cairo,
     dep_pangocairo,
     dep_json_c,
-    dep_xkbcommon,
     dep_rt,
   ],
   install: true,

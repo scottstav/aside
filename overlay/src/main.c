@@ -9,7 +9,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <linux/input-event-codes.h>
-#include <xkbcommon/xkbcommon.h>
 #include "wayland.h"
 #include "config.h"
 #include "render.h"
@@ -19,43 +18,7 @@
 static volatile sig_atomic_t quit = 0;
 static char current_conv_id[64] = "";
 
-/* --- Action buttons --- */
-enum overlay_button { BTN_ACTION_MIC = 0, BTN_ACTION_OPEN, BTN_ACTION_REPLY, BTN_ACTION_COUNT };
-static struct button_rect action_buttons[BTN_ACTION_COUNT];
-static bool show_buttons = false;
-
-/* --- Text input state --- */
-static bool input_active = false;
-static char input_buf[4096] = "";
-static size_t input_len = 0;
-
-/* Button row height: set after renderer init */
-static uint32_t button_row_height = 0;
-
 static void handle_signal(int sig) { (void)sig; quit = 1; }
-
-/* JSON-escape a string for safe embedding in JSON values */
-static size_t json_escape(const char *in, char *out, size_t out_size)
-{
-    size_t j = 0;
-    for (size_t i = 0; in[i] && j < out_size - 2; i++) {
-        switch (in[i]) {
-        case '"':  if (j+2 < out_size) { out[j++] = '\\'; out[j++] = '"'; }  break;
-        case '\\': if (j+2 < out_size) { out[j++] = '\\'; out[j++] = '\\'; } break;
-        case '\n': if (j+2 < out_size) { out[j++] = '\\'; out[j++] = 'n'; }  break;
-        case '\r': if (j+2 < out_size) { out[j++] = '\\'; out[j++] = 'r'; }  break;
-        case '\t': if (j+2 < out_size) { out[j++] = '\\'; out[j++] = 't'; }  break;
-        default:
-            if ((unsigned char)in[i] < 0x20) {
-                if (j+6 < out_size) j += (size_t)snprintf(out+j, out_size-j, "\\u%04x", (unsigned char)in[i]);
-            } else {
-                out[j++] = in[i];
-            }
-        }
-    }
-    out[j] = '\0';
-    return j;
-}
 
 /* Send a JSON action to the aside daemon */
 static void send_daemon_action(const char *action_json)
@@ -76,134 +39,6 @@ static void send_daemon_action(const char *action_json)
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
         (void)write(fd, action_json, strlen(action_json));
     close(fd);
-}
-
-/* Forward-declared dismiss helper; defined after main locals are available */
-static struct overlay_state *g_state = NULL;  /* set in main() for callbacks */
-static int g_timer_fd = -1;
-static bool *g_timer_armed = NULL;
-static char *g_text_buf = NULL;
-static size_t *g_text_len = NULL;
-static struct animation *g_fade_anim = NULL;
-static struct animation *g_scroll_anim = NULL;
-static uint64_t *g_done_at = NULL;
-static bool *g_user_scrolling = NULL;
-
-static void dismiss_overlay(void)
-{
-    g_text_buf[0] = '\0';
-    *g_text_len = 0;
-    g_fade_anim->current = 1.0;
-    g_fade_anim->active = false;
-    *g_done_at = 0;
-    g_scroll_anim->current = 0.0;
-    g_scroll_anim->active = false;
-    *g_user_scrolling = false;
-    show_buttons = false;
-    input_active = false;
-    input_len = 0;
-    input_buf[0] = '\0';
-    if (*g_timer_armed) {
-        /* disarm inline -- can't call arm_timer yet (declared below) */
-        struct itimerspec ts = {0};
-        timerfd_settime(g_timer_fd, 0, &ts, NULL);
-        *g_timer_armed = false;
-    }
-    wayland_destroy_surface(g_state);
-}
-
-static void handle_button_click(int btn)
-{
-    switch (btn) {
-    case BTN_ACTION_MIC: {
-        char json[256];
-        snprintf(json, sizeof(json),
-                 "{\"action\":\"query\",\"conversation_id\":\"%s\",\"mic\":true}\n",
-                 current_conv_id);
-        send_daemon_action(json);
-        dismiss_overlay();
-        break;
-    }
-    case BTN_ACTION_OPEN: {
-        /* Resolve aside binary -- pip installs to ~/.local/bin which may
-           not be in our inherited PATH. */
-        const char *home = getenv("HOME");
-        char aside_bin[512];
-        if (home) {
-            snprintf(aside_bin, sizeof(aside_bin), "%s/.local/bin/aside", home);
-            if (access(aside_bin, X_OK) != 0)
-                snprintf(aside_bin, sizeof(aside_bin), "aside"); /* fallback */
-        } else {
-            snprintf(aside_bin, sizeof(aside_bin), "aside");
-        }
-        if (fork() == 0) {
-            execl(aside_bin, "aside", "open", current_conv_id, NULL);
-            _exit(1);
-        }
-        break;
-    }
-    case BTN_ACTION_REPLY:
-        input_active = true;
-        input_len = 0;
-        input_buf[0] = '\0';
-        show_buttons = false;
-        g_state->needs_redraw = true;
-        break;
-    }
-}
-
-/* Keyboard callback: receives key events from wayland.c */
-static void on_key(void *user_data, uint32_t sym, const char *utf8, int n)
-{
-    (void)user_data;
-    if (!input_active) return;
-
-    if (sym == XKB_KEY_Escape) {
-        input_active = false;
-        show_buttons = true;
-        g_state->needs_redraw = true;
-        return;
-    }
-
-    if (sym == XKB_KEY_Return || sym == XKB_KEY_KP_Enter) {
-        if (input_len > 0) {
-            /* JSON-escape the input */
-            char escaped[8192];
-            json_escape(input_buf, escaped, sizeof(escaped));
-
-            char json[8500];
-            snprintf(json, sizeof(json),
-                     "{\"action\":\"query\",\"text\":\"%s\","
-                     "\"conversation_id\":\"%s\"}\n",
-                     escaped, current_conv_id);
-            send_daemon_action(json);
-        }
-        input_active = false;
-        dismiss_overlay();
-        return;
-    }
-
-    if (sym == XKB_KEY_BackSpace) {
-        if (input_len > 0) {
-            /* Handle UTF-8: find start of last character */
-            size_t i = input_len - 1;
-            while (i > 0 && (input_buf[i] & 0xC0) == 0x80) i--;
-            input_len = i;
-            input_buf[input_len] = '\0';
-        }
-        g_state->needs_redraw = true;
-        return;
-    }
-
-    /* Printable character */
-    if (n > 0 && (unsigned char)utf8[0] >= 0x20) {
-        if (input_len + (size_t)n < sizeof(input_buf) - 1) {
-            memcpy(input_buf + input_len, utf8, (size_t)n);
-            input_len += (size_t)n;
-            input_buf[input_len] = '\0';
-        }
-    }
-    g_state->needs_redraw = true;
 }
 
 static void arm_timer(int fd, bool on)
@@ -246,9 +81,6 @@ int main(int argc, char *argv[])
     struct renderer rend = {0};
     renderer_init(&rend, &cfg);
 
-    /* Button row height: button + padding above/below */
-    button_row_height = (uint32_t)rend.line_height + 16;
-
     struct overlay_state state = {0};
     state.shm_fd = -1;
 
@@ -260,10 +92,6 @@ int main(int argc, char *argv[])
         renderer_cleanup(&rend);
         return EXIT_FAILURE;
     }
-
-    /* Wire up keyboard callback */
-    state.key_cb = on_key;
-    state.key_cb_data = &state;
 
     /* Do NOT create surface on startup -- wait for commands */
 
@@ -307,13 +135,6 @@ int main(int argc, char *argv[])
     struct animation fade_anim = { .current = 1.0 };
     bool timer_armed = false;
 
-    /* Wire up global pointers for callback functions */
-    g_state = &state;
-    g_timer_fd = timer_fd;
-    g_timer_armed = &timer_armed;
-    g_fade_anim = &fade_anim;
-    g_scroll_anim = &scroll_anim;
-
     struct pollfd fds[4]; /* wayland, timer, socket_listen, socket_client */
     fds[0].fd = wayland_get_fd(&state);
     fds[0].events = POLLIN;
@@ -331,12 +152,6 @@ int main(int argc, char *argv[])
     uint64_t done_at = 0;        /* timestamp when CMD_DONE received, 0 = not waiting */
     uint32_t linger_ms = 3000;   /* ms to wait after done before fading */
 
-    /* Wire up remaining global pointers for callbacks */
-    g_text_buf = text_buf;
-    g_text_len = &text_len;
-    g_done_at = &done_at;
-    g_user_scrolling = &user_scrolling;
-
     while (!quit && !state.closed) {
         /* Only redraw when surface is visible and configured */
         if (state.needs_redraw && state.surface_visible && state.configured) {
@@ -348,9 +163,7 @@ int main(int argc, char *argv[])
             uint32_t s = state.scale > 1 ? state.scale : 1;
             renderer_draw(&rend, &cfg, state.pixels,
                           state.configured_width * s, state.configured_height * s,
-                          text_buf, scroll_anim.current, fade_anim.current,
-                          show_buttons, action_buttons, BTN_ACTION_COUNT,
-                          input_active, input_buf);
+                          text_buf, scroll_anim.current, fade_anim.current);
 
             wayland_commit(&state);
             state.needs_redraw = false;
@@ -365,7 +178,6 @@ int main(int argc, char *argv[])
             uint64_t now = anim_now_ms();
             if (now - done_at >= linger_ms) {
                 done_at = 0;
-                show_buttons = false;
                 anim_set_target(&fade_anim, 0.0, cfg.fade_duration);
                 ensure_timer(timer_fd, &timer_armed);
                 state.needs_redraw = true;
@@ -393,16 +205,14 @@ int main(int argc, char *argv[])
             /* Pause: snap opacity back to full, cancel the fade */
             fade_anim.current = 1.0;
             fade_anim.active = false;
-            /* Restore buttons if we have a conversation */
-            if (current_conv_id[0] && !input_active) {
-                show_buttons = true;
+            if (current_conv_id[0]) {
                 done_at = 0;  /* reset linger; will restart when pointer leaves */
             }
             state.needs_redraw = true;
         }
         /* Restart linger when pointer leaves after hover-pause */
-        if (!state.pointer_over && show_buttons && done_at == 0
-            && !fade_anim.active && !input_active) {
+        if (!state.pointer_over && done_at == 0
+            && !fade_anim.active && current_conv_id[0]) {
             done_at = anim_now_ms();
         }
 
@@ -445,42 +255,20 @@ int main(int argc, char *argv[])
             state.pending_button = 0;
 
             if (btn == BTN_LEFT) {
-                /* Check action button hits first */
-                bool btn_hit = false;
-                if (show_buttons) {
-                    for (int i = 0; i < BTN_ACTION_COUNT; i++) {
-                        if (state.pointer_x >= action_buttons[i].x &&
-                            state.pointer_x <= action_buttons[i].x + action_buttons[i].w &&
-                            state.pointer_y >= action_buttons[i].y &&
-                            state.pointer_y <= action_buttons[i].y + action_buttons[i].h) {
-                            handle_button_click(i);
-                            btn_hit = true;
-                            break;
-                        }
-                    }
+                /* Left click: dismiss overlay */
+                text_buf[0] = '\0';
+                text_len = 0;
+                fade_anim.current = 1.0;
+                fade_anim.active = false;
+                done_at = 0;
+                scroll_anim.current = 0.0;
+                scroll_anim.active = false;
+                user_scrolling = false;
+                if (timer_armed) {
+                    arm_timer(timer_fd, false);
+                    timer_armed = false;
                 }
-                if (btn_hit) {
-                    /* Button handled; don't dismiss */
-                } else if (input_active) {
-                    /* Clicking while input is active: ignore (keep focus) */
-                } else {
-                    /* Left click: dismiss overlay */
-                    text_buf[0] = '\0';
-                    text_len = 0;
-                    fade_anim.current = 1.0;
-                    fade_anim.active = false;
-                    done_at = 0;
-                    scroll_anim.current = 0.0;
-                    scroll_anim.active = false;
-                    user_scrolling = false;
-                    show_buttons = false;
-                    input_active = false;
-                    if (timer_armed) {
-                        arm_timer(timer_fd, false);
-                        timer_armed = false;
-                    }
-                    wayland_destroy_surface(&state);
-                }
+                wayland_destroy_surface(&state);
             } else if (btn == BTN_RIGHT) {
                 /* Right click: cancel query (stops stream + TTS + overlay) */
                 send_daemon_action("{\"action\":\"cancel\"}\n");
@@ -492,10 +280,6 @@ int main(int argc, char *argv[])
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 user_scrolling = false;
-                show_buttons = false;
-                input_active = false;
-                input_len = 0;
-                input_buf[0] = '\0';
                 if (timer_armed) {
                     arm_timer(timer_fd, false);
                     timer_armed = false;
@@ -553,11 +337,6 @@ int main(int argc, char *argv[])
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
             user_scrolling = false;
-            /* Reset buttons/input */
-            show_buttons = false;
-            input_active = false;
-            input_len = 0;
-            input_buf[0] = '\0';
             if (!state.surface_visible) {
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
                 if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
@@ -569,9 +348,6 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_TEXT:
-            /* Streaming text: clear buttons/input */
-            show_buttons = false;
-            input_active = false;
             /* Append text data to buffer */
             {
                 size_t chunk_len = strlen(cmd.data);
@@ -630,32 +406,51 @@ int main(int argc, char *argv[])
             state.needs_redraw = true;
             break;
 
-        case CMD_DONE:
-            /* Show action buttons */
-            show_buttons = true;
-            /* Resize surface to include button row */
-            {
-                int content_h = renderer_measure(&rend, &cfg, text_buf);
-                uint32_t extra_h = button_row_height;
-                uint32_t max_h = cfg.padding_y * 2
-                    + (uint32_t)rend.line_height * cfg.max_lines + extra_h;
-                uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2 + extra_h;
-                if (target_h > max_h)
-                    target_h = max_h;
-                uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height + extra_h;
-                if (target_h < min_h)
-                    target_h = min_h;
-                if (target_h != state.height && state.layer_surface) {
-                    zwlr_layer_surface_v1_set_size(state.layer_surface,
-                                                   cfg.width, target_h);
-                    wl_surface_commit(state.surface);
-                    state.height = target_h;
+        case CMD_DONE: {
+            /* Spawn GTK action bar below overlay */
+            int content_h = renderer_measure(&rend, &cfg, text_buf);
+            uint32_t max_h = cfg.padding_y * 2 + (uint32_t)rend.line_height * cfg.max_lines;
+            uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2;
+            if (target_h > max_h) target_h = max_h;
+            uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
+            if (target_h < min_h) target_h = min_h;
+
+            if (target_h != state.height && state.layer_surface) {
+                zwlr_layer_surface_v1_set_size(state.layer_surface,
+                                                cfg.width, target_h);
+                wl_surface_commit(state.surface);
+                state.height = target_h;
+            }
+
+            /* Launch aside-actions positioned below this overlay */
+            if (current_conv_id[0] != '\0') {
+                char margin_str[32], width_str[32];
+                snprintf(margin_str, sizeof(margin_str), "%u",
+                         cfg.margin_top + state.height + 4);
+                snprintf(width_str, sizeof(width_str), "%u", cfg.width);
+
+                const char *home = getenv("HOME");
+                char bin[512] = "aside-actions";
+                if (home) {
+                    snprintf(bin, sizeof(bin), "%s/.local/bin/aside-actions", home);
+                    if (access(bin, X_OK) != 0)
+                        snprintf(bin, sizeof(bin), "aside-actions");
+                }
+
+                if (fork() == 0) {
+                    execl(bin, "aside-actions",
+                          "--conv-id", current_conv_id,
+                          "--width", width_str,
+                          "--margin-top", margin_str,
+                          NULL);
+                    _exit(1);
                 }
             }
+
             state.needs_redraw = true;
-            /* Start linger period -- fade begins after delay */
             done_at = anim_now_ms();
             break;
+        }
 
         case CMD_CLEAR:
             text_buf[0] = '\0';
@@ -666,10 +461,6 @@ int main(int argc, char *argv[])
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
             user_scrolling = false;
-            show_buttons = false;
-            input_active = false;
-            input_len = 0;
-            input_buf[0] = '\0';
             if (timer_armed) {
                 arm_timer(timer_fd, false);
                 timer_armed = false;

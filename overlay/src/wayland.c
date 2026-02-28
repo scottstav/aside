@@ -6,7 +6,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <xkbcommon/xkbcommon.h>
 
 /* --- wl_output listener (for scale detection) --- */
 
@@ -124,91 +123,6 @@ static const struct wl_pointer_listener pointer_listener = {
     .axis_relative_direction = pointer_axis_relative_direction,
 };
 
-/* --- wl_keyboard listener --- */
-
-static void keyboard_keymap(void *data, struct wl_keyboard *kb,
-                            uint32_t format, int fd, uint32_t size)
-{
-    (void)kb;
-    struct overlay_state *state = data;
-    if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) { close(fd); return; }
-
-    char *map_str = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (map_str == MAP_FAILED) { close(fd); return; }
-
-    if (!state->xkb_ctx)
-        state->xkb_ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (state->xkb_keymap) xkb_keymap_unref(state->xkb_keymap);
-    if (state->xkb_state)  xkb_state_unref(state->xkb_state);
-
-    state->xkb_keymap = xkb_keymap_new_from_string(state->xkb_ctx, map_str,
-        XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    munmap(map_str, size);
-    close(fd);
-
-    if (state->xkb_keymap)
-        state->xkb_state = xkb_state_new(state->xkb_keymap);
-}
-
-static void keyboard_enter(void *data, struct wl_keyboard *kb,
-                            uint32_t serial, struct wl_surface *surface,
-                            struct wl_array *keys)
-{
-    (void)data; (void)kb; (void)serial; (void)surface; (void)keys;
-}
-
-static void keyboard_leave(void *data, struct wl_keyboard *kb,
-                            uint32_t serial, struct wl_surface *surface)
-{
-    (void)data; (void)kb; (void)serial; (void)surface;
-}
-
-static void keyboard_key(void *data, struct wl_keyboard *kb,
-                          uint32_t serial, uint32_t time,
-                          uint32_t key, uint32_t key_state)
-{
-    (void)kb; (void)serial; (void)time;
-    struct overlay_state *state = data;
-    if (!state->xkb_state) return;
-    if (key_state != WL_KEYBOARD_KEY_STATE_PRESSED) return;
-
-    uint32_t keycode = key + 8;
-    xkb_keysym_t sym = xkb_state_key_get_one_sym(state->xkb_state, keycode);
-
-    char buf[8] = {0};
-    int n = xkb_state_key_get_utf8(state->xkb_state, keycode, buf, sizeof(buf));
-
-    if (state->key_cb)
-        state->key_cb(state->key_cb_data, sym, buf, n);
-}
-
-static void keyboard_modifiers(void *data, struct wl_keyboard *kb,
-                                uint32_t serial, uint32_t depressed,
-                                uint32_t latched, uint32_t locked,
-                                uint32_t group)
-{
-    (void)kb; (void)serial;
-    struct overlay_state *state = data;
-    if (state->xkb_state)
-        xkb_state_update_mask(state->xkb_state, depressed, latched,
-                              locked, 0, 0, group);
-}
-
-static void keyboard_repeat_info(void *data, struct wl_keyboard *kb,
-                                  int32_t rate, int32_t delay)
-{
-    (void)data; (void)kb; (void)rate; (void)delay;
-}
-
-static const struct wl_keyboard_listener keyboard_listener = {
-    .keymap = keyboard_keymap,
-    .enter = keyboard_enter,
-    .leave = keyboard_leave,
-    .key = keyboard_key,
-    .modifiers = keyboard_modifiers,
-    .repeat_info = keyboard_repeat_info,
-};
-
 /* --- wl_seat listener --- */
 
 static void seat_capabilities(void *data, struct wl_seat *seat, uint32_t caps)
@@ -217,10 +131,6 @@ static void seat_capabilities(void *data, struct wl_seat *seat, uint32_t caps)
     if ((caps & WL_SEAT_CAPABILITY_POINTER) && !state->pointer) {
         state->pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(state->pointer, &pointer_listener, state);
-    }
-    if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !state->keyboard) {
-        state->keyboard = wl_seat_get_keyboard(seat);
-        wl_keyboard_add_listener(state->keyboard, &keyboard_listener, state);
     }
 }
 
@@ -386,10 +296,6 @@ bool wayland_create_surface(struct overlay_state *state,
     zwlr_layer_surface_v1_add_listener(state->layer_surface,
                                        &layer_surface_listener, state);
 
-    /* Accept keyboard focus when clicked (needed for text input) */
-    zwlr_layer_surface_v1_set_keyboard_interactivity(state->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
-
     /* Accept all pointer input (scroll + click) */
     state->input_enabled = true;
 
@@ -503,22 +409,6 @@ void wayland_cleanup(struct overlay_state *state)
 {
     wayland_destroy_surface(state);
 
-    if (state->xkb_state) {
-        xkb_state_unref(state->xkb_state);
-        state->xkb_state = NULL;
-    }
-    if (state->xkb_keymap) {
-        xkb_keymap_unref(state->xkb_keymap);
-        state->xkb_keymap = NULL;
-    }
-    if (state->xkb_ctx) {
-        xkb_context_unref(state->xkb_ctx);
-        state->xkb_ctx = NULL;
-    }
-    if (state->keyboard) {
-        wl_keyboard_destroy(state->keyboard);
-        state->keyboard = NULL;
-    }
     if (state->pointer) {
         wl_pointer_destroy(state->pointer);
         state->pointer = NULL;
