@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key
 
 
 # ---------------------------------------------------------------------------
@@ -1102,9 +1102,6 @@ class TestReplyCommand:
 # ---------------------------------------------------------------------------
 # set-key command
 # ---------------------------------------------------------------------------
-
-from aside.cli import _cmd_set_key, _cmd_get_key
-
 
 class TestSetKeyCommand:
     def test_set_key_with_arg(self, capsys):

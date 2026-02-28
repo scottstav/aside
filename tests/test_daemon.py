@@ -108,6 +108,23 @@ class TestOverlayConfig:
 # ---------------------------------------------------------------------------
 
 
+class TestMainStartupWiring:
+    def test_main_calls_load_keyring_keys(self):
+        """main() should call load_keyring_keys between restore and cache."""
+        call_order = []
+
+        with mock.patch("aside.daemon._restore_api_keys", side_effect=lambda: call_order.append("restore")):
+            with mock.patch("aside.keyring.load_keyring_keys", side_effect=lambda: call_order.append("keyring")):
+                with mock.patch("aside.daemon._cache_api_keys", side_effect=lambda: call_order.append("cache")):
+                    with mock.patch("aside.daemon.load_config", return_value={}):
+                        with mock.patch("aside.daemon.Daemon") as mock_daemon:
+                            mock_daemon.return_value.run = mock.Mock()
+                            from aside.daemon import main
+                            main()
+
+        assert call_order == ["restore", "keyring", "cache"]
+
+
 class TestDaemonConstruction:
     def test_construct_with_minimal_config(self, minimal_config, tmp_path):
         """Daemon should initialise all components from config."""
