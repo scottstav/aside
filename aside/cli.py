@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import socket
 import subprocess
 import sys
@@ -373,11 +374,16 @@ def _cmd_open(args: argparse.Namespace) -> None:
                 lines.append(content)
                 lines.append("")
 
-    md_path = f"/tmp/aside-{conv_id[:8]}.md"
-    with open(md_path, "w") as f:
-        f.write("\n".join(lines))
+    md_text = "\n".join(lines)
 
-    subprocess.Popen(["xdg-open", md_path])
+    if shutil.which("xdg-open"):
+        md_path = f"/tmp/aside-{conv_id[:8]}.md"
+        with open(md_path, "w") as f:
+            f.write(md_text)
+        subprocess.Popen(["xdg-open", md_path])
+    else:
+        print(md_text)
+        print("\n(xdg-open not found — printed transcript instead)", file=sys.stderr)
 
 
 def _cmd_rm(args: argparse.Namespace) -> None:
