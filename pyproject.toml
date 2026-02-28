@@ -21,6 +21,7 @@ gtk = ["PyGObject>=3.50"]
 [project.scripts]
 aside = "aside.cli:main"
 aside-input = "aside.input.window:main"
+aside-actions = "aside.actions.window:main"
 aside-status = "aside.status:main"
 
 [tool.setuptools.packages.find]
