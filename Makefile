@@ -50,13 +50,13 @@ install: overlay
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@echo "==> Installing wrapper scripts"
 	install -d $(BIN)
-	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.cli "$$@"\n' > $(BIN)/aside
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.cli "$$@"'; } > $(BIN)/aside
 	chmod 755 $(BIN)/aside
-	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.input.window "$$@"\n' > $(BIN)/aside-input
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.input.window "$$@"'; } > $(BIN)/aside-input
 	chmod 755 $(BIN)/aside-input
-	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.status "$$@"\n' > $(BIN)/aside-status
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.status "$$@"'; } > $(BIN)/aside-status
 	chmod 755 $(BIN)/aside-status
-	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.actions.window "$$@"\n' > $(BIN)/aside-actions
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.actions.window "$$@"'; } > $(BIN)/aside-actions
 	chmod 755 $(BIN)/aside-actions
 	@echo "==> Installing systemd units"
 	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
