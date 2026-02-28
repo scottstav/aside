@@ -80,7 +80,8 @@ static void color_rgba(uint32_t c, double *r, double *g, double *b, double *a)
 
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
-                   const char *text, double scroll_y, double opacity)
+                   const char *text, double scroll_y, double opacity,
+                   uint32_t accent)
 {
     cairo_surface_t *surface = cairo_image_surface_create_for_data(
         (unsigned char *)pixels, CAIRO_FORMAT_ARGB32,
@@ -145,7 +146,7 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_clip(cr);
 
         double ac_r, ac_g, ac_b, ac_a;
-        color_rgba(cfg->accent_color, &ac_r, &ac_g, &ac_b, &ac_a);
+        color_rgba(accent, &ac_r, &ac_g, &ac_b, &ac_a);
 
         /* Draw the top edge path of the rounded rect as a thick stroke */
         cairo_new_sub_path(cr);

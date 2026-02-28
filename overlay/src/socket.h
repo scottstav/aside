@@ -18,6 +18,7 @@ struct overlay_command {
     enum overlay_cmd cmd;
     char data[4096];
     char conv_id[64];  /* Conversation ID from daemon */
+    char mode[8];      /* "user" or "agent" (default) */
 };
 
 struct socket_server {

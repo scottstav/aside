@@ -14,6 +14,7 @@ static bool parse_command(const char *line, struct overlay_command *cmd)
     cmd->cmd = CMD_NONE;
     cmd->data[0] = '\0';
     cmd->conv_id[0] = '\0';
+    cmd->mode[0] = '\0';
 
     struct json_object *root = json_tokener_parse(line);
     if (!root)
@@ -45,6 +46,11 @@ static bool parse_command(const char *line, struct overlay_command *cmd)
                  json_object_get_string(jid));
     else
         cmd->conv_id[0] = '\0';
+
+    struct json_object *jmode;
+    if (json_object_object_get_ex(root, "mode", &jmode))
+        snprintf(cmd->mode, sizeof(cmd->mode), "%s",
+                 json_object_get_string(jmode));
 
     json_object_put(root);
     return cmd->cmd != CMD_NONE;

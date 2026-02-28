@@ -34,6 +34,7 @@ def _send(msg: dict) -> None:
 
     try:
         sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.shutdown(socket.SHUT_WR)
     finally:
         sock.close()
 

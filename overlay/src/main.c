@@ -8,6 +8,7 @@
 #include <sys/timerfd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <linux/input-event-codes.h>
 #include "wayland.h"
 #include "config.h"
@@ -17,8 +18,33 @@
 
 static volatile sig_atomic_t quit = 0;
 static char current_conv_id[64] = "";
+static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
+static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
+
+/* Kill the aside-actions child if running */
+static void kill_actions(void)
+{
+    if (actions_pid > 0) {
+        kill(actions_pid, SIGTERM);
+        waitpid(actions_pid, NULL, 0);
+        actions_pid = 0;
+    }
+}
+
+/* Check if aside-actions child has exited; returns true if it just died */
+static bool reap_actions(void)
+{
+    if (actions_pid <= 0) return false;
+    int status;
+    pid_t r = waitpid(actions_pid, &status, WNOHANG);
+    if (r == actions_pid) {
+        actions_pid = 0;
+        return true;
+    }
+    return false;
+}
 
 /* Send a JSON action to the aside daemon */
 static void send_daemon_action(const char *action_json)
@@ -161,9 +187,10 @@ int main(int argc, char *argv[])
             }
 
             uint32_t s = state.scale > 1 ? state.scale : 1;
+            uint32_t accent = user_mode ? cfg.user_accent_color : cfg.accent_color;
             renderer_draw(&rend, &cfg, state.pixels,
                           state.configured_width * s, state.configured_height * s,
-                          text_buf, scroll_anim.current, fade_anim.current);
+                          text_buf, scroll_anim.current, fade_anim.current, accent);
 
             wayland_commit(&state);
             state.needs_redraw = false;
@@ -173,8 +200,14 @@ int main(int argc, char *argv[])
 
         wl_display_flush(state.display);
 
-        /* Check linger timer: start fade after delay, unless pointer hovers */
-        if (done_at > 0 && !state.pointer_over) {
+        /* Reap actions child; start linger when it exits */
+        if (reap_actions() && done_at == 0 && current_conv_id[0]) {
+            done_at = anim_now_ms();
+        }
+
+        /* Check linger timer: start fade after delay, unless pointer hovers
+         * or actions bar is still running */
+        if (done_at > 0 && !state.pointer_over && actions_pid == 0) {
             uint64_t now = anim_now_ms();
             if (now - done_at >= linger_ms) {
                 done_at = 0;
@@ -256,6 +289,7 @@ int main(int argc, char *argv[])
 
             if (btn == BTN_LEFT) {
                 /* Left click: dismiss overlay */
+                kill_actions();
                 text_buf[0] = '\0';
                 text_len = 0;
                 fade_anim.current = 1.0;
@@ -271,6 +305,7 @@ int main(int argc, char *argv[])
                 wayland_destroy_surface(&state);
             } else if (btn == BTN_RIGHT) {
                 /* Right click: cancel query (stops stream + TTS + overlay) */
+                kill_actions();
                 send_daemon_action("{\"action\":\"cancel\"}\n");
                 text_buf[0] = '\0';
                 text_len = 0;
@@ -311,6 +346,7 @@ int main(int argc, char *argv[])
 
                 /* If fade completed (opacity ~0), destroy surface */
                 if (fade_anim.current <= 0.01 && state.surface_visible) {
+                    kill_actions();
                     wayland_destroy_surface(&state);
                 }
             }
@@ -324,9 +360,11 @@ int main(int argc, char *argv[])
 
         switch (cmd.cmd) {
         case CMD_OPEN:
+            kill_actions();
             strncpy(current_conv_id, cmd.conv_id,
                     sizeof(current_conv_id) - 1);
             current_conv_id[sizeof(current_conv_id) - 1] = '\0';
+            user_mode = (strcmp(cmd.mode, "user") == 0);
             text_buf[0] = '\0';
             text_len = 0;
             /* Cancel fade/linger, reset opacity */
@@ -437,22 +475,30 @@ int main(int argc, char *argv[])
                         snprintf(bin, sizeof(bin), "aside-actions");
                 }
 
-                if (fork() == 0) {
+                kill_actions();  /* kill any previous actions bar */
+                pid_t pid = fork();
+                if (pid == 0) {
                     execl(bin, "aside-actions",
                           "--conv-id", current_conv_id,
                           "--width", width_str,
                           "--margin-top", margin_str,
                           NULL);
                     _exit(1);
+                } else if (pid > 0) {
+                    actions_pid = pid;
                 }
             }
 
             state.needs_redraw = true;
-            done_at = anim_now_ms();
+            /* Start linger only if no actions bar was spawned;
+             * otherwise reap_actions() will start it when child exits */
+            if (actions_pid == 0)
+                done_at = anim_now_ms();
             break;
         }
 
         case CMD_CLEAR:
+            kill_actions();
             text_buf[0] = '\0';
             text_len = 0;
             fade_anim.current = 1.0;

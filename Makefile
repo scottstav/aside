@@ -7,7 +7,7 @@ SYSTEMD  := $(HOME)/.config/systemd/user
 APPS     := $(HOME)/.local/share/applications
 CONFIG   := $(HOME)/.config/aside
 
-.PHONY: all overlay install install-extras-tts install-extras-voice install-extras-gtk uninstall clean
+.PHONY: all overlay install dev install-extras-tts install-extras-voice install-extras-gtk uninstall clean
 
 all: overlay
 
@@ -19,13 +19,33 @@ overlay:
 	ninja -C overlay/build
 
 # ---------------------------------------------------------------------------
+# Fast dev reinstall — reuses existing venv, restarts services
+# ---------------------------------------------------------------------------
+dev: overlay
+	$(VENV)/bin/pip install ".[gtk]"
+	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
+	@install -d $(BIN)
+	@for cmd in aside aside-input aside-status aside-actions; do \
+		src="$(VENV)/bin/$$cmd"; \
+		if [ -f "$$src" ]; then \
+			ln -sf "$$src" "$(BIN)/$$cmd"; \
+		fi; \
+	done
+	cp -a plugins/* $(LIB)/plugins/ 2>/dev/null || true
+	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
+	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
+	systemctl --user daemon-reload
+	systemctl --user restart aside-daemon aside-overlay
+	@echo "==> Dev reinstall done"
+
+# ---------------------------------------------------------------------------
 # Install everything
 # ---------------------------------------------------------------------------
 install: overlay
 	@echo "==> Creating venv at $(VENV)"
 	$(PYTHON) -m venv $(VENV) --clear
 	$(VENV)/bin/pip install --upgrade pip setuptools
-	$(VENV)/bin/pip install .
+	$(VENV)/bin/pip install ".[gtk]"
 	@echo "==> Installing overlay binary"
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@echo "==> Installing wrapper scripts"

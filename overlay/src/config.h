@@ -9,7 +9,8 @@ struct overlay_config {
     uint32_t background;     // RGBA: 0xRRGGBBAA
     uint32_t text_color;     // RGBA: 0xRRGGBBAA
     uint32_t border_color;   // RGBA: 0xRRGGBBAA
-    uint32_t accent_color;   // RGBA: 0xRRGGBBAA — top accent line
+    uint32_t accent_color;   // RGBA: 0xRRGGBBAA — top accent line (agent mode)
+    uint32_t user_accent_color; // RGBA: 0xRRGGBBAA — accent for user/mic mode
     uint32_t width;
     uint32_t max_lines;
     uint32_t padding_x;

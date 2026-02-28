@@ -50,27 +50,39 @@ CSS = """
 window {
     background-color: transparent;
 }
+window.background {
+    background-color: transparent;
+}
 .action-bar {
-    background-color: alpha(@window_bg_color, 0.95);
-    border-radius: 8px;
-    border: 1px solid alpha(@accent_color, 0.3);
-    padding: 6px;
+    background-color: alpha(@window_bg_color, 0.90);
+    border-radius: 14px;
+    border: 1px solid alpha(@accent_color, 0.25);
+    padding: 2px;
+    margin: 0;
 }
-.action-btn {
-    border-radius: 6px;
-    padding: 6px 16px;
-    min-height: 28px;
-    background: alpha(@window_fg_color, 0.06);
-    border: 1px solid alpha(@accent_color, 0.2);
-    color: @accent_color;
-    font-weight: 500;
+button.action-btn {
+    border-radius: 10px;
+    padding: 2px 8px;
+    min-height: 0;
+    min-width: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: alpha(@window_fg_color, 0.5);
+    -gtk-icon-size: 14px;
 }
-.action-btn:hover {
+button.action-btn:hover {
     background: alpha(@accent_color, 0.15);
-    border-color: alpha(@accent_color, 0.5);
+    color: @accent_color;
 }
-.action-btn:active {
+button.action-btn:active {
     background: alpha(@accent_color, 0.25);
+}
+.input-bar {
+    background-color: alpha(@window_bg_color, 0.95);
+    border-radius: 12px;
+    border: 1px solid alpha(@accent_color, 0.3);
+    padding: 4px;
 }
 .reply-input {
     background-color: alpha(@window_fg_color, 0.04);
@@ -86,21 +98,23 @@ window {
 .reply-hint {
     font-size: 0.8em;
     color: alpha(@window_fg_color, 0.4);
-    margin-top: 4px;
+    margin-top: 2px;
 }
 """
 
 
-class ActionsWindow(Adw.ApplicationWindow):
+class ActionsWindow(Gtk.Window):
     """Layer-shell action bar that appears below the overlay."""
 
     def __init__(self, app: Adw.Application, conv_id: str,
                  width: int, margin_top: int) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
+        self._input_width = width
 
         self.set_title("aside-actions")
-        self.set_default_size(width, -1)
+        self.set_decorated(False)
+        self.set_resizable(False)
 
         # Layer shell setup
         Gtk4LayerShell.init_for_window(self)
@@ -108,7 +122,7 @@ class ActionsWindow(Adw.ApplicationWindow):
         Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
         Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
         Gtk4LayerShell.set_keyboard_mode(
-            self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+            self, Gtk4LayerShell.KeyboardMode.NONE
         )
         Gtk4LayerShell.set_namespace(self, "aside-actions")
 
@@ -122,32 +136,50 @@ class ActionsWindow(Adw.ApplicationWindow):
 
         # Build UI
         self._stack = Gtk.Stack()
+        self._stack.set_vhomogeneous(False)
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.set_transition_duration(150)
 
         self._build_button_mode()
         self._build_input_mode()
-        self.set_content(self._stack)
+        self.set_child(self._stack)
 
         # Keyboard shortcuts
         key_ctl = Gtk.EventControllerKey()
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
 
+        # Auto-dismiss after inactivity (reset on any interaction)
+        self._timeout_id = GLib.timeout_add_seconds(5, self._on_timeout)
+
+    def _reset_timeout(self) -> None:
+        if self._timeout_id:
+            GLib.source_remove(self._timeout_id)
+        self._timeout_id = GLib.timeout_add_seconds(5, self._on_timeout)
+
+    def _on_timeout(self) -> bool:
+        self._timeout_id = 0
+        self.close()
+        return False
+
     def _build_button_mode(self) -> None:
         """Create the action buttons view."""
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         box.add_css_class("action-bar")
         box.set_halign(Gtk.Align.CENTER)
 
-        for label, callback in [
-            ("mic", self._on_mic),
-            ("open", self._on_open),
-            ("reply", self._on_reply),
+        for icon_name, tooltip, callback in [
+            ("audio-input-microphone-symbolic", "Voice reply", self._on_mic),
+            ("document-open-symbolic", "Open transcript", self._on_open),
+            ("mail-reply-sender-symbolic", "Text reply", self._on_reply),
         ]:
-            btn = Gtk.Button(label=label)
+            img = Gtk.Image.new_from_icon_name(icon_name)
+            img.set_pixel_size(14)
+            btn = Gtk.Button()
+            btn.set_child(img)
+            btn.set_has_frame(False)
+            btn.set_tooltip_text(tooltip)
             btn.add_css_class("action-btn")
-            btn.set_hexpand(True)
             btn.connect("clicked", callback)
             box.append(btn)
 
@@ -157,7 +189,7 @@ class ActionsWindow(Adw.ApplicationWindow):
     def _build_input_mode(self) -> None:
         """Create the text input view."""
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.add_css_class("action-bar")
+        vbox.add_css_class("input-bar")
 
         # Scrolled text view
         scrolled = Gtk.ScrolledWindow()
@@ -207,6 +239,11 @@ class ActionsWindow(Adw.ApplicationWindow):
         self.close()
 
     def _on_reply(self, btn: Gtk.Button) -> None:
+        self._reset_timeout()
+        Gtk4LayerShell.set_keyboard_mode(
+            self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+        )
+        self.set_size_request(self._input_width, -1)
         self._stack.set_visible_child_name("input")
         self._textview.grab_focus()
 
@@ -217,6 +254,10 @@ class ActionsWindow(Adw.ApplicationWindow):
         if keyval == Gdk.KEY_Escape:
             # If in input mode, go back to buttons
             if self._stack.get_visible_child_name() == "input":
+                Gtk4LayerShell.set_keyboard_mode(
+                    self, Gtk4LayerShell.KeyboardMode.NONE
+                )
+                self.set_size_request(-1, -1)
                 self._stack.set_visible_child_name("buttons")
                 return True
             # If in button mode, close
@@ -226,6 +267,7 @@ class ActionsWindow(Adw.ApplicationWindow):
 
     def _on_input_key(self, ctl: Gtk.EventControllerKey,
                       keyval: int, keycode: int, state: Gdk.ModifierType) -> bool:
+        self._reset_timeout()
         if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             if state & Gdk.ModifierType.SHIFT_MASK:
                 return False  # let GTK insert newline

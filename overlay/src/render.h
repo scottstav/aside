@@ -23,9 +23,11 @@ int renderer_measure(struct renderer *r, const struct overlay_config *cfg,
 // Render text into an ARGB8888 pixel buffer.
 // scroll_y: how many pixels of content to skip from the top (for scrolling).
 // opacity: 0.0-1.0 for fade animation.
+// accent: accent color override (used instead of cfg->accent_color).
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
-                   const char *text, double scroll_y, double opacity);
+                   const char *text, double scroll_y, double opacity,
+                   uint32_t accent);
 
 void renderer_cleanup(struct renderer *r);
 

@@ -461,7 +461,7 @@ def send_query(
     # ------------------------------------------------------------------
     full_text = ""
     overlay_sock = _connect_overlay()
-    _overlay_send(overlay_sock, {"cmd": "open", "conv_id": conv["id"]})
+    _overlay_send(overlay_sock, {"cmd": "open", "mode": "agent", "conv_id": conv["id"]})
     sentence_buf = SentenceBuffer()
     session_tokens = 0
     dirs = plugin_dirs or []

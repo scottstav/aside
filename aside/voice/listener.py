@@ -13,7 +13,7 @@ import time
 log = logging.getLogger(__name__)
 
 
-def capture_one_shot(config: dict) -> str:
+def capture_one_shot(config: dict, on_interim=None) -> str:
     """Record speech from the microphone and return the transcription.
 
     Opens the microphone, records audio frames with VAD-based silence
@@ -28,6 +28,8 @@ def capture_one_shot(config: dict) -> str:
                 ``pre_roll_seconds``, ``smart_silence``, ``silence_timeout``,
                 ``no_speech_timeout``, ``force_send_phrases``, and
                 optionally ``max_capture_seconds``.
+        on_interim: Optional callback ``(text: str) -> None`` called with
+                    each interim transcription (~every 2s).
 
     Returns:
         Transcribed text string, or empty string if no speech detected.
@@ -53,12 +55,12 @@ def capture_one_shot(config: dict) -> str:
 
     audio.start()
     try:
-        return _do_capture(audio, detector, whisper_config, config)
+        return _do_capture(audio, detector, whisper_config, config, on_interim)
     finally:
         audio.stop()
 
 
-def _do_capture(audio, detector, whisper_config: dict, config: dict) -> str:
+def _do_capture(audio, detector, whisper_config: dict, config: dict, on_interim=None) -> str:
     """Core capture loop: read frames, detect silence, transcribe.
 
     Separated from ``capture_one_shot`` so that audio.stop() is always
@@ -105,6 +107,11 @@ def _do_capture(audio, detector, whisper_config: dict, config: dict) -> str:
                     detector.update_transcript(interim_text)
                     if interim_text.strip():
                         heard_speech = True
+                        if on_interim:
+                            try:
+                                on_interim(interim_text.strip())
+                            except Exception:
+                                pass
 
                     # Transcript stall detection
                     if heard_speech and interim_text.strip() == last_transcript:

@@ -113,6 +113,7 @@ _COLOR_KEY_MAP = {
     "foreground": "text_color",
     "border": "border_color",
     "accent": "accent_color",
+    "user_accent": "user_accent_color",
 }
 
 # Top-level overlay keys (non-color) written as-is.
@@ -321,11 +322,33 @@ class Daemon:
                             if capture_one_shot is None:
                                 log.warning("Voice deps not installed -- mic capture unavailable")
                                 return
-                            text = capture_one_shot(self.config.get("voice", {}))
+
+                            from aside.query import _connect_overlay, _overlay_send, _overlay_close
+
+                            overlay_sock = _connect_overlay()
+                            _overlay_send(overlay_sock, {
+                                "cmd": "open",
+                                "mode": "user",
+                                "conv_id": conv_id or "",
+                            })
+
+                            def on_interim(text):
+                                _overlay_send(overlay_sock, {
+                                    "cmd": "replace",
+                                    "data": text,
+                                })
+
+                            text = capture_one_shot(
+                                self.config.get("voice", {}),
+                                on_interim=on_interim,
+                            )
+                            _overlay_close(overlay_sock)
+
                             if text:
                                 self.start_query(text, conversation_id=conv_id)
                             else:
                                 log.info("Mic capture returned empty, no query started")
+                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
                         except Exception:
                             log.exception("Mic capture error")
 

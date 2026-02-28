@@ -13,6 +13,7 @@ void config_defaults(struct overlay_config *cfg)
     cfg->text_color      = 0xe0e0e0ff;
     cfg->border_color    = 0x333355ff;
     cfg->accent_color    = 0xD4714Aff;
+    cfg->user_accent_color = 0x9ECE6Aff;
     cfg->width           = 600;
     cfg->max_lines       = 12;
     cfg->padding_x       = 12;
@@ -76,6 +77,8 @@ static void config_set(struct overlay_config *cfg, const char *key,
         parse_color(value, &cfg->border_color);
     } else if (strcmp(key, "accent_color") == 0) {
         parse_color(value, &cfg->accent_color);
+    } else if (strcmp(key, "user_accent_color") == 0) {
+        parse_color(value, &cfg->user_accent_color);
     } else if (strcmp(key, "width") == 0) {
         cfg->width = (uint32_t)strtoul(value, NULL, 10);
     } else if (strcmp(key, "max_lines") == 0) {
