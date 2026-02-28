@@ -78,6 +78,10 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside daemon
     sub.add_parser("daemon", help="Start the aside daemon (foreground)")
 
+    # aside show CONVERSATION_ID
+    show = sub.add_parser("show", help="Print a full conversation transcript")
+    show.add_argument("conversation_id", help="Conversation ID to display")
+
     # aside ls [-n LIMIT]
     ls = sub.add_parser("ls", help="List recent conversations")
     ls.add_argument(
@@ -216,6 +220,49 @@ def _cmd_ls(args: argparse.Namespace) -> None:
         print(f"{short_id}  {age:>8}  {preview}")
 
 
+def _cmd_show(args: argparse.Namespace) -> None:
+    """Print a full conversation transcript to stdout."""
+    cfg = load_config()
+    conv_dir = resolve_conversations_dir(cfg)
+
+    conv_path = conv_dir / f"{args.conversation_id}.json"
+    if not conv_path.exists():
+        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
+        sys.exit(1)
+
+    with open(conv_path) as f:
+        conv = json.load(f)
+
+    # Build a lookup from tool_call id -> function name for resolving
+    # tool messages that lack a "name" field.
+    tool_call_names: dict[str, str] = {}
+
+    for msg in conv.get("messages", []):
+        role = msg.get("role", "")
+
+        if role == "user":
+            content = msg.get("content", "")
+            text = _extract_user_preview(content)
+            print(f"user: {text}")
+
+        elif role == "assistant":
+            # Collect tool_call names for later resolution
+            for tc in msg.get("tool_calls", []):
+                tc_id = tc.get("id", "")
+                tc_name = tc.get("function", {}).get("name", "unknown")
+                tool_call_names[tc_id] = tc_name
+                print(f"assistant: [calling {tc_name}]")
+
+            content = msg.get("content")
+            if content:
+                print(f"assistant: {content}")
+
+        elif role == "tool":
+            name = msg.get("name") or tool_call_names.get(msg.get("tool_call_id", ""), "unknown")
+            content = msg.get("content", "")
+            print(f"tool({name}): {content}")
+
+
 def _cmd_daemon(args: argparse.Namespace) -> None:
     """Start the aside daemon in the foreground."""
     from aside.daemon import main as daemon_main
@@ -233,6 +280,7 @@ _HANDLERS = {
     "stop-tts": _cmd_stop_tts,
     "status": _cmd_status,
     "ls": _cmd_ls,
+    "show": _cmd_show,
     "daemon": _cmd_daemon,
 }
 

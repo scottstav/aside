@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +67,11 @@ class TestArgumentParsing:
     def test_ls_default_limit(self):
         args = self.parser.parse_args(["ls"])
         assert args.limit == 20
+
+    def test_show(self):
+        args = self.parser.parse_args(["show", "abc-123"])
+        assert args.command == "show"
+        assert args.conversation_id == "abc-123"
 
     def test_no_subcommand_exits(self):
         """Calling with no subcommand should cause an error."""
@@ -393,3 +398,175 @@ class TestLsCommand:
         parts = lines[0].split()
         # At minimum: short id and some age string
         assert len(parts) >= 2
+
+
+# ---------------------------------------------------------------------------
+# show command
+# ---------------------------------------------------------------------------
+
+
+class TestShowCommand:
+    """Test the show subcommand that prints a full conversation transcript."""
+
+    def _make_conv(self, conv_dir, conv_id, created, messages):
+        """Write a conversation JSON file."""
+        data = {"id": conv_id, "created": created, "messages": messages}
+        (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
+
+    def test_show_user_and_assistant(self, tmp_path, capsys):
+        """show should print user and assistant messages with role prefixes."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "aaaa-1111", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "aaaa-1111"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_show(args)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "user: Hello"
+        assert lines[1] == "assistant: Hi there!"
+
+    def test_show_tool_calls(self, tmp_path, capsys):
+        """show should display tool calls and tool results."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "bbbb-2222", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Search for cats"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "function": {"name": "web_search", "arguments": '{"q": "cats"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_1", "name": "web_search", "content": "Cats are great pets."},
+            {"role": "assistant", "content": "According to my search, cats are great pets."},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "bbbb-2222"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_show(args)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "user: Search for cats"
+        assert lines[1] == "assistant: [calling web_search]"
+        assert lines[2] == "tool(web_search): Cats are great pets."
+        assert lines[3] == "assistant: According to my search, cats are great pets."
+
+    def test_show_tool_result_without_name(self, tmp_path, capsys):
+        """Tool message without name field should resolve name from preceding tool_call."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "cccc-3333", "2026-02-27T10:00:00+00:00", [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_99",
+                        "function": {"name": "read_file", "arguments": '{"path": "/tmp/x"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_99", "content": "file contents here"},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "cccc-3333"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_show(args)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "assistant: [calling read_file]"
+        assert lines[1] == "tool(read_file): file contents here"
+
+    def test_show_multimodal_user_content(self, tmp_path, capsys):
+        """User content can be a list (multimodal) — should extract text parts."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "dddd-4444", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;..."}},
+                {"type": "text", "text": "What is in this image?"},
+            ]},
+            {"role": "assistant", "content": "I see a cat."},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "dddd-4444"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_show(args)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "user: What is in this image?"
+        assert lines[1] == "assistant: I see a cat."
+
+    def test_show_not_found(self, tmp_path, capsys):
+        """show should print an error and exit 1 if conversation not found."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        args = mock.MagicMock()
+        args.conversation_id = "nonexistent-id"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with pytest.raises(SystemExit) as exc_info:
+                    _cmd_show(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower()
+
+    def test_show_multiple_tool_calls(self, tmp_path, capsys):
+        """Assistant message with multiple tool_calls should show each one."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "eeee-5555", "2026-02-27T10:00:00+00:00", [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "web_search", "arguments": "{}"}},
+                    {"id": "c2", "function": {"name": "read_file", "arguments": "{}"}},
+                ],
+            },
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "eeee-5555"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_show(args)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().splitlines()
+        assert lines[0] == "assistant: [calling web_search]"
+        assert lines[1] == "assistant: [calling read_file]"
