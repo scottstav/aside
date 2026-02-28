@@ -1,10 +1,13 @@
 # aside
 
-a desktop LLM assistant for Wayland. ask it something with your voice or keyboard, it streams the answer onto a floating overlay, then fades away.
+a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, and never lose focus on what you're doing.
 
-![demo](demo.gif)
+![demo](demo.gif) ![demo](demo2.gif)
 
-voice input, follow-up questions, reply button, live transcript — it all just works.
+- **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel.
+- **voice** — STT via faster-whisper, TTS via Kokoro. talk to it, it talks back.
+- **actions bar** — mic, transcript, and reply buttons after every response.
+- **input popup** — GTK4 window with conversation history. continue one or start fresh.
 
 ## tools
 
@@ -36,50 +39,31 @@ aside set-key openai sk-...
 
 ## CLI
 
-the CLI makes scripting and integration easy.
+everything goes through the CLI, which makes it easy to script, integrate with pickers, or wire into status bars.
 
-![demo](demo2.gif)
+![demo](demo3.gif)
 
 ```bash
-# models
-aside models                    # list what's available
-aside model set gemini/gemini-2.5-pro  # switch on the fly
-aside model exclude openai/o1   # hide deprecated models
+# models — auto-detects what's available based on your API keys
+aside models
+aside model set gemini/gemini-2.5-pro
+aside model exclude openai/o1
 
 # querying
 aside query "what time is it in tokyo"
-aside query --mic               # voice input
+aside query --mic
 aside reply abc123 "tell me more"
 
 # state
-aside status                    # daemon status as JSON
+aside status                    # JSON, great for status bars
 aside ls                        # recent conversations
 aside show <id>                 # print conversation
 aside open <id>                 # open as markdown
 
 # voice
-aside toggle-tts                # toggle text-to-speech
-aside stop-tts                  # stop playback
-aside cancel                    # cancel running query
-```
-
-### waybar
-
-aside integrates with waybar out of the box — status icon updates in real time as the model thinks, uses tools, and responds.
-
-![demo](demo3.gif)
-
-```json
-{
-    "custom/aside": {
-        "exec": "aside-status",
-        "return-type": "json",
-        "signal": 12,
-        "interval": "once",
-        "on-click": "aside-input",
-        "on-click-right": "aside toggle-tts"
-    }
-}
+aside toggle-tts
+aside stop-tts
+aside cancel
 ```
 
 ## theming
