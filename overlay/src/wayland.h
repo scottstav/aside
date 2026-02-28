@@ -6,6 +6,16 @@
 #include <wayland-client.h>
 #include "wlr-layer-shell-unstable-v1-protocol.h"
 
+/* Forward declarations for keyboard callback */
+struct xkb_context;
+struct xkb_keymap;
+struct xkb_state;
+
+/* Keyboard event callback: called on key press with keysym and UTF-8 text.
+ * utf8 may be empty for non-printable keys. n is the byte length of utf8. */
+typedef void (*keyboard_key_cb)(void *user_data, uint32_t keysym,
+                                const char *utf8, int n);
+
 struct overlay_state {
     /* Wayland globals */
     struct wl_display *display;
@@ -16,6 +26,7 @@ struct overlay_state {
     struct wl_output *output;
     struct wl_seat *seat;
     struct wl_pointer *pointer;
+    struct wl_keyboard *keyboard;
 
     /* Surface */
     struct wl_surface *surface;
@@ -39,8 +50,16 @@ struct overlay_state {
     /* Pointer / scroll input */
     double pending_scroll_delta;
     uint32_t pending_button;   /* button code from last press, 0 = none */
+    double pointer_x, pointer_y;  /* current pointer position */
     bool pointer_over;
     bool input_enabled;
+
+    /* Keyboard / xkb state */
+    struct xkb_context *xkb_ctx;
+    struct xkb_keymap  *xkb_keymap;
+    struct xkb_state   *xkb_state;
+    keyboard_key_cb     key_cb;
+    void               *key_cb_data;
 
     /* State flags */
     bool surface_visible;

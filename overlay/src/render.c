@@ -78,9 +78,147 @@ static void color_rgba(uint32_t c, double *r, double *g, double *b, double *a)
     *a = (c & 0xFF) / 255.0;
 }
 
+/* Draw action buttons at the bottom of the overlay */
+static void draw_buttons(struct renderer *r, const struct overlay_config *cfg,
+                         cairo_t *cr, double logical_w, double logical_h,
+                         struct button_rect *rects, int count)
+{
+    if (count <= 0) return;
+
+    double ac_r, ac_g, ac_b, ac_a;
+    color_rgba(cfg->accent_color, &ac_r, &ac_g, &ac_b, &ac_a);
+
+    double bg_r, bg_g, bg_b, bg_a;
+    color_rgba(cfg->background, &bg_r, &bg_g, &bg_b, &bg_a);
+
+    double btn_h = r->line_height + 4;
+    double row_y = logical_h - cfg->padding_y - btn_h;
+    double total_w = logical_w - 2 * cfg->padding_x;
+    double gap = 8.0;
+    double btn_w = (total_w - gap * (count - 1)) / count;
+
+    const char *labels[] = { "mic", "open", "reply" };
+
+    for (int i = 0; i < count; i++) {
+        double bx = cfg->padding_x + i * (btn_w + gap);
+        double by = row_y;
+
+        /* Store rect for hit-testing (logical coords) */
+        if (rects) {
+            rects[i].x = bx;
+            rects[i].y = by;
+            rects[i].w = btn_w;
+            rects[i].h = btn_h;
+        }
+
+        /* Button fill: lighter version of background */
+        rounded_rect(cr, bx, by, btn_w, btn_h, 4.0);
+        cairo_set_source_rgba(cr,
+            fmin(bg_r + 0.08, 1.0), fmin(bg_g + 0.08, 1.0),
+            fmin(bg_b + 0.08, 1.0), bg_a);
+        cairo_fill(cr);
+
+        /* Button border: subtle */
+        rounded_rect(cr, bx, by, btn_w, btn_h, 4.0);
+        cairo_set_source_rgba(cr, ac_r, ac_g, ac_b, 0.3);
+        cairo_set_line_width(cr, 1.0);
+        cairo_stroke(cr);
+
+        /* Button label */
+        const char *label = (i < 3) ? labels[i] : "?";
+        PangoLayout *layout = pango_cairo_create_layout(cr);
+        pango_layout_set_font_description(layout, r->font_desc);
+        pango_layout_set_text(layout, label, -1);
+
+        int tw, th;
+        pango_layout_get_pixel_size(layout, &tw, &th);
+        double tx = bx + (btn_w - tw) / 2.0;
+        double ty = by + (btn_h - th) / 2.0;
+
+        cairo_move_to(cr, tx, ty);
+        cairo_set_source_rgba(cr, ac_r, ac_g, ac_b, ac_a);
+        pango_cairo_show_layout(cr, layout);
+        g_object_unref(layout);
+    }
+}
+
+/* Draw text input box at the bottom of the overlay */
+static void draw_input_box(struct renderer *r, const struct overlay_config *cfg,
+                           cairo_t *cr, double logical_w, double logical_h,
+                           const char *input_text)
+{
+    double ac_r, ac_g, ac_b, ac_a;
+    color_rgba(cfg->accent_color, &ac_r, &ac_g, &ac_b, &ac_a);
+
+    double bg_r, bg_g, bg_b, bg_a;
+    color_rgba(cfg->background, &bg_r, &bg_g, &bg_b, &bg_a);
+
+    double tc_r, tc_g, tc_b, tc_a;
+    color_rgba(cfg->text_color, &tc_r, &tc_g, &tc_b, &tc_a);
+
+    double box_h = r->line_height + 8;
+    double box_y = logical_h - cfg->padding_y - box_h;
+    double box_x = cfg->padding_x;
+    double box_w = logical_w - 2 * cfg->padding_x;
+
+    /* Input box background: slightly different from overlay bg */
+    rounded_rect(cr, box_x, box_y, box_w, box_h, 4.0);
+    cairo_set_source_rgba(cr,
+        fmin(bg_r + 0.05, 1.0), fmin(bg_g + 0.05, 1.0),
+        fmin(bg_b + 0.05, 1.0), bg_a);
+    cairo_fill(cr);
+
+    /* Input box border: accent color */
+    rounded_rect(cr, box_x, box_y, box_w, box_h, 4.0);
+    cairo_set_source_rgba(cr, ac_r, ac_g, ac_b, 0.5);
+    cairo_set_line_width(cr, 1.0);
+    cairo_stroke(cr);
+
+    /* Text or placeholder */
+    PangoLayout *layout = pango_cairo_create_layout(cr);
+    pango_layout_set_font_description(layout, r->font_desc);
+
+    double text_x = box_x + 8.0;
+    double text_max_w = box_w - 16.0;
+    pango_layout_set_width(layout, (int)(text_max_w) * PANGO_SCALE);
+    pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_NONE);
+
+    bool has_text = input_text && input_text[0] != '\0';
+
+    if (has_text) {
+        /* Build display string with cursor */
+        size_t len = strlen(input_text);
+        char *display = malloc(len + 2);
+        if (display) {
+            memcpy(display, input_text, len);
+            display[len] = '|';
+            display[len + 1] = '\0';
+            pango_layout_set_text(layout, display, -1);
+            free(display);
+        } else {
+            pango_layout_set_text(layout, input_text, -1);
+        }
+        cairo_set_source_rgba(cr, tc_r, tc_g, tc_b, tc_a);
+    } else {
+        pango_layout_set_text(layout, "Type a reply...", -1);
+        cairo_set_source_rgba(cr, tc_r, tc_g, tc_b, 0.4);
+    }
+
+    int tw, th;
+    pango_layout_get_pixel_size(layout, &tw, &th);
+    double text_y = box_y + (box_h - th) / 2.0;
+
+    cairo_move_to(cr, text_x, text_y);
+    pango_cairo_show_layout(cr, layout);
+    g_object_unref(layout);
+}
+
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
-                   const char *text, double scroll_y, double opacity)
+                   const char *text, double scroll_y, double opacity,
+                   bool draw_buttons_flag, struct button_rect *btn_rects,
+                   int btn_count,
+                   bool draw_input, const char *input_text)
 {
     cairo_surface_t *surface = cairo_image_surface_create_for_data(
         (unsigned char *)pixels, CAIRO_FORMAT_ARGB32,
@@ -211,7 +349,10 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         double px = cfg->padding_x;
         double py = cfg->padding_y;
         double content_w = logical_w - 2 * px;
-        double content_h = logical_h - 2 * py;
+        /* Reserve space for button/input row if active */
+        double bottom_row = (draw_buttons_flag || draw_input)
+            ? (double)(r->line_height + 16) : 0.0;
+        double content_h = logical_h - 2 * py - bottom_row;
 
         cairo_rectangle(cr, px, py, content_w, content_h);
         cairo_clip(cr);
@@ -275,6 +416,14 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_pop_group_to_source(cr);
         cairo_paint(cr);
         cairo_restore(cr);
+    }
+
+    /* --- Action buttons or input box --- */
+    if (draw_buttons_flag && btn_rects && btn_count > 0) {
+        draw_buttons(r, cfg, cr, logical_w, logical_h,
+                     btn_rects, btn_count);
+    } else if (draw_input) {
+        draw_input_box(r, cfg, cr, logical_w, logical_h, input_text);
     }
 
     /* Pop group and paint with global opacity */
