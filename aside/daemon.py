@@ -407,6 +407,22 @@ class Daemon:
                 self.status.speak_enabled = new_val
                 log.info("Socket: toggle_tts -> %s", new_val)
 
+            elif action == "get_model":
+                model = self.config.get("model", {}).get("name", "")
+                response = json.dumps({"model": model}).encode("utf-8")
+                writer.write(response)
+                await writer.drain()
+                log.info("Socket: get_model -> %s", model)
+
+            elif action == "set_model":
+                new_model = msg.get("model", "")
+                if new_model:
+                    self.config.setdefault("model", {})["name"] = new_model
+                    self.status.set_model(new_model)
+                    log.info("Socket: set_model -> %s", new_model)
+                else:
+                    log.warning("Socket: set_model with empty model name")
+
             else:
                 log.warning("Socket: unknown action %r", action)
 

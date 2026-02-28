@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 import os
@@ -1191,3 +1192,55 @@ class TestSendRecv:
         with mock.patch("aside.cli.resolve_socket_path", return_value=tmp_path / "nope.sock"):
             with pytest.raises(SystemExit):
                 _send_recv({"action": "get_model"})
+
+
+# ---------------------------------------------------------------------------
+# Daemon model actions
+# ---------------------------------------------------------------------------
+
+
+class TestDaemonModelActions:
+    """Test get_model and set_model socket actions."""
+
+    @pytest.fixture
+    def daemon(self, tmp_path):
+        from aside.config import DEFAULT_CONFIG
+        import copy
+        config = copy.deepcopy(DEFAULT_CONFIG)
+        config["model"]["name"] = "anthropic/claude-haiku-4-5"
+        from aside.daemon import Daemon
+        with mock.patch("subprocess.Popen"):
+            d = Daemon(config)
+        return d
+
+    @pytest.mark.asyncio
+    async def test_get_model(self, daemon):
+        reader = asyncio.StreamReader()
+        reader.feed_data(json.dumps({"action": "get_model"}).encode())
+        reader.feed_eof()
+
+        writer = mock.AsyncMock()
+        writer.write = mock.Mock()
+        writer.close = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+
+        await daemon.handle_client(reader, writer)
+
+        written = writer.write.call_args[0][0]
+        data = json.loads(written.decode())
+        assert data["model"] == "anthropic/claude-haiku-4-5"
+
+    @pytest.mark.asyncio
+    async def test_set_model(self, daemon):
+        reader = asyncio.StreamReader()
+        reader.feed_data(json.dumps({"action": "set_model", "model": "gemini/gemini-2.5-pro"}).encode())
+        reader.feed_eof()
+
+        writer = mock.AsyncMock()
+        writer.write = mock.Mock()
+        writer.close = mock.Mock()
+        writer.wait_closed = mock.AsyncMock()
+
+        await daemon.handle_client(reader, writer)
+
+        assert daemon.config["model"]["name"] == "gemini/gemini-2.5-pro"
