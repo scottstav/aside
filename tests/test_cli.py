@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key
+from aside.cli import main, _send, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key
 
 
 # ---------------------------------------------------------------------------
@@ -1142,3 +1142,52 @@ class TestGetKeyCommand:
                     _cmd_get_key(args)
         out = capsys.readouterr().out
         assert "not found" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# _send_recv helper
+# ---------------------------------------------------------------------------
+
+
+class TestSendRecv:
+    def test_send_recv_returns_response(self, tmp_path):
+        """_send_recv sends JSON and returns the parsed JSON response."""
+        import asyncio
+        import threading
+
+        sock_path = tmp_path / "test.sock"
+
+        async def echo_server():
+            async def handler(reader, writer):
+                data = await reader.read(65536)
+                writer.write(data)
+                await writer.drain()
+                writer.close()
+                await writer.wait_closed()
+
+            srv = await asyncio.start_unix_server(handler, path=str(sock_path))
+            return srv
+
+        loop = asyncio.new_event_loop()
+
+        def run_loop():
+            asyncio.set_event_loop(loop)
+            loop.run_forever()
+
+        t = threading.Thread(target=run_loop, daemon=True)
+        t.start()
+
+        srv = asyncio.run_coroutine_threadsafe(echo_server(), loop).result(timeout=5)
+        try:
+            with mock.patch("aside.cli.resolve_socket_path", return_value=sock_path):
+                result = _send_recv({"action": "get_model"})
+            assert result == {"action": "get_model"}
+        finally:
+            loop.call_soon_threadsafe(srv.close)
+            loop.call_soon_threadsafe(loop.stop)
+            t.join(timeout=5)
+
+    def test_send_recv_daemon_not_running(self, tmp_path):
+        with mock.patch("aside.cli.resolve_socket_path", return_value=tmp_path / "nope.sock"):
+            with pytest.raises(SystemExit):
+                _send_recv({"action": "get_model"})

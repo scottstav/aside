@@ -39,6 +39,36 @@ def _send(msg: dict) -> None:
         sock.close()
 
 
+def _send_recv(msg: dict) -> dict:
+    """Send JSON to the daemon and return the JSON response.
+
+    Like _send, but waits for a response before closing.
+    """
+    sock_path = resolve_socket_path("aside.sock")
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(str(sock_path))
+    except (ConnectionRefusedError, FileNotFoundError, OSError):
+        print("Error: aside daemon is not running", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.shutdown(socket.SHUT_WR)
+
+        chunks = []
+        while True:
+            data = sock.recv(4096)
+            if not data:
+                break
+            chunks.append(data)
+
+        return json.loads(b"".join(chunks).decode("utf-8"))
+    finally:
+        sock.close()
+
+
 def _resolve_conv_id(conv_dir, prefix: str) -> str:
     """Resolve a conversation ID prefix to the full ID.
 
