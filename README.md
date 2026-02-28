@@ -1,46 +1,17 @@
 # aside
 
-Wayland-native LLM assistant. You talk to it (keyboard or mic), it streams the response onto a floating overlay on your desktop, and it goes away when it's done.
+Wayland-native LLM assistant. Ask it something, it streams the answer onto a floating overlay on your desktop, then gets out of the way.
 
-![Overlay streaming a response](screenshots/overlay-streaming.png)
+![aside overlay](screenshots/overlay-streaming.png)
 
-## Overlay
+- **Overlay** — C11 layer-shell surface, streams tokens in real time, auto-dismisses. Hover to keep it, right-click to cancel.
+- **Voice** — STT via faster-whisper, TTS via Kokoro. Talk to it, it talks back.
+- **Actions bar** — pops up after a response with mic, open transcript, and reply buttons.
+- **Input popup** — GTK4 window with conversation history. Pick one to continue or start fresh.
+- **Plugins** — drop a Python file with `TOOL_SPEC` + `run()` in a directory. Ships with shell, screenshot, web search, memory, clipboard.
+- **Any LLM** — [LiteLLM](https://github.com/BerriAI/litellm) under the hood. Claude, GPT-4o, Gemini, Ollama, whatever.
 
-C11 layer-shell surface. Streams text token-by-token as it comes back from the LLM. Auto-scrolls, fades content at the edges, and dismisses itself after a few seconds. Hover to keep it around. Left-click to dismiss. Right-click to cancel mid-stream.
-
-![Overlay text detail](screenshots/overlay-closeup.png)
-
-The accent bar at the top is orange when the LLM is responding, green when it's listening to your mic. When nothing's happening, the overlay doesn't exist — no window, no tray icon.
-
-## Actions bar
-
-When a response finishes, a small bar appears below the overlay with three buttons — mic (voice reply), open (view the transcript), and reply (inline text input). Goes away on its own after 5 seconds.
-
-![Actions bar](screenshots/actions-bar.png)
-
-## Voice
-
-Speech-to-text via faster-whisper. You talk, it transcribes in real time on the overlay, and auto-sends when you stop. TTS via Kokoro — responses are synthesized sentence-by-sentence and played back as text streams in. Middle-click the overlay to kill the audio without stopping the text.
-
-## Input popup
-
-GTK4 window for typing queries. Shows recent conversations so you can pick one to continue.
-
-![Input popup](screenshots/input-popup.png)
-
-## Waybar
-
-Custom module that shows the model name, cost, and what the daemon is doing. Click it to open the input popup.
-
-![Waybar module](screenshots/waybar-module.png)
-
-## LLM support
-
-Uses [LiteLLM](https://github.com/BerriAI/litellm) — Claude, GPT-4o, Gemini, Ollama, Groq, Mistral, whatever. One config line to switch.
-
-## Plugins
-
-Drop a Python file with a `TOOL_SPEC` dict and a `run()` function into the plugins directory. That's it. Built-in tools: shell, screenshot (sends the image to the LLM), web search, persistent memory, clipboard.
+![aside input](screenshots/input-popup.png)
 
 ## Install
 
@@ -51,7 +22,7 @@ make install
 systemctl --user enable --now aside-daemon aside-overlay
 ```
 
-Voice, TTS, and GTK input are separate:
+Optional:
 
 ```bash
 make install-extras-voice  # faster-whisper + VAD
@@ -63,12 +34,10 @@ make install-extras-gtk    # input popup
 
 | | |
 |---|---|
-| [Installation](docs/install.md) | Dependencies, build steps, AUR |
-| [Usage & CLI](docs/usage.md) | All commands |
-| [Configuration](docs/configuration.md) | Config reference |
+| [Installation](docs/install.md) | Dependencies, build, AUR |
+| [Usage](docs/usage.md) | CLI reference |
+| [Configuration](docs/configuration.md) | Config options |
 | [Plugins](docs/plugins.md) | Plugin API |
-| [Architecture](docs/architecture.md) | System design, sockets, data flow |
-
-## License
+| [Architecture](docs/architecture.md) | System design |
 
 MIT
