@@ -15,8 +15,10 @@ Copy the example config and set your API key:
 ```bash
 cp ~/.config/aside/config.toml.example ~/.config/aside/config.toml
 # Edit config.toml — at minimum set model.name
-export ANTHROPIC_API_KEY="sk-..."   # or OPENAI_API_KEY, etc.
+aside set-key anthropic sk-ant-...   # or: aside set-key openai sk-...
 ```
+
+See [configuration.md](configuration.md#api-key-configuration) for all key storage options (keyring, env file, env vars).
 
 Start the services:
 
