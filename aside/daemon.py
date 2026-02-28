@@ -178,9 +178,8 @@ class Daemon:
         Full config dict (from ``load_config``).
     """
 
-    def __init__(self, config: dict, config_path: Path | None = None) -> None:
+    def __init__(self, config: dict) -> None:
         self.config = config
-        self._config_path = config_path
 
         # Resolve directories
         state_dir = resolve_state_dir(config)
@@ -238,18 +237,6 @@ class Daemon:
     # Query dispatch
     # ------------------------------------------------------------------
 
-    def _reload_model(self) -> None:
-        """Re-read the model name from config.toml and update config + status."""
-        if self._config_path is None:
-            return
-        from aside.state import _read_model_from_config
-        new_model = _read_model_from_config(self._config_path)
-        old_model = self.config.get("model", {}).get("name")
-        if new_model != old_model:
-            self.config.setdefault("model", {})["name"] = new_model
-            self.status.reload_model(self._config_path)
-            log.info("Model changed: %s -> %s", old_model, new_model)
-
     def start_query(
         self,
         text: str,
@@ -261,7 +248,6 @@ class Daemon:
 
         Cancels any existing running query first.
         """
-        self._reload_model()
 
         cancel_event = threading.Event()
         with self._cancel_lock:
@@ -496,17 +482,8 @@ def main() -> None:
     load_keyring_keys()
 
     _cache_api_keys()
-    config_path = _resolve_config_path()
-    config = load_config(config_path)
-    Daemon(config, config_path=config_path).run()
-
-
-def _resolve_config_path() -> Path:
-    """Return the path to config.toml (same logic as load_config)."""
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    if xdg:
-        return Path(xdg) / "aside" / "config.toml"
-    return Path.home() / ".config" / "aside" / "config.toml"
+    config = load_config()
+    Daemon(config).run()
 
 
 if __name__ == "__main__":

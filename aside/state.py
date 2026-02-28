@@ -7,7 +7,6 @@ import logging
 import subprocess
 import threading
 import time
-import tomllib
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -290,22 +289,11 @@ class StatusState:
             self._state["usage"]["total_tokens"] = total_tokens
             self._write()
 
-    def reload_model(self, config_path: Path) -> None:
-        """Re-read model name from config.toml and update state."""
+    def set_model(self, model: str) -> None:
+        """Update the active model name in status state."""
         with self._lock:
-            self._state["model"] = _read_model_from_config(config_path)
+            self._state["model"] = model
             self._write()
-
-    def reload_speak_enabled(self) -> None:
-        """Re-read the state file to pick up toggle changes from external scripts."""
-        with self._lock:
-            try:
-                status_file = self._state_dir / "status.json"
-                if status_file.exists():
-                    data = json.loads(status_file.read_text())
-                    self._state["speak_enabled"] = data.get("speak_enabled", False)
-            except (json.JSONDecodeError, OSError):
-                pass
 
     def _write(self) -> None:
         """Write state to disk and signal the status bar."""
@@ -333,11 +321,3 @@ class StatusState:
 # ---------------------------------------------------------------------------
 
 
-def _read_model_from_config(config_path: Path) -> str:
-    """Read the model name from a TOML config file."""
-    try:
-        with open(config_path, "rb") as f:
-            config = tomllib.load(f)
-        return config.get("model", {}).get("name", DEFAULT_MODEL)
-    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
-        return DEFAULT_MODEL

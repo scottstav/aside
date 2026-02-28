@@ -290,21 +290,11 @@ class TestStatusState:
         assert "month_cost" not in data["usage"]
         assert "last_query_cost" not in data["usage"]
 
-    def test_reload_model(self, tmp_path):
-        config_path = tmp_path / "config.toml"
-        config_path.write_text('[model]\nname = "openai/gpt-4o"\n')
+    def test_set_model(self):
         with mock.patch("subprocess.Popen"):
-            self.status.reload_model(config_path)
+            self.status.set_model("gemini/gemini-2.5-pro")
         data = json.loads((self.state_dir / "status.json").read_text())
-        assert data["model"] == "openai/gpt-4o"
-
-    def test_reload_model_missing_file(self, tmp_path):
-        config_path = tmp_path / "nonexistent.toml"
-        with mock.patch("subprocess.Popen"):
-            self.status.reload_model(config_path)
-        # Should keep default model
-        data = json.loads((self.state_dir / "status.json").read_text())
-        assert "model" in data
+        assert data["model"] == "gemini/gemini-2.5-pro"
 
     def test_signal_bar_uses_configured_signal(self):
         with mock.patch("subprocess.Popen") as mock_popen:
