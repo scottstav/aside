@@ -386,6 +386,10 @@ bool wayland_create_surface(struct overlay_state *state,
     zwlr_layer_surface_v1_add_listener(state->layer_surface,
                                        &layer_surface_listener, state);
 
+    /* Accept keyboard focus when clicked (needed for text input) */
+    zwlr_layer_surface_v1_set_keyboard_interactivity(state->layer_surface,
+        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
+
     /* Accept all pointer input (scroll + click) */
     state->input_enabled = true;
 

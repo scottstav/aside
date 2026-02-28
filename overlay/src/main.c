@@ -124,12 +124,24 @@ static void handle_button_click(int btn)
         dismiss_overlay();
         break;
     }
-    case BTN_ACTION_OPEN:
+    case BTN_ACTION_OPEN: {
+        /* Resolve aside binary -- pip installs to ~/.local/bin which may
+           not be in our inherited PATH. */
+        const char *home = getenv("HOME");
+        char aside_bin[512];
+        if (home) {
+            snprintf(aside_bin, sizeof(aside_bin), "%s/.local/bin/aside", home);
+            if (access(aside_bin, X_OK) != 0)
+                snprintf(aside_bin, sizeof(aside_bin), "aside"); /* fallback */
+        } else {
+            snprintf(aside_bin, sizeof(aside_bin), "aside");
+        }
         if (fork() == 0) {
-            execlp("aside", "aside", "open", current_conv_id, NULL);
+            execl(aside_bin, "aside", "open", current_conv_id, NULL);
             _exit(1);
         }
         break;
+    }
     case BTN_ACTION_REPLY:
         input_active = true;
         input_len = 0;
