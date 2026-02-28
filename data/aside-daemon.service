@@ -6,6 +6,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/.config/aside/env
 ExecStart=%h/.local/lib/aside/venv/bin/python3 -m aside.daemon
 Restart=on-failure
 RestartSec=5
