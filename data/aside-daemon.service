@@ -1,6 +1,7 @@
 [Unit]
 Description=aside - LLM desktop assistant daemon
 After=graphical-session.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -8,7 +9,6 @@ Environment=PYTHONUNBUFFERED=1
 ExecStart=%h/.local/lib/aside/venv/bin/python3 -m aside.daemon
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=default.target

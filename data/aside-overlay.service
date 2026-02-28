@@ -1,13 +1,13 @@
 [Unit]
 Description=aside - Wayland text overlay
 After=graphical-session.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/aside-overlay
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=default.target

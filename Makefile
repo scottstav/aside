@@ -56,6 +56,8 @@ install: overlay
 	chmod 755 $(BIN)/aside-input
 	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.status "$$@"\n' > $(BIN)/aside-status
 	chmod 755 $(BIN)/aside-status
+	printf '#!/bin/sh\nexec $(VENV)/bin/python3 -m aside.actions.window "$$@"\n' > $(BIN)/aside-actions
+	chmod 755 $(BIN)/aside-actions
 	@echo "==> Installing systemd units"
 	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
 	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
