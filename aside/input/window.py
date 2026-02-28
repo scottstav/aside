@@ -207,8 +207,13 @@ class AsideInputWindow(Adw.ApplicationWindow):
         self._textview.grab_focus()
         input_scroll.set_child(self._textview)
 
+        # Key controller on textview for Enter handling
+        tv_key = Gtk.EventControllerKey()
+        tv_key.connect("key-pressed", self._on_input_key)
+        self._textview.add_controller(tv_key)
+
         # -- Hint label --
-        hint = Gtk.Label(label="Ctrl+Enter to send  |  Escape to close")
+        hint = Gtk.Label(label="Enter to send  |  Shift+Enter for newline  |  Escape to close")
         hint.add_css_class("dim-label")
         hint.set_margin_bottom(6)
         vbox.append(hint)
@@ -261,12 +266,35 @@ class AsideInputWindow(Adw.ApplicationWindow):
             self.close()
             return True
 
-        # Ctrl+Enter -> submit
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            if state & Gdk.ModifierType.CONTROL_MASK:
-                self._submit()
+        # Ctrl+N / Ctrl+P -> navigate conversation list
+        if state & Gdk.ModifierType.CONTROL_MASK:
+            if keyval in (Gdk.KEY_n, Gdk.KEY_p):
+                row = self._listbox.get_selected_row()
+                if row is not None:
+                    idx = row.get_index()
+                    if keyval == Gdk.KEY_n:
+                        next_row = self._listbox.get_row_at_index(idx + 1)
+                    else:
+                        next_row = self._listbox.get_row_at_index(max(0, idx - 1))
+                    if next_row is not None:
+                        self._listbox.select_row(next_row)
                 return True
 
+        # Tab -> select conversation and focus input
+        if keyval == Gdk.KEY_Tab:
+            self._textview.grab_focus()
+            return True
+
+        return False
+
+    def _on_input_key(self, ctl: Gtk.EventControllerKey,
+                      keyval: int, keycode: int, state: Gdk.ModifierType) -> bool:
+        """Handle key presses inside the text input."""
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            if state & Gdk.ModifierType.SHIFT_MASK:
+                return False  # let GTK insert newline
+            self._submit()
+            return True
         return False
 
     def _submit(self) -> None:
