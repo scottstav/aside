@@ -177,6 +177,7 @@ int main(int argc, char *argv[])
     /* Linger state: wait before starting fade after CMD_DONE */
     uint64_t done_at = 0;        /* timestamp when CMD_DONE received, 0 = not waiting */
     uint32_t linger_ms = 3000;   /* ms to wait after done before fading */
+    bool done_received = false;  /* true after CMD_DONE, prevents premature linger */
 
     while (!quit && !state.closed) {
         /* Only redraw when surface is visible and configured */
@@ -205,9 +206,8 @@ int main(int argc, char *argv[])
             done_at = anim_now_ms();
         }
 
-        /* Check linger timer: start fade after delay, unless pointer hovers
-         * or actions bar is still running */
-        if (done_at > 0 && !state.pointer_over && actions_pid == 0) {
+        /* Check linger timer: start fade after delay, unless pointer hovers */
+        if (done_at > 0 && !state.pointer_over) {
             uint64_t now = anim_now_ms();
             if (now - done_at >= linger_ms) {
                 done_at = 0;
@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
         }
         /* Restart linger when pointer leaves after hover-pause */
         if (!state.pointer_over && done_at == 0
-            && !fade_anim.active && current_conv_id[0]) {
+            && !fade_anim.active && done_received && current_conv_id[0]) {
             done_at = anim_now_ms();
         }
 
@@ -295,6 +295,7 @@ int main(int argc, char *argv[])
                 fade_anim.current = 1.0;
                 fade_anim.active = false;
                 done_at = 0;
+                done_received = false;
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 user_scrolling = false;
@@ -312,6 +313,7 @@ int main(int argc, char *argv[])
                 fade_anim.current = 1.0;
                 fade_anim.active = false;
                 done_at = 0;
+                done_received = false;
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 user_scrolling = false;
@@ -347,6 +349,7 @@ int main(int argc, char *argv[])
                 /* If fade completed (opacity ~0), destroy surface */
                 if (fade_anim.current <= 0.01 && state.surface_visible) {
                     kill_actions();
+                    done_received = false;
                     wayland_destroy_surface(&state);
                 }
             }
@@ -371,6 +374,7 @@ int main(int argc, char *argv[])
             fade_anim.current = 1.0;
             fade_anim.active = false;
             done_at = 0;
+            done_received = false;
             /* Reset scroll */
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
@@ -490,10 +494,8 @@ int main(int argc, char *argv[])
             }
 
             state.needs_redraw = true;
-            /* Start linger only if no actions bar was spawned;
-             * otherwise reap_actions() will start it when child exits */
-            if (actions_pid == 0)
-                done_at = anim_now_ms();
+            done_received = true;
+            done_at = anim_now_ms();
             break;
         }
 
@@ -504,6 +506,7 @@ int main(int argc, char *argv[])
             fade_anim.current = 1.0;
             fade_anim.active = false;
             done_at = 0;
+            done_received = false;
             scroll_anim.current = 0.0;
             scroll_anim.active = false;
             user_scrolling = false;

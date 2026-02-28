@@ -149,18 +149,7 @@ class ActionsWindow(Gtk.Window):
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
 
-        # Auto-dismiss after inactivity (reset on any interaction)
-        self._timeout_id = GLib.timeout_add_seconds(5, self._on_timeout)
-
-    def _reset_timeout(self) -> None:
-        if self._timeout_id:
-            GLib.source_remove(self._timeout_id)
-        self._timeout_id = GLib.timeout_add_seconds(5, self._on_timeout)
-
-    def _on_timeout(self) -> bool:
-        self._timeout_id = 0
-        self.close()
-        return False
+        # Lifecycle managed by the overlay process (SIGTERM on fade/dismiss).
 
     def _build_button_mode(self) -> None:
         """Create the action buttons view."""
@@ -239,7 +228,6 @@ class ActionsWindow(Gtk.Window):
         self.close()
 
     def _on_reply(self, btn: Gtk.Button) -> None:
-        self._reset_timeout()
         Gtk4LayerShell.set_keyboard_mode(
             self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
         )
@@ -267,7 +255,6 @@ class ActionsWindow(Gtk.Window):
 
     def _on_input_key(self, ctl: Gtk.EventControllerKey,
                       keyval: int, keycode: int, state: Gdk.ModifierType) -> bool:
-        self._reset_timeout()
         if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             if state & Gdk.ModifierType.SHIFT_MASK:
                 return False  # let GTK insert newline
