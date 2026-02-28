@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +76,11 @@ class TestArgumentParsing:
     def test_open(self):
         args = self.parser.parse_args(["open", "abc-123"])
         assert args.command == "open"
+        assert args.conversation_id == "abc-123"
+
+    def test_rm(self):
+        args = self.parser.parse_args(["rm", "abc-123"])
+        assert args.command == "rm"
         assert args.conversation_id == "abc-123"
 
     def test_no_subcommand_exits(self):
@@ -690,3 +695,74 @@ class TestOpenCommand:
 
         # Clean up
         os.unlink(md_path)
+
+
+# ---------------------------------------------------------------------------
+# rm command
+# ---------------------------------------------------------------------------
+
+
+class TestRmCommand:
+    """Test the rm subcommand that deletes a conversation."""
+
+    def _make_conv(self, conv_dir, conv_id, created, messages):
+        """Write a conversation JSON file."""
+        data = {"id": conv_id, "created": created, "messages": messages}
+        (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
+
+    def test_rm_deletes_file(self, tmp_path):
+        """rm should delete the conversation JSON file."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "aaaa-1111", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Hello"},
+        ])
+
+        conv_path = conv_dir / "aaaa-1111.json"
+        assert conv_path.exists()
+
+        args = mock.MagicMock()
+        args.conversation_id = "aaaa-1111"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_rm(args)
+
+        assert not conv_path.exists()
+
+    def test_rm_prints_confirmation(self, tmp_path, capsys):
+        """rm should print 'Deleted {id[:7]}' on success."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "bbbb-2222", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "Hello"},
+        ])
+
+        args = mock.MagicMock()
+        args.conversation_id = "bbbb-2222"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_rm(args)
+
+        captured = capsys.readouterr()
+        assert "Deleted bbbb-22" in captured.out
+
+    def test_rm_not_found(self, tmp_path, capsys):
+        """rm should print an error and exit 1 if conversation not found."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        args = mock.MagicMock()
+        args.conversation_id = "nonexistent-id"
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                with pytest.raises(SystemExit) as exc_info:
+                    _cmd_rm(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower()

@@ -87,6 +87,10 @@ def _build_parser() -> argparse.ArgumentParser:
     open_cmd = sub.add_parser("open", help="Export conversation to markdown and open it")
     open_cmd.add_argument("conversation_id", help="Conversation ID to export and open")
 
+    # aside rm CONVERSATION_ID
+    rm_cmd = sub.add_parser("rm", help="Delete a conversation")
+    rm_cmd.add_argument("conversation_id", help="Conversation ID to delete")
+
     # aside ls [-n LIMIT]
     ls = sub.add_parser("ls", help="List recent conversations")
     ls.add_argument(
@@ -310,6 +314,20 @@ def _cmd_open(args: argparse.Namespace) -> None:
     subprocess.Popen(["xdg-open", md_path])
 
 
+def _cmd_rm(args: argparse.Namespace) -> None:
+    """Delete a conversation file."""
+    cfg = load_config()
+    conv_dir = resolve_conversations_dir(cfg)
+
+    conv_path = conv_dir / f"{args.conversation_id}.json"
+    if not conv_path.exists():
+        print(f"Error: conversation {args.conversation_id} not found", file=sys.stderr)
+        sys.exit(1)
+
+    conv_path.unlink()
+    print(f"Deleted {args.conversation_id[:7]}")
+
+
 def _cmd_daemon(args: argparse.Namespace) -> None:
     """Start the aside daemon in the foreground."""
     from aside.daemon import main as daemon_main
@@ -329,6 +347,7 @@ _HANDLERS = {
     "ls": _cmd_ls,
     "show": _cmd_show,
     "open": _cmd_open,
+    "rm": _cmd_rm,
     "daemon": _cmd_daemon,
 }
 
