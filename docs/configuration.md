@@ -12,7 +12,7 @@ cp ~/.config/aside/config.toml.example ~/.config/aside/config.toml
 |------------------|-----------------------------------------------------|
 | `[model]`        | LLM provider and model name, system prompt          |
 | `[input]`        | Terminal emulator for input window                   |
-| `[voice]`        | Wake word, STT model, silence detection              |
+| `[voice]`        | STT model, silence detection                         |
 | `[tts]`          | Voice model, speed, text filtering                   |
 | `[overlay]`      | Font, dimensions, colors, animation timing           |
 | `[storage]`      | Conversation and archive directories                 |

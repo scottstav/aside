@@ -15,7 +15,7 @@ The main CLI. All subcommands talk to the daemon over a Unix socket.
 | `aside reply ID --mic` | Continue a conversation via voice capture |
 | `aside ls [-n LIMIT]` | List recent conversations (default: 20) |
 | `aside show ID` | Print a full conversation transcript |
-| `aside open ID` | Export conversation to markdown and open it |
+| `aside open ID` | Open the conversation transcript |
 | `aside rm ID` | Delete a conversation |
 | `aside cancel` | Cancel the running query |
 | `aside stop-tts` | Stop TTS playback |
@@ -48,4 +48,4 @@ Waybar custom module. Reads the daemon's `status.json` and prints waybar-compati
 
 Conversations are stored as JSON in `~/.local/state/aside/conversations/`. By default, a new query continues the most recent conversation. Use `--new` to start fresh.
 
-Export any conversation to markdown with `aside open ID`.
+Open any conversation transcript with `aside open ID`.
