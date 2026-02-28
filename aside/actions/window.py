@@ -14,6 +14,7 @@ import logging
 import os
 import socket
 import sys
+import threading
 
 _LAYER_SHELL_LIB = os.environ.get("GTK4_LAYER_SHELL_LIB", "libgtk4-layer-shell.so")
 try:
@@ -107,7 +108,8 @@ class ActionsWindow(Gtk.Window):
     """Layer-shell action bar that appears below the overlay."""
 
     def __init__(self, app: Adw.Application, conv_id: str,
-                 width: int, margin_top: int) -> None:
+                 width: int, margin_top: int,
+                 reposition_fd: int | None = None) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
@@ -149,7 +151,39 @@ class ActionsWindow(Gtk.Window):
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
 
-        # Lifecycle managed by the overlay process (SIGTERM on fade/dismiss).
+        # Watch for reposition messages from overlay (pipe fd)
+        if reposition_fd is not None:
+            threading.Thread(
+                target=self._watch_reposition, args=(reposition_fd,),
+                daemon=True,
+            ).start()
+
+    def _watch_reposition(self, fd: int) -> None:
+        """Read margin-top updates from the overlay over a pipe."""
+        buf = b""
+        while True:
+            try:
+                data = os.read(fd, 256)
+            except OSError:
+                break
+            if not data:
+                break
+            buf += data
+            while b"\n" in buf:
+                line, buf = buf.split(b"\n", 1)
+                try:
+                    margin = int(line)
+                    GLib.idle_add(self._update_margin, margin)
+                except ValueError:
+                    pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    def _update_margin(self, margin: int) -> bool:
+        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin)
+        return False
 
     def _build_button_mode(self) -> None:
         """Create the action buttons view."""
@@ -274,14 +308,17 @@ class ActionsWindow(Gtk.Window):
 
 
 class ActionsApp(Adw.Application):
-    def __init__(self, conv_id: str, width: int, margin_top: int) -> None:
+    def __init__(self, conv_id: str, width: int, margin_top: int,
+                 reposition_fd: int | None = None) -> None:
         super().__init__(application_id="dev.aside.actions")
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
+        self._reposition_fd = reposition_fd
 
     def do_activate(self) -> None:
-        win = ActionsWindow(self, self._conv_id, self._width, self._margin_top)
+        win = ActionsWindow(self, self._conv_id, self._width, self._margin_top,
+                            reposition_fd=self._reposition_fd)
         win.present()
 
 
@@ -293,8 +330,10 @@ def main() -> None:
     parser.add_argument("--conv-id", required=True)
     parser.add_argument("--width", type=int, default=600)
     parser.add_argument("--margin-top", type=int, default=60)
+    parser.add_argument("--reposition-fd", type=int, default=None)
     args = parser.parse_args()
-    app = ActionsApp(args.conv_id, args.width, args.margin_top)
+    app = ActionsApp(args.conv_id, args.width, args.margin_top,
+                     reposition_fd=args.reposition_fd)
     app.run([])
 
 

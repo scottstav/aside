@@ -20,6 +20,7 @@ static volatile sig_atomic_t quit = 0;
 static char current_conv_id[64] = "";
 static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
 static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
+static int actions_write_fd = -1; /* write end of pipe to reposition actions */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
 
@@ -31,6 +32,10 @@ static void kill_actions(void)
         waitpid(actions_pid, NULL, 0);
         actions_pid = 0;
     }
+    if (actions_write_fd >= 0) {
+        close(actions_write_fd);
+        actions_write_fd = -1;
+    }
 }
 
 /* Check if aside-actions child has exited; returns true if it just died */
@@ -41,9 +46,67 @@ static bool reap_actions(void)
     pid_t r = waitpid(actions_pid, &status, WNOHANG);
     if (r == actions_pid) {
         actions_pid = 0;
+        if (actions_write_fd >= 0) {
+            close(actions_write_fd);
+            actions_write_fd = -1;
+        }
         return true;
     }
     return false;
+}
+
+/* Send new margin-top to the actions bar over its reposition pipe */
+static void reposition_actions(uint32_t margin_top, uint32_t height)
+{
+    if (actions_write_fd < 0) return;
+    char msg[32];
+    int n = snprintf(msg, sizeof(msg), "%u\n", margin_top + height + 4);
+    (void)write(actions_write_fd, msg, n);
+}
+
+/* Spawn aside-actions bar below the overlay */
+static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
+{
+    if (current_conv_id[0] == '\0') return;
+
+    char margin_str[32], width_str[32];
+    snprintf(margin_str, sizeof(margin_str), "%u",
+             cfg->margin_top + height + 4);
+    snprintf(width_str, sizeof(width_str), "%u", cfg->width);
+
+    const char *home = getenv("HOME");
+    char bin[512] = "aside-actions";
+    if (home) {
+        snprintf(bin, sizeof(bin), "%s/.local/bin/aside-actions", home);
+        if (access(bin, X_OK) != 0)
+            snprintf(bin, sizeof(bin), "aside-actions");
+    }
+
+    kill_actions();
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return;
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(pipefd[1]);
+        char fd_str[16];
+        snprintf(fd_str, sizeof(fd_str), "%d", pipefd[0]);
+        execl(bin, "aside-actions",
+              "--conv-id", current_conv_id,
+              "--width", width_str,
+              "--margin-top", margin_str,
+              "--reposition-fd", fd_str,
+              NULL);
+        _exit(1);
+    } else if (pid > 0) {
+        close(pipefd[0]);
+        actions_pid = pid;
+        actions_write_fd = pipefd[1];
+    } else {
+        close(pipefd[0]);
+        close(pipefd[1]);
+    }
 }
 
 /* Send a JSON action to the aside daemon */
@@ -112,6 +175,7 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
+    signal(SIGPIPE, SIG_IGN);
 
     if (!wayland_init(&state)) {
         fprintf(stderr, "Failed to initialize Wayland\n");
@@ -201,8 +265,8 @@ int main(int argc, char *argv[])
 
         wl_display_flush(state.display);
 
-        /* Reap actions child; start linger when it exits */
-        if (reap_actions() && done_at == 0 && current_conv_id[0]) {
+        /* Reap actions child; start linger when it exits (only after done) */
+        if (reap_actions() && done_at == 0 && done_received && current_conv_id[0]) {
             done_at = anim_now_ms();
         }
 
@@ -386,6 +450,9 @@ int main(int argc, char *argv[])
                     break;
                 }
             }
+            /* Spawn actions immediately (not user/mic mode) */
+            if (!user_mode)
+                spawn_actions(&cfg, state.height);
             state.needs_redraw = true;
             break;
 
@@ -428,6 +495,7 @@ int main(int argc, char *argv[])
                                                    cfg.width, target_h);
                     wl_surface_commit(state.surface);
                     state.height = target_h;
+                    reposition_actions(cfg.margin_top, state.height);
                     /* Configure callback will set needs_redraw */
                 }
             }
@@ -449,7 +517,7 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_DONE: {
-            /* Spawn GTK action bar below overlay */
+            /* Final resize + reposition actions */
             int content_h = renderer_measure(&rend, &cfg, text_buf);
             uint32_t max_h = cfg.padding_y * 2 + (uint32_t)rend.line_height * cfg.max_lines;
             uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2;
@@ -462,36 +530,12 @@ int main(int argc, char *argv[])
                                                 cfg.width, target_h);
                 wl_surface_commit(state.surface);
                 state.height = target_h;
+                reposition_actions(cfg.margin_top, state.height);
             }
 
-            /* Launch aside-actions positioned below this overlay */
-            if (current_conv_id[0] != '\0') {
-                char margin_str[32], width_str[32];
-                snprintf(margin_str, sizeof(margin_str), "%u",
-                         cfg.margin_top + state.height + 4);
-                snprintf(width_str, sizeof(width_str), "%u", cfg.width);
-
-                const char *home = getenv("HOME");
-                char bin[512] = "aside-actions";
-                if (home) {
-                    snprintf(bin, sizeof(bin), "%s/.local/bin/aside-actions", home);
-                    if (access(bin, X_OK) != 0)
-                        snprintf(bin, sizeof(bin), "aside-actions");
-                }
-
-                kill_actions();  /* kill any previous actions bar */
-                pid_t pid = fork();
-                if (pid == 0) {
-                    execl(bin, "aside-actions",
-                          "--conv-id", current_conv_id,
-                          "--width", width_str,
-                          "--margin-top", margin_str,
-                          NULL);
-                    _exit(1);
-                } else if (pid > 0) {
-                    actions_pid = pid;
-                }
-            }
+            /* Spawn actions now if not already running (e.g. user-mode open) */
+            if (actions_pid == 0 && current_conv_id[0] != '\0')
+                spawn_actions(&cfg, state.height);
 
             state.needs_redraw = true;
             done_received = true;
