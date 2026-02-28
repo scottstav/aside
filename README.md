@@ -55,6 +55,44 @@ make install-extras-voice  # voice input (openwakeword, faster-whisper)
 make install-extras-gtk    # GTK4 input window (PyGObject)
 ```
 
+## CLI Reference
+
+### `aside`
+
+The main CLI. All subcommands talk to the daemon over a Unix socket.
+
+| Command | Description |
+|---------|-------------|
+| `aside query TEXT` | Send a query to the daemon |
+| `aside query --mic` | Send a query via one-shot voice capture |
+| `aside query --new TEXT` | Force a new conversation |
+| `aside query -c ID TEXT` | Continue a specific conversation |
+| `aside reply ID [TEXT]` | Continue a conversation by ID (prompts for input if no text given) |
+| `aside reply ID --gui` | Continue a conversation in the GTK input popup |
+| `aside reply ID --mic` | Continue a conversation via voice capture |
+| `aside ls [-n LIMIT]` | List recent conversations (default: 20) |
+| `aside show ID` | Print a full conversation transcript |
+| `aside open ID` | Export conversation to markdown and open it |
+| `aside rm ID` | Delete a conversation |
+| `aside cancel` | Cancel the running query |
+| `aside stop-tts` | Stop TTS playback |
+| `aside status` | Print daemon status as JSON |
+| `aside daemon` | Start the daemon in the foreground |
+
+Conversation IDs can be short prefixes (e.g. the 7-char IDs shown by `aside ls`).
+
+### `aside-input`
+
+GTK4 text entry popup. Opens a lightweight input window with conversation history picker. Pass `-c ID` to pre-select a conversation.
+
+### `aside-actions`
+
+GTK4 layer-shell action bar providing quick-access buttons for common daemon commands.
+
+### `aside-status`
+
+Waybar custom module. Reads the daemon's `status.json` and prints waybar-compatible JSON (`text`, `tooltip`, `class`) to stdout. Shows model name, cost tracking, and activity status.
+
 ## Configuration
 
 All configuration lives in `~/.config/aside/config.toml`. The example config documents every option:
@@ -162,7 +200,7 @@ The **overlay** is a standalone C program using wlr-layer-shell. It reads config
 | soundfile           | TTS audio file handling           | `make install-extras-tts` |
 | openwakeword        | Wake word detection               | `make install-extras-voice`|
 | faster-whisper      | Speech-to-text                    | `make install-extras-voice`|
-| webrtcvad           | Voice activity detection          | `make install-extras-voice`|
+| webrtcvad-wheels    | Voice activity detection          | `make install-extras-voice`|
 | PyGObject + GTK4    | Input window                      | `make install-extras-gtk` |
 | grim + slurp        | Screenshot plugin                 | system package            |
 

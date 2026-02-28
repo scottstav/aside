@@ -29,7 +29,7 @@ optdepends=(
     'python-soundfile: TTS audio file handling'
     'python-openwakeword: voice wake word detection'
     'python-faster-whisper: speech-to-text'
-    'python-webrtcvad: voice activity detection'
+    'python-webrtcvad-wheels: voice activity detection'
     'python-gobject: GTK4 input window'
     'gtk4: GTK4 input window'
     'grim: screenshot plugin'

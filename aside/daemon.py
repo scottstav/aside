@@ -187,7 +187,7 @@ class Daemon:
 
         # Built-in tools directory (alongside this module)
         built_in_tools_dir = Path(__file__).parent / "tools"
-        plugin_dirs = [Path(d) for d in config.get("plugins", {}).get("dirs", [])]
+        plugin_dirs = [Path(d).expanduser() for d in config.get("plugins", {}).get("dirs", [])]
         self.tools_dirs: list[Path] = [built_in_tools_dir] + plugin_dirs
         self._tools: list[dict] | None = None  # Lazy-loaded
 
