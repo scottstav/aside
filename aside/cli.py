@@ -51,9 +51,9 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
     sub.required = True
 
-    # aside query "text" [-c CONV_ID] [--new]
+    # aside query [TEXT] [-c CONV_ID] [--new] [--mic]
     q = sub.add_parser("query", help="Send a query to the daemon")
-    q.add_argument("text", help="Query text")
+    q.add_argument("text", nargs="?", default=None, help="Query text")
     q.add_argument(
         "-c", "--conversation-id",
         dest="conversation_id",
@@ -65,6 +65,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Force a new conversation",
+    )
+    q.add_argument(
+        "--mic",
+        action="store_true",
+        default=False,
+        help="One-shot voice capture",
     )
 
     # aside cancel
@@ -117,7 +123,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _cmd_query(args: argparse.Namespace) -> None:
     """Send a query to the daemon."""
-    msg: dict = {"action": "query", "text": args.text}
+    # Validate mutual exclusion
+    if args.text and args.mic:
+        print("Error: text and --mic are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+    if not args.text and not args.mic:
+        print("Error: must provide either text or --mic", file=sys.stderr)
+        sys.exit(1)
+
+    if args.mic:
+        msg: dict = {"action": "query", "mic": True}
+    else:
+        msg = {"action": "query", "text": args.text}
 
     if args.new:
         msg["conversation_id"] = "__new__"

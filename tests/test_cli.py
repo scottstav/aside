@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +41,25 @@ class TestArgumentParsing:
     def test_query_with_new_flag(self):
         args = self.parser.parse_args(["query", "hello", "--new"])
         assert args.command == "query"
+        assert args.new is True
+
+    def test_query_mic(self):
+        args = self.parser.parse_args(["query", "--mic"])
+        assert args.command == "query"
+        assert args.mic is True
+        assert args.text is None
+
+    def test_query_mic_with_conversation_id(self):
+        args = self.parser.parse_args(["query", "--mic", "-c", "conv-42"])
+        assert args.command == "query"
+        assert args.mic is True
+        assert args.conversation_id == "conv-42"
+        assert args.text is None
+
+    def test_query_mic_with_new_flag(self):
+        args = self.parser.parse_args(["query", "--mic", "--new"])
+        assert args.command == "query"
+        assert args.mic is True
         assert args.new is True
 
     def test_cancel(self):
@@ -794,6 +813,132 @@ class TestRmCommand:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
         assert "not found" in captured.err.lower()
+
+
+# ---------------------------------------------------------------------------
+# query command handler
+# ---------------------------------------------------------------------------
+
+
+class TestQueryCommand:
+    """Test the query subcommand handler with --mic support."""
+
+    def test_query_text_and_mic_exclusive(self, capsys):
+        """Providing both text and --mic should print error and exit 1."""
+        args = mock.MagicMock()
+        args.text = "some text"
+        args.mic = True
+        args.new = False
+        args.conversation_id = None
+
+        with pytest.raises(SystemExit) as exc_info:
+            _cmd_query(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err.lower()
+
+    def test_query_requires_text_or_mic(self, capsys):
+        """Providing neither text nor --mic should print error and exit 1."""
+        args = mock.MagicMock()
+        args.text = None
+        args.mic = False
+        args.new = False
+        args.conversation_id = None
+
+        with pytest.raises(SystemExit) as exc_info:
+            _cmd_query(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "must provide" in captured.err.lower()
+
+    def test_query_mic_sends_correct_json(self, monkeypatch):
+        """query --mic should send mic:true with no text field."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.text = None
+        args.mic = True
+        args.new = False
+        args.conversation_id = None
+
+        _cmd_query(args)
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["mic"] is True
+        assert "text" not in sent[0]
+        assert sent[0]["conversation_id"] is None
+
+    def test_query_mic_with_conversation_id_sends_correct_json(self, monkeypatch):
+        """query --mic -c CONV should send mic:true with conversation_id."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.text = None
+        args.mic = True
+        args.new = False
+        args.conversation_id = "conv-42"
+
+        _cmd_query(args)
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["mic"] is True
+        assert sent[0]["conversation_id"] == "conv-42"
+        assert "text" not in sent[0]
+
+    def test_query_mic_with_new_flag(self, monkeypatch):
+        """query --mic --new should send mic:true with __new__ conversation_id."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.text = None
+        args.mic = True
+        args.new = True
+        args.conversation_id = None
+
+        _cmd_query(args)
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["mic"] is True
+        assert sent[0]["conversation_id"] == "__new__"
+
+    def test_query_text_still_works(self, monkeypatch):
+        """query TEXT should still send text as before."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.text = "hello world"
+        args.mic = False
+        args.new = False
+        args.conversation_id = None
+
+        _cmd_query(args)
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["text"] == "hello world"
+        assert "mic" not in sent[0]
+
+    def test_query_mic_dispatch_via_main(self, monkeypatch):
+        """aside query --mic via main() should dispatch correctly."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        with mock.patch("sys.argv", ["aside", "query", "--mic"]):
+            main()
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["mic"] is True
+        assert "text" not in sent[0]
 
 
 # ---------------------------------------------------------------------------
