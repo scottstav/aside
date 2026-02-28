@@ -17,7 +17,7 @@ the tool system is flexible enough to do real work — spawn background workers,
 
 ![demo](demo4.gif)
 
-the demo shows a custom [wreckless](https://github.com/scottstav/wreccless) plugin.
+the demo shows a custom [wreccless](https://github.com/scottstav/wreccless) plugin.
 
 ## any LLM
 
