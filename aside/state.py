@@ -127,6 +127,12 @@ class ConversationStore:
                     content = msg.get("content", "")
                     if isinstance(content, str):
                         preview = content[:120]
+                    elif isinstance(content, list):
+                        parts = []
+                        for part in content:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                parts.append(part.get("text", ""))
+                        preview = " ".join(parts)[:120]
                     break
 
             results.append((conv_id, created, preview))

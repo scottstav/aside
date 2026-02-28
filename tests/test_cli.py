@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser
+from aside.cli import main, _send, _build_parser, _cmd_ls
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +54,19 @@ class TestArgumentParsing:
     def test_status(self):
         args = self.parser.parse_args(["status"])
         assert args.command == "status"
+
+    def test_ls(self):
+        args = self.parser.parse_args(["ls"])
+        assert args.command == "ls"
+
+    def test_ls_with_limit(self):
+        args = self.parser.parse_args(["ls", "-n", "10"])
+        assert args.command == "ls"
+        assert args.limit == 10
+
+    def test_ls_default_limit(self):
+        args = self.parser.parse_args(["ls"])
+        assert args.limit == 20
 
     def test_no_subcommand_exits(self):
         """Calling with no subcommand should cause an error."""
@@ -214,3 +227,169 @@ class TestMainDispatch:
 
         msg = mock_send.call_args[0][0]
         assert msg["action"] == "stop_tts"
+
+
+# ---------------------------------------------------------------------------
+# ls command
+# ---------------------------------------------------------------------------
+
+
+class TestLsCommand:
+    """Test the ls subcommand that lists recent conversations."""
+
+    def _make_conv(self, conv_dir, conv_id, created, messages):
+        """Write a conversation JSON file."""
+        data = {"id": conv_id, "created": created, "messages": messages}
+        (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
+
+    def test_ls_lists_conversations(self, tmp_path, capsys):
+        """ls should print one line per conversation."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "aaaa-1111", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "What is the weather?"},
+            {"role": "assistant", "content": "It is sunny."},
+        ])
+        self._make_conv(conv_dir, "bbbb-2222", "2026-02-27T09:00:00+00:00", [
+            {"role": "user", "content": "Tell me a joke"},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        lines = [l for l in captured.out.strip().splitlines() if l.strip()]
+        assert len(lines) == 2
+
+        # Both conversation IDs should appear (first 7 chars)
+        assert "aaaa-11" in captured.out
+        assert "bbbb-22" in captured.out
+
+    def test_ls_shows_first_user_message(self, tmp_path, capsys):
+        """ls should show the first user message preview."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "cccc-3333", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "How do I bake a cake?"},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        assert "How do I bake a cake?" in captured.out
+
+    def test_ls_truncates_long_message(self, tmp_path, capsys):
+        """Messages longer than 60 chars should be truncated."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        long_msg = "A" * 80
+        self._make_conv(conv_dir, "dddd-4444", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": long_msg},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        # Should not contain the full 80-char message
+        assert long_msg not in captured.out
+        # Should contain truncated version (60 chars + ellipsis)
+        assert "A" * 60 in captured.out
+
+    def test_ls_multimodal_content(self, tmp_path, capsys):
+        """User content can be a list (multimodal) — should extract text parts."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "eeee-5555", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/png;..."}},
+                {"type": "text", "text": "What is in this image?"},
+            ]},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        assert "What is in this image?" in captured.out
+
+    def test_ls_no_conversations(self, tmp_path, capsys):
+        """When no conversations exist, ls should print nothing (no crash)."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        assert captured.out.strip() == ""
+
+    def test_ls_no_user_messages(self, tmp_path, capsys):
+        """Conversation with no user messages should still appear."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "ffff-6666", "2026-02-27T10:00:00+00:00", [
+            {"role": "assistant", "content": "Hello!"},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        assert "ffff-66" in captured.out
+
+    def test_ls_relative_age(self, tmp_path, capsys):
+        """ls should show relative age of conversations."""
+        conv_dir = tmp_path / "conversations"
+        conv_dir.mkdir()
+
+        self._make_conv(conv_dir, "gggg-7777", "2026-02-27T10:00:00+00:00", [
+            {"role": "user", "content": "hello"},
+        ])
+
+        args = mock.MagicMock()
+        args.limit = 20
+
+        with mock.patch("aside.cli.load_config", return_value={}):
+            with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
+                _cmd_ls(args)
+
+        captured = capsys.readouterr()
+        # Should have some age indicator (e.g., "5m", "2h", "3d", etc.)
+        # The exact value depends on when the test runs, but the line should
+        # have 3 visible fields: id, age, message
+        lines = [l for l in captured.out.strip().splitlines() if l.strip()]
+        assert len(lines) == 1
+        parts = lines[0].split()
+        # At minimum: short id and some age string
+        assert len(parts) >= 2

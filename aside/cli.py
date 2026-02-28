@@ -6,9 +6,9 @@ import argparse
 import json
 import socket
 import sys
-from pathlib import Path
+from datetime import datetime, timezone
 
-from aside.config import load_config, resolve_socket_path, resolve_state_dir
+from aside.config import load_config, resolve_conversations_dir, resolve_socket_path, resolve_state_dir
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +78,15 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside daemon
     sub.add_parser("daemon", help="Start the aside daemon (foreground)")
 
+    # aside ls [-n LIMIT]
+    ls = sub.add_parser("ls", help="List recent conversations")
+    ls.add_argument(
+        "-n", "--limit",
+        type=int,
+        default=20,
+        help="Maximum number of conversations to list (default: 20)",
+    )
+
     return parser
 
 
@@ -124,6 +133,89 @@ def _cmd_status(args: argparse.Namespace) -> None:
     print(json.dumps(data, indent=2))
 
 
+def _relative_age(iso_str: str) -> str:
+    """Convert an ISO 8601 timestamp to a short relative-age string."""
+    try:
+        created = datetime.fromisoformat(iso_str)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - created
+        seconds = int(delta.total_seconds())
+    except (ValueError, TypeError):
+        return "?"
+
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h"
+    days = hours // 24
+    if days < 30:
+        return f"{days}d"
+    months = days // 30
+    if months < 12:
+        return f"{months}mo"
+    years = days // 365
+    return f"{years}y"
+
+
+def _extract_user_preview(content) -> str:
+    """Extract a text preview from user message content.
+
+    Content can be a plain string or a list of content parts (multimodal).
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+        return " ".join(parts)
+    return ""
+
+
+def _cmd_ls(args: argparse.Namespace) -> None:
+    """List recent conversations."""
+    cfg = load_config()
+    conv_dir = resolve_conversations_dir(cfg)
+
+    if not conv_dir.is_dir():
+        return
+
+    from aside.state import ConversationStore
+
+    store = ConversationStore(conv_dir)
+    entries = store.list_recent(limit=args.limit)
+
+    for conv_id, created, preview in entries:
+        short_id = conv_id[:7]
+        age = _relative_age(created)
+
+        # list_recent already extracts str content but not multimodal;
+        # re-extract if preview is empty (multimodal case)
+        if not preview:
+            path = conv_dir / f"{conv_id}.json"
+            try:
+                with open(path) as f:
+                    conv = json.load(f)
+                for msg in conv.get("messages", []):
+                    if msg.get("role") == "user":
+                        preview = _extract_user_preview(msg.get("content", ""))
+                        break
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # Truncate to 60 chars
+        if len(preview) > 60:
+            preview = preview[:60] + "..."
+
+        print(f"{short_id}  {age:>8}  {preview}")
+
+
 def _cmd_daemon(args: argparse.Namespace) -> None:
     """Start the aside daemon in the foreground."""
     from aside.daemon import main as daemon_main
@@ -140,6 +232,7 @@ _HANDLERS = {
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,
     "status": _cmd_status,
+    "ls": _cmd_ls,
     "daemon": _cmd_daemon,
 }
 
