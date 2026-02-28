@@ -156,3 +156,28 @@ def resolve_socket_path(name: str = "aside.sock") -> Path:
     if xdg:
         return Path(xdg) / name
     return Path(f"/run/user/{os.getuid()}") / name
+
+
+def resolve_excluded_models_path() -> Path:
+    """Return the path to the excluded-models file."""
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "aside" / "excluded-models"
+    return Path.home() / ".config" / "aside" / "excluded-models"
+
+
+def load_excluded_models() -> list[str]:
+    """Load the excluded models list from the excluded-models file.
+
+    One model per line.  Blank lines and ``#`` comments are ignored.
+    Returns an empty list if the file doesn't exist.
+    """
+    path = resolve_excluded_models_path()
+    if not path.is_file():
+        return []
+    models = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            models.append(line)
+    return models

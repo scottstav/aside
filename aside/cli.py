@@ -10,7 +10,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-from aside.config import load_config, resolve_conversations_dir, resolve_socket_path, resolve_state_dir
+from aside.config import load_config, load_excluded_models, resolve_conversations_dir, resolve_excluded_models_path, resolve_socket_path, resolve_state_dir
 
 
 # ---------------------------------------------------------------------------
@@ -181,11 +181,14 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("models", help="List available models (filtered by API keys)")
 
     # aside model set NAME
+    # aside model exclude NAME
     model_cmd = sub.add_parser("model", help="Manage the active model")
     model_sub = model_cmd.add_subparsers(dest="model_action")
     model_sub.required = True
     model_set = model_sub.add_parser("set", help="Switch the active model (runtime)")
     model_set.add_argument("name", help="Model name (e.g. gemini/gemini-2.5-pro)")
+    model_exclude = model_sub.add_parser("exclude", help="Exclude a model from the picker")
+    model_exclude.add_argument("name", help="Model name to exclude (e.g. gemini/gemini-pro)")
 
     return parser
 
@@ -481,7 +484,8 @@ def _cmd_models(args: argparse.Namespace) -> None:
     """List available models grouped by provider."""
     import aside.models
 
-    models = aside.models.available_models()
+    exclude = load_excluded_models()
+    models = aside.models.available_models(exclude=exclude)
     if not models:
         print("No models available (no API keys found)")
         return
@@ -503,11 +507,27 @@ def _cmd_models(args: argparse.Namespace) -> None:
         print()
 
 
+def _cmd_model_exclude(name: str) -> None:
+    """Add a model to the excluded-models file."""
+    exclude_path = resolve_excluded_models_path()
+    existing = load_excluded_models()
+    if name in existing:
+        print(f"{name} is already excluded")
+        return
+
+    exclude_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(exclude_path, "a") as fh:
+        fh.write(name + "\n")
+    print(f"Excluded {name}")
+
+
 def _cmd_model(args: argparse.Namespace) -> None:
     """Model subcommand dispatcher."""
     if args.model_action == "set":
         _send({"action": "set_model", "model": args.name})
         print(f"Model set to {args.name}")
+    elif args.model_action == "exclude":
+        _cmd_model_exclude(args.name)
 
 
 # ---------------------------------------------------------------------------

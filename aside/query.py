@@ -259,6 +259,30 @@ def notify_error(message: str) -> None:
         pass
 
 
+def _notify_model_not_found(model: str) -> None:
+    """Show a notification for a model-not-found error with an action to copy the exclude command."""
+    exclude_cmd = f"aside model exclude {model}"
+    try:
+        result = subprocess.run(
+            [
+                "notify-send", "-u", "critical", "-a", "Aside",
+                "--action=copy=Copy exclude command",
+                "Aside — model not found",
+                f"{model} is deprecated or unavailable.",
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.stdout.strip() == "copy":
+            subprocess.run(
+                ["wl-copy", exclude_cmd],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        # Fallback: simple fire-and-forget notification
+        notify_error(f"Model not found: {model}\nRun: {exclude_cmd}")
+
+
 # ---------------------------------------------------------------------------
 # Streaming API call
 # ---------------------------------------------------------------------------
@@ -574,6 +598,15 @@ def send_query(
 
         return conv["id"]
 
+    except litellm.exceptions.NotFoundError as e:
+        log.error("Model not found: %s — %s", model, e)
+        _overlay_send(overlay_sock, {"cmd": "clear"})
+        _overlay_close(overlay_sock)
+        _notify_model_not_found(model)
+        if tts is not None:
+            tts.stop()
+        store.save(conv)
+        return conv["id"]
     except litellm.exceptions.AuthenticationError as e:
         log.error("Authentication error: %s", e)
         _overlay_send(overlay_sock, {"cmd": "clear"})

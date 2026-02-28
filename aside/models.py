@@ -43,15 +43,17 @@ def available_providers() -> list[str]:
     return result
 
 
-def available_models() -> dict[str, list[str]]:
+def available_models(exclude: list[str] | None = None) -> dict[str, list[str]]:
     """Return chat models grouped by provider, filtered to keyed providers.
 
     Each model name is normalized to ``provider/model`` format.
+    Models in *exclude* are omitted from the results.
     """
     providers = available_providers()
     if not providers:
         return {}
 
+    exclude_set = set(exclude) if exclude else set()
     registry = _get_registry()
     result: dict[str, list[str]] = {}
 
@@ -71,7 +73,7 @@ def available_models() -> dict[str, list[str]]:
             if "/" not in name:
                 name = f"{litellm_key}/{name}"
 
-            if name not in seen:
+            if name not in seen and name not in exclude_set:
                 seen.add(name)
 
         if seen:
