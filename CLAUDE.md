@@ -49,6 +49,10 @@ The overlay listens on `$XDG_RUNTIME_DIR/aside-overlay.sock` (UNIX stream). JSON
 
 The daemon listens on `$XDG_RUNTIME_DIR/aside.sock`. The CLI sends queries there.
 
+## After Every Fix
+
+**Always run `make dev` after changing any code.** This rebuilds the overlay, reinstalls the Python package, and restarts the systemd services so the fix is live on the user's machine immediately. Never commit a fix without installing it first.
+
 ## Important Notes
 
 - The daemon starts via `aside daemon` (CLI subcommand) or `python3 -m aside.daemon`
