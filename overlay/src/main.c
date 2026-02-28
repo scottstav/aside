@@ -21,6 +21,7 @@ static char current_conv_id[64] = "";
 static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
 static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
 static int actions_write_fd = -1; /* write end of pipe to reposition actions */
+static uint64_t last_spawn_ms = 0; /* rate-limit respawn attempts */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
 
@@ -624,6 +625,18 @@ int main(int argc, char *argv[])
 
         case CMD_NONE:
             break;
+        }
+
+        /* --- Invariant: actions bar must exist when overlay is visible ---
+         * This catches every edge case (dismiss-during-stream, actions
+         * crash, implicit reopen via CMD_TEXT, etc.) in one place.  */
+        if (state.surface_visible && !user_mode
+            && current_conv_id[0] != '\0' && actions_pid == 0) {
+            uint64_t now = anim_now_ms();
+            if (now - last_spawn_ms >= 1000) {
+                last_spawn_ms = now;
+                spawn_actions(&cfg, state.height);
+            }
         }
     }
 
