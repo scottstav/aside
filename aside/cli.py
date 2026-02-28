@@ -177,6 +177,16 @@ def _build_parser() -> argparse.ArgumentParser:
     gk = sub.add_parser("get-key", help="Show a stored API key (masked)")
     gk.add_argument("provider", help="Provider name (anthropic, openai, etc.)")
 
+    # aside models
+    sub.add_parser("models", help="List available models (filtered by API keys)")
+
+    # aside model set NAME
+    model_cmd = sub.add_parser("model", help="Manage the active model")
+    model_sub = model_cmd.add_subparsers(dest="model_action")
+    model_sub.required = True
+    model_set = model_sub.add_parser("set", help="Switch the active model (runtime)")
+    model_set.add_argument("name", help="Model name (e.g. gemini/gemini-2.5-pro)")
+
     return parser
 
 
@@ -467,6 +477,39 @@ def _cmd_get_key(args: argparse.Namespace) -> None:
         print(f"{args.provider}: not found")
 
 
+def _cmd_models(args: argparse.Namespace) -> None:
+    """List available models grouped by provider."""
+    import aside.models
+
+    models = aside.models.available_models()
+    if not models:
+        print("No models available (no API keys found)")
+        return
+
+    # Try to get current model from daemon
+    try:
+        resp = _send_recv({"action": "get_model"})
+        current = resp.get("model", "")
+    except SystemExit:
+        # Daemon not running, read from config
+        cfg = load_config()
+        current = cfg.get("model", {}).get("name", "")
+
+    for provider in sorted(models):
+        print(provider)
+        for name in models[provider]:
+            marker = "*" if name == current else " "
+            print(f"  {marker} {name}")
+        print()
+
+
+def _cmd_model(args: argparse.Namespace) -> None:
+    """Model subcommand dispatcher."""
+    if args.model_action == "set":
+        _send({"action": "set_model", "model": args.name})
+        print(f"Model set to {args.name}")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -485,6 +528,8 @@ _HANDLERS = {
     "daemon": _cmd_daemon,
     "set-key": _cmd_set_key,
     "get-key": _cmd_get_key,
+    "models": _cmd_models,
+    "model": _cmd_model,
 }
 
 

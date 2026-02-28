@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key
+from aside.cli import main, _send, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key, _cmd_models, _cmd_model
 
 
 # ---------------------------------------------------------------------------
@@ -1244,3 +1244,45 @@ class TestDaemonModelActions:
         await daemon.handle_client(reader, writer)
 
         assert daemon.config["model"]["name"] == "gemini/gemini-2.5-pro"
+
+
+# ---------------------------------------------------------------------------
+# models / model commands
+# ---------------------------------------------------------------------------
+
+
+class TestModelsCommand:
+    def test_parse_models(self):
+        parser = _build_parser()
+        args = parser.parse_args(["models"])
+        assert args.command == "models"
+
+    def test_parse_model_set(self):
+        parser = _build_parser()
+        args = parser.parse_args(["model", "set", "gemini/gemini-2.5-pro"])
+        assert args.command == "model"
+        assert args.model_action == "set"
+        assert args.name == "gemini/gemini-2.5-pro"
+
+    def test_models_lists_grouped_output(self, capsys):
+        fake_models = {
+            "anthropic": ["anthropic/claude-haiku-4-5", "anthropic/claude-sonnet-4-6"],
+            "gemini": ["gemini/gemini-2.5-pro"],
+        }
+        with mock.patch("aside.models.available_models", return_value=fake_models):
+            with mock.patch("aside.cli._send_recv", return_value={"model": "anthropic/claude-haiku-4-5"}):
+                _cmd_models(mock.Mock())
+
+        out = capsys.readouterr().out
+        assert "anthropic" in out
+        assert "* anthropic/claude-haiku-4-5" in out
+        assert "  anthropic/claude-sonnet-4-6" in out
+        assert "gemini" in out
+
+    def test_model_set_sends_socket_message(self):
+        with mock.patch("aside.cli._send") as mock_send:
+            args = mock.Mock()
+            args.model_action = "set"
+            args.name = "gemini/gemini-2.5-pro"
+            _cmd_model(args)
+            mock_send.assert_called_once_with({"action": "set_model", "model": "gemini/gemini-2.5-pro"})
