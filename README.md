@@ -17,7 +17,7 @@ the tool system is flexible enough to do real work — spawn background workers,
 
 ![demo](demo4.gif)
 
-i use [wreckless](https://github.com/scottstav/wreckless) for heavier stuff like multi-file refactors. more tool configs in [my dots](https://github.com/scottstav/dotfiles) if you're curious.
+the demo shows a custom [wreckless](https://github.com/scottstav/wreckless) plugin.
 
 ## any LLM
 
@@ -49,7 +49,7 @@ aside models
 aside model set gemini/gemini-2.5-pro
 aside model exclude openai/o1
 
-# querying
+# querying — rapid follow-ups auto-attach to the same conversation
 aside query "what time is it in tokyo"
 aside query --mic
 aside reply abc123 "tell me more"
