@@ -4,6 +4,7 @@
         "return-type": "json",
         "signal": 12,
         "interval": "once",
-        "on-click": "aside-input"
+        "on-click": "aside-input",
+        "on-click-right": "aside toggle-tts"
     }
 }

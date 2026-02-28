@@ -101,6 +101,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside stop-tts
     sub.add_parser("stop-tts", help="Stop TTS playback")
 
+    # aside toggle-tts
+    sub.add_parser("toggle-tts", help="Toggle TTS on/off for next query")
+
     # aside status
     sub.add_parser("status", help="Print daemon status as JSON")
 
@@ -211,6 +214,11 @@ def _cmd_cancel(args: argparse.Namespace) -> None:
 def _cmd_stop_tts(args: argparse.Namespace) -> None:
     """Stop TTS playback."""
     _send({"action": "stop_tts"})
+
+
+def _cmd_toggle_tts(args: argparse.Namespace) -> None:
+    """Toggle TTS on/off for next query."""
+    _send({"action": "toggle_tts"})
 
 
 def _cmd_status(args: argparse.Namespace) -> None:
@@ -461,6 +469,7 @@ _HANDLERS = {
     "reply": _cmd_reply,
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,
+    "toggle-tts": _cmd_toggle_tts,
     "status": _cmd_status,
     "ls": _cmd_ls,
     "show": _cmd_show,

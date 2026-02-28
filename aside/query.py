@@ -421,10 +421,8 @@ def send_query(
     # ------------------------------------------------------------------
     speak_on = False
     if tts is not None:
-        tts_cfg = config.get("tts", {})
-        if tts_cfg.get("enabled", False):
-            status.reload_speak_enabled()
-            speak_on = status.speak_enabled
+        status.reload_speak_enabled()
+        speak_on = status.speak_enabled
     if speak_on and tts is not None:
         tts.start()
         status.set_status("speaking")

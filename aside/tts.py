@@ -147,6 +147,14 @@ class TTSPipeline:
         """Thread: pull audio arrays, play through speakers."""
         import sounddevice as sd
 
+        # Use the PipeWire device so audio follows the user's default
+        # sink (just like every other app).
+        pw_dev = None
+        for i, d in enumerate(sd.query_devices()):
+            if d["name"] == "pipewire" and d["max_output_channels"] > 0:
+                pw_dev = i
+                break
+
         while True:
             item = self._audio_q.get()
             if item is _STOP or item is _DONE:
@@ -154,7 +162,7 @@ class TTSPipeline:
             if not self._running:
                 break
             try:
-                sd.play(item, samplerate=24000)
+                sd.play(item, samplerate=24000, device=pw_dev)
                 # Poll _running during playback so stop() can interrupt us
                 # without relying on cross-thread sd.stop() (unreliable with PipeWire)
                 stream = sd.get_stream()

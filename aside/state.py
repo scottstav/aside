@@ -193,6 +193,7 @@ class StatusState:
         signal_num: int = 12,
         usage_log_path: Path | None = None,
         model: str = DEFAULT_MODEL,
+        speak_enabled: bool = False,
     ) -> None:
         self._state_dir = Path(state_dir)
         self._signal_num = signal_num
@@ -202,7 +203,7 @@ class StatusState:
             "status": "idle",
             "tool_name": "",
             "model": model,
-            "speak_enabled": False,
+            "speak_enabled": speak_enabled,
             "usage": {
                 "total_tokens": 0,
             },

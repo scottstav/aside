@@ -169,8 +169,9 @@ class Daemon:
         Full config dict (from ``load_config``).
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, config_path: Path | None = None) -> None:
         self.config = config
+        self._config_path = config_path
 
         # Resolve directories
         state_dir = resolve_state_dir(config)
@@ -184,6 +185,7 @@ class Daemon:
             signal_num=config.get("status", {}).get("signal", 12),
             usage_log_path=state_dir / "usage.jsonl",
             model=config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6"),
+            speak_enabled=config.get("tts", {}).get("enabled", False),
         )
 
         # Built-in tools directory (alongside this module)
@@ -192,22 +194,22 @@ class Daemon:
         self.tools_dirs: list[Path] = [built_in_tools_dir] + plugin_dirs
         self._tools: list[dict] | None = None  # Lazy-loaded
 
-        # Optional TTS
+        # Optional TTS — always try to initialise so toggle-tts works.
+        # The config "enabled" key controls the default speak_enabled state.
         self.tts = None
         tts_cfg = config.get("tts", {})
-        if tts_cfg.get("enabled", False):
-            try:
-                if TTSPipeline is None:
-                    raise ImportError("TTSPipeline not available")
-                self.tts = TTSPipeline(
-                    model=tts_cfg.get("model", "af_heart"),
-                    speed=tts_cfg.get("speed", 1.0),
-                    lang=tts_cfg.get("lang", "a"),
-                )
-                log.info("TTS pipeline initialised")
-            except (ImportError, Exception):
-                log.warning("TTS deps not installed — TTS disabled", exc_info=True)
-                self.tts = None
+        try:
+            if TTSPipeline is None:
+                raise ImportError("TTSPipeline not available")
+            self.tts = TTSPipeline(
+                model=tts_cfg.get("model", "af_heart"),
+                speed=tts_cfg.get("speed", 1.0),
+                lang=tts_cfg.get("lang", "a"),
+            )
+            log.info("TTS pipeline initialised")
+        except (ImportError, Exception):
+            log.warning("TTS deps not installed — TTS disabled", exc_info=True)
+            self.tts = None
 
         # Query cancel state
         self._cancel_event: threading.Event | None = None
@@ -227,6 +229,18 @@ class Daemon:
     # Query dispatch
     # ------------------------------------------------------------------
 
+    def _reload_model(self) -> None:
+        """Re-read the model name from config.toml and update config + status."""
+        if self._config_path is None:
+            return
+        from aside.state import _read_model_from_config
+        new_model = _read_model_from_config(self._config_path)
+        old_model = self.config.get("model", {}).get("name")
+        if new_model != old_model:
+            self.config.setdefault("model", {})["name"] = new_model
+            self.status.reload_model(self._config_path)
+            log.info("Model changed: %s -> %s", old_model, new_model)
+
     def start_query(
         self,
         text: str,
@@ -238,6 +252,8 @@ class Daemon:
 
         Cancels any existing running query first.
         """
+        self._reload_model()
+
         cancel_event = threading.Event()
         with self._cancel_lock:
             if self._cancel_event is not None:
@@ -391,6 +407,11 @@ class Daemon:
                 else:
                     self.status.set_status("idle")
 
+            elif action == "toggle_tts":
+                new_val = not self.status.speak_enabled
+                self.status.speak_enabled = new_val
+                log.info("Socket: toggle_tts -> %s", new_val)
+
             else:
                 log.warning("Socket: unknown action %r", action)
 
@@ -466,8 +487,17 @@ def main() -> None:
     load_keyring_keys()
 
     _cache_api_keys()
-    config = load_config()
-    Daemon(config).run()
+    config_path = _resolve_config_path()
+    config = load_config(config_path)
+    Daemon(config, config_path=config_path).run()
+
+
+def _resolve_config_path() -> Path:
+    """Return the path to config.toml (same logic as load_config)."""
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "aside" / "config.toml"
+    return Path.home() / ".config" / "aside" / "config.toml"
 
 
 if __name__ == "__main__":

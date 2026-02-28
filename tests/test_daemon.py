@@ -136,11 +136,12 @@ class TestDaemonConstruction:
         assert d.store is not None
         assert d.usage_log is not None
         assert d.status is not None
-        assert d.tts is None  # TTS disabled by default
+        # TTS pipeline is initialised even when config enabled=false,
+        # so toggle-tts can activate it at runtime.
+        assert d.tts is not None
 
-    def test_construct_with_tts_enabled_import_error(self, minimal_config, tmp_path):
+    def test_construct_with_tts_import_error(self, minimal_config, tmp_path):
         """Daemon should handle missing TTS deps gracefully."""
-        minimal_config["tts"]["enabled"] = True
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
             with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
                 with mock.patch("aside.daemon.TTSPipeline", side_effect=ImportError("no tts")):
@@ -335,6 +336,16 @@ class TestCommandParsing:
                 import time
                 time.sleep(0.15)
         mock_sq.assert_not_called()
+
+    def test_toggle_tts(self, minimal_config, tmp_path):
+        d = self._make_daemon(minimal_config, tmp_path)
+        assert d.status.speak_enabled is False
+        with mock.patch("subprocess.Popen"):
+            self._run_command(d, {"action": "toggle_tts"})
+        assert d.status.speak_enabled is True
+        with mock.patch("subprocess.Popen"):
+            self._run_command(d, {"action": "toggle_tts"})
+        assert d.status.speak_enabled is False
 
     def test_stop_tts_with_tts(self, minimal_config, tmp_path):
         d = self._make_daemon(minimal_config, tmp_path)
