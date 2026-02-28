@@ -98,6 +98,57 @@ class ConversationStore:
             pass
         return None
 
+    @staticmethod
+    def transcript_path(conv_id: str) -> Path:
+        """Return the path to the live markdown transcript for a conversation."""
+        return Path(f"/tmp/aside-{conv_id[:8]}.md")
+
+    @staticmethod
+    def _extract_user_text(content) -> str:
+        """Extract text from user message content (plain string or multimodal)."""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    parts.append(part.get("text", ""))
+            return " ".join(parts)
+        return ""
+
+    def write_transcript(self, conv: dict) -> None:
+        """Write a markdown transcript of the conversation to /tmp.
+
+        Called incrementally during query streaming so an editor with
+        auto-reload-from-disk shows the conversation as it happens.
+        """
+        conv_id = conv.get("id", "unknown")
+        lines = [f"# Conversation {conv_id[:8]}", ""]
+
+        for msg in conv.get("messages", []):
+            role = msg.get("role", "")
+
+            if role == "user":
+                lines.append("## User")
+                lines.append("")
+                text = self._extract_user_text(msg.get("content", ""))
+                lines.append(text)
+                lines.append("")
+
+            elif role == "assistant":
+                content = msg.get("content")
+                if content:
+                    lines.append("## Assistant")
+                    lines.append("")
+                    lines.append(content)
+                    lines.append("")
+
+        md_path = self.transcript_path(conv_id)
+        try:
+            md_path.write_text("\n".join(lines))
+        except OSError:
+            log.exception("Failed to write transcript to %s", md_path)
+
     def list_recent(self, limit: int = 20) -> list[tuple[str, str, str]]:
         """List recent conversations ordered by modification time (newest first).
 

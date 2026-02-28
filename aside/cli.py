@@ -361,46 +361,23 @@ def _cmd_show(args: argparse.Namespace) -> None:
 
 def _cmd_open(args: argparse.Namespace) -> None:
     """Export conversation to markdown and open with xdg-open."""
+    from aside.state import ConversationStore
+
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
 
     full_id = _resolve_conv_id(conv_dir, args.conversation_id)
-    conv_path = conv_dir / f"{full_id}.json"
 
-    with open(conv_path) as f:
-        conv = json.load(f)
+    store = ConversationStore(conv_dir)
+    conv = store.get_or_create(full_id)
+    store.write_transcript(conv)
 
-    conv_id = conv.get("id", full_id)
-    lines = [f"# Conversation {conv_id[:8]}", ""]
-
-    for msg in conv.get("messages", []):
-        role = msg.get("role", "")
-
-        if role == "user":
-            lines.append("## User")
-            lines.append("")
-            content = msg.get("content", "")
-            text = _extract_user_preview(content)
-            lines.append(text)
-            lines.append("")
-
-        elif role == "assistant":
-            content = msg.get("content")
-            if content:
-                lines.append("## Assistant")
-                lines.append("")
-                lines.append(content)
-                lines.append("")
-
-    md_text = "\n".join(lines)
+    md_path = str(store.transcript_path(full_id))
 
     if shutil.which("xdg-open"):
-        md_path = f"/tmp/aside-{conv_id[:8]}.md"
-        with open(md_path, "w") as f:
-            f.write(md_text)
         subprocess.Popen(["xdg-open", md_path])
     else:
-        print(md_text)
+        print(open(md_path).read())
         print("\n(xdg-open not found — printed transcript instead)", file=sys.stderr)
 
 

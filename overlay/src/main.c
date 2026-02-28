@@ -21,6 +21,8 @@ static char current_conv_id[64] = "";
 static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
 static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
 static int actions_write_fd = -1; /* write end of pipe to reposition actions */
+static int actions_hold_fd = -1;  /* read end of hold pipe from actions */
+static bool actions_holding = false; /* true while user interacts with actions */
 static uint64_t last_spawn_ms = 0; /* rate-limit respawn attempts */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
@@ -37,6 +39,11 @@ static void kill_actions(void)
         close(actions_write_fd);
         actions_write_fd = -1;
     }
+    if (actions_hold_fd >= 0) {
+        close(actions_hold_fd);
+        actions_hold_fd = -1;
+    }
+    actions_holding = false;
 }
 
 /* Check if aside-actions child has exited; returns true if it just died */
@@ -51,6 +58,11 @@ static bool reap_actions(void)
             close(actions_write_fd);
             actions_write_fd = -1;
         }
+        if (actions_hold_fd >= 0) {
+            close(actions_hold_fd);
+            actions_hold_fd = -1;
+        }
+        actions_holding = false;
         return true;
     }
     return false;
@@ -88,25 +100,38 @@ static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
     int pipefd[2];
     if (pipe(pipefd) != 0) return;
 
+    int holdpipe[2];
+    if (pipe(holdpipe) != 0) {
+        close(pipefd[0]); close(pipefd[1]);
+        return;
+    }
+
     pid_t pid = fork();
     if (pid == 0) {
         close(pipefd[1]);
-        char fd_str[16];
+        close(holdpipe[0]);
+        char fd_str[16], hold_fd_str[16];
         snprintf(fd_str, sizeof(fd_str), "%d", pipefd[0]);
+        snprintf(hold_fd_str, sizeof(hold_fd_str), "%d", holdpipe[1]);
         execl(bin, "aside-actions",
               "--conv-id", current_conv_id,
               "--width", width_str,
               "--margin-top", margin_str,
               "--reposition-fd", fd_str,
+              "--hold-fd", hold_fd_str,
               NULL);
         _exit(1);
     } else if (pid > 0) {
         close(pipefd[0]);
+        close(holdpipe[1]);
         actions_pid = pid;
         actions_write_fd = pipefd[1];
+        actions_hold_fd = holdpipe[0];
     } else {
         close(pipefd[0]);
         close(pipefd[1]);
+        close(holdpipe[0]);
+        close(holdpipe[1]);
     }
 }
 
@@ -226,7 +251,7 @@ int main(int argc, char *argv[])
     struct animation fade_anim = { .current = 1.0 };
     bool timer_armed = false;
 
-    struct pollfd fds[4]; /* wayland, timer, socket_listen, socket_client */
+    struct pollfd fds[5]; /* wayland, timer, socket_listen, socket_client, hold */
     fds[0].fd = wayland_get_fd(&state);
     fds[0].events = POLLIN;
     fds[1].fd = timer_fd;
@@ -263,6 +288,13 @@ int main(int argc, char *argv[])
         }
 
         int nfds = 2 + socket_get_fds(&srv, fds, 2);
+        int hold_idx = -1;
+        if (actions_hold_fd >= 0) {
+            hold_idx = nfds;
+            fds[nfds].fd = actions_hold_fd;
+            fds[nfds].events = POLLIN;
+            nfds++;
+        }
 
         wl_display_flush(state.display);
 
@@ -271,8 +303,9 @@ int main(int argc, char *argv[])
             done_at = anim_now_ms();
         }
 
-        /* Check linger timer: start fade after delay, unless pointer hovers */
-        if (done_at > 0 && !state.pointer_over) {
+        /* Check linger timer: start fade after delay, unless pointer hovers
+         * or user is interacting with the actions bar */
+        if (done_at > 0 && !state.pointer_over && !actions_holding) {
             uint64_t now = anim_now_ms();
             if (now - done_at >= linger_ms) {
                 done_at = 0;
@@ -298,8 +331,32 @@ int main(int argc, char *argv[])
                 break;
         }
 
-        /* --- Pointer hover pauses fade --- */
-        if (state.pointer_over && fade_anim.active && fade_anim.target < 0.5) {
+        /* --- Read hold signals from actions bar --- */
+        if (hold_idx >= 0 && (fds[hold_idx].revents & POLLIN)) {
+            char hbuf[16];
+            ssize_t hn = read(actions_hold_fd, hbuf, sizeof(hbuf));
+            if (hn > 0) {
+                for (ssize_t i = hn - 1; i >= 0; i--) {
+                    if (hbuf[i] == 'H') { actions_holding = true; break; }
+                    if (hbuf[i] == 'R') {
+                        actions_holding = false;
+                        /* Fresh linger countdown after interaction ends */
+                        if (done_received && current_conv_id[0])
+                            done_at = anim_now_ms();
+                        break;
+                    }
+                }
+            } else if (hn == 0) {
+                /* Pipe closed: actions exited */
+                close(actions_hold_fd);
+                actions_hold_fd = -1;
+                actions_holding = false;
+            }
+        }
+
+        /* --- Pointer / actions-hold pauses fade --- */
+        if ((state.pointer_over || actions_holding)
+            && fade_anim.active && fade_anim.target < 0.5) {
             /* Pause: snap opacity back to full, cancel the fade */
             fade_anim.current = 1.0;
             fade_anim.active = false;
@@ -308,8 +365,9 @@ int main(int argc, char *argv[])
             }
             state.needs_redraw = true;
         }
-        /* Restart linger when pointer leaves after hover-pause */
-        if (!state.pointer_over && done_at == 0
+        /* Restart linger when pointer leaves after hover-pause
+         * (only if user is not interacting with actions bar) */
+        if (!state.pointer_over && !actions_holding && done_at == 0
             && !fade_anim.active && done_received && current_conv_id[0]) {
             done_at = anim_now_ms();
         }

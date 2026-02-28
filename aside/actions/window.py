@@ -109,10 +109,15 @@ class ActionsWindow(Gtk.Window):
 
     def __init__(self, app: Adw.Application, conv_id: str,
                  width: int, margin_top: int,
-                 reposition_fd: int | None = None) -> None:
+                 reposition_fd: int | None = None,
+                 hold_fd: int | None = None) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
+        self._hold_fd = hold_fd
+        self._pointer_in = False
+        self._in_input_mode = False
+        self._holding = False
 
         self.set_title("aside-actions")
         self.set_decorated(False)
@@ -151,6 +156,12 @@ class ActionsWindow(Gtk.Window):
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
 
+        # Pointer enter/leave to signal hold to overlay
+        motion = Gtk.EventControllerMotion()
+        motion.connect("enter", self._on_pointer_enter)
+        motion.connect("leave", self._on_pointer_leave)
+        self.add_controller(motion)
+
         # Watch for reposition messages from overlay (pipe fd)
         if reposition_fd is not None:
             threading.Thread(
@@ -184,6 +195,30 @@ class ActionsWindow(Gtk.Window):
     def _update_margin(self, margin: int) -> bool:
         Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin)
         return False
+
+    # -- Hold signalling to overlay --
+
+    def _send_hold(self, hold: bool) -> None:
+        if self._hold_fd is not None:
+            try:
+                os.write(self._hold_fd, b"H" if hold else b"R")
+            except OSError:
+                pass
+
+    def _update_hold(self) -> None:
+        should_hold = self._pointer_in or self._in_input_mode
+        if should_hold != self._holding:
+            self._holding = should_hold
+            self._send_hold(should_hold)
+
+    def _on_pointer_enter(self, ctl: Gtk.EventControllerMotion,
+                          x: float, y: float) -> None:
+        self._pointer_in = True
+        self._update_hold()
+
+    def _on_pointer_leave(self, ctl: Gtk.EventControllerMotion) -> None:
+        self._pointer_in = False
+        self._update_hold()
 
     def _build_button_mode(self) -> None:
         """Create the action buttons view."""
@@ -262,6 +297,8 @@ class ActionsWindow(Gtk.Window):
         self.close()
 
     def _on_reply(self, btn: Gtk.Button) -> None:
+        self._in_input_mode = True
+        self._update_hold()
         Gtk4LayerShell.set_keyboard_mode(
             self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
         )
@@ -276,6 +313,8 @@ class ActionsWindow(Gtk.Window):
         if keyval == Gdk.KEY_Escape:
             # If in input mode, go back to buttons
             if self._stack.get_visible_child_name() == "input":
+                self._in_input_mode = False
+                self._update_hold()
                 Gtk4LayerShell.set_keyboard_mode(
                     self, Gtk4LayerShell.KeyboardMode.NONE
                 )
@@ -309,16 +348,19 @@ class ActionsWindow(Gtk.Window):
 
 class ActionsApp(Adw.Application):
     def __init__(self, conv_id: str, width: int, margin_top: int,
-                 reposition_fd: int | None = None) -> None:
+                 reposition_fd: int | None = None,
+                 hold_fd: int | None = None) -> None:
         super().__init__(application_id="dev.aside.actions")
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
         self._reposition_fd = reposition_fd
+        self._hold_fd = hold_fd
 
     def do_activate(self) -> None:
         win = ActionsWindow(self, self._conv_id, self._width, self._margin_top,
-                            reposition_fd=self._reposition_fd)
+                            reposition_fd=self._reposition_fd,
+                            hold_fd=self._hold_fd)
         win.present()
 
 
@@ -331,9 +373,11 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=600)
     parser.add_argument("--margin-top", type=int, default=60)
     parser.add_argument("--reposition-fd", type=int, default=None)
+    parser.add_argument("--hold-fd", type=int, default=None)
     args = parser.parse_args()
     app = ActionsApp(args.conv_id, args.width, args.margin_top,
-                     reposition_fd=args.reposition_fd)
+                     reposition_fd=args.reposition_fd,
+                     hold_fd=args.hold_fd)
     app.run([])
 
 

@@ -453,6 +453,7 @@ def send_query(
         user_content = user_text  # type: ignore[assignment]
 
     conv["messages"].append({"role": "user", "content": user_content})
+    store.write_transcript(conv)
 
     # ------------------------------------------------------------------
     # Streaming loop with tool execution
@@ -516,6 +517,7 @@ def send_query(
                 if not resp_text:
                     assistant_msg["content"] = None
             conv["messages"].append(assistant_msg)
+            store.write_transcript(conv)
 
             if not tool_calls or (cancel_event and cancel_event.is_set()):
                 break
