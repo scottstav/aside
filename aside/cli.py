@@ -91,6 +91,13 @@ def _build_parser() -> argparse.ArgumentParser:
     rm_cmd = sub.add_parser("rm", help="Delete a conversation")
     rm_cmd.add_argument("conversation_id", help="Conversation ID to delete")
 
+    # aside reply CONVERSATION_ID [TEXT] [--gui] [--mic]
+    reply = sub.add_parser("reply", help="Continue a conversation by ID")
+    reply.add_argument("conversation_id", help="Conversation ID to continue")
+    reply.add_argument("text", nargs="?", default=None, help="Reply text (optional)")
+    reply.add_argument("--gui", action="store_true", default=False, help="Open GTK input popup")
+    reply.add_argument("--mic", action="store_true", default=False, help="One-shot voice capture")
+
     # aside ls [-n LIMIT]
     ls = sub.add_parser("ls", help="List recent conversations")
     ls.add_argument(
@@ -120,6 +127,27 @@ def _cmd_query(args: argparse.Namespace) -> None:
         msg["conversation_id"] = None
 
     _send(msg)
+
+
+def _cmd_reply(args: argparse.Namespace) -> None:
+    """Continue a conversation by ID."""
+    # Validate mutual exclusion
+    if args.text and args.mic:
+        print("Error: text and --mic are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+    if args.gui and args.mic:
+        print("Error: --gui and --mic are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
+    if args.gui:
+        subprocess.Popen(["aside-input", "-c", args.conversation_id])
+    elif args.mic:
+        _send({"action": "query", "conversation_id": args.conversation_id, "mic": True})
+    elif args.text:
+        _send({"action": "query", "text": args.text, "conversation_id": args.conversation_id})
+    else:
+        text = input(">>> ")
+        _send({"action": "query", "text": text, "conversation_id": args.conversation_id})
 
 
 def _cmd_cancel(args: argparse.Namespace) -> None:
@@ -341,6 +369,7 @@ def _cmd_daemon(args: argparse.Namespace) -> None:
 
 _HANDLERS = {
     "query": _cmd_query,
+    "reply": _cmd_reply,
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,
     "status": _cmd_status,

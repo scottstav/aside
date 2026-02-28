@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm
+from aside.cli import main, _send, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,34 @@ class TestArgumentParsing:
         args = self.parser.parse_args(["rm", "abc-123"])
         assert args.command == "rm"
         assert args.conversation_id == "abc-123"
+
+    def test_reply_basic(self):
+        args = self.parser.parse_args(["reply", "conv-42"])
+        assert args.command == "reply"
+        assert args.conversation_id == "conv-42"
+        assert args.text is None
+        assert args.gui is False
+        assert args.mic is False
+
+    def test_reply_with_text(self):
+        args = self.parser.parse_args(["reply", "conv-42", "follow up question"])
+        assert args.command == "reply"
+        assert args.conversation_id == "conv-42"
+        assert args.text == "follow up question"
+
+    def test_reply_with_gui(self):
+        args = self.parser.parse_args(["reply", "conv-42", "--gui"])
+        assert args.command == "reply"
+        assert args.conversation_id == "conv-42"
+        assert args.gui is True
+        assert args.text is None
+
+    def test_reply_with_mic(self):
+        args = self.parser.parse_args(["reply", "conv-42", "--mic"])
+        assert args.command == "reply"
+        assert args.conversation_id == "conv-42"
+        assert args.mic is True
+        assert args.text is None
 
     def test_no_subcommand_exits(self):
         """Calling with no subcommand should cause an error."""
@@ -766,3 +794,133 @@ class TestRmCommand:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
         assert "not found" in captured.err.lower()
+
+
+# ---------------------------------------------------------------------------
+# reply command
+# ---------------------------------------------------------------------------
+
+
+class TestReplyCommand:
+    """Test the reply subcommand that continues a conversation."""
+
+    def test_reply_text_sends_correct_json(self, monkeypatch):
+        """reply ID TEXT should send a query with text and conversation_id."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = "follow up question"
+        args.gui = False
+        args.mic = False
+
+        _cmd_reply(args)
+
+        assert len(sent) == 1
+        assert sent[0] == {
+            "action": "query",
+            "text": "follow up question",
+            "conversation_id": "conv-42",
+        }
+
+    def test_reply_mic_sends_mic_flag(self, monkeypatch):
+        """reply ID --mic should send mic:true with conversation_id."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = None
+        args.gui = False
+        args.mic = True
+
+        _cmd_reply(args)
+
+        assert len(sent) == 1
+        assert sent[0] == {
+            "action": "query",
+            "conversation_id": "conv-42",
+            "mic": True,
+        }
+
+    def test_reply_gui_launches_subprocess(self, monkeypatch):
+        """reply ID --gui should launch aside-input subprocess."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = None
+        args.gui = True
+        args.mic = False
+
+        with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
+            _cmd_reply(args)
+
+        mock_popen.assert_called_once_with(["aside-input", "-c", "conv-42"])
+        assert len(sent) == 0  # no socket message sent
+
+    def test_reply_bare_prompts_for_input(self, monkeypatch):
+        """Bare 'aside reply ID' should prompt for text, then send it."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+        monkeypatch.setattr("builtins.input", lambda prompt: "typed reply")
+
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = None
+        args.gui = False
+        args.mic = False
+
+        _cmd_reply(args)
+
+        assert len(sent) == 1
+        assert sent[0] == {
+            "action": "query",
+            "text": "typed reply",
+            "conversation_id": "conv-42",
+        }
+
+    def test_reply_text_and_mic_errors(self, capsys):
+        """Providing both text and --mic should print error and exit 1."""
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = "some text"
+        args.gui = False
+        args.mic = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            _cmd_reply(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err.lower() or "--mic" in captured.err
+
+    def test_reply_gui_and_mic_errors(self, capsys):
+        """Providing both --gui and --mic should print error and exit 1."""
+        args = mock.MagicMock()
+        args.conversation_id = "conv-42"
+        args.text = None
+        args.gui = True
+        args.mic = True
+
+        with pytest.raises(SystemExit) as exc_info:
+            _cmd_reply(args)
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "mutually exclusive" in captured.err.lower() or "--mic" in captured.err
+
+    def test_reply_dispatch_via_main(self, monkeypatch):
+        """aside reply conv-42 'text' via main() should dispatch correctly."""
+        sent = []
+        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+
+        with mock.patch("sys.argv", ["aside", "reply", "conv-42", "hello again"]):
+            main()
+
+        assert len(sent) == 1
+        assert sent[0]["action"] == "query"
+        assert sent[0]["text"] == "hello again"
+        assert sent[0]["conversation_id"] == "conv-42"
