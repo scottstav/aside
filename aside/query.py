@@ -592,11 +592,12 @@ def send_query(
             tts.stop()
         store.save(conv)
         return conv["id"]
-    except Exception:
+    except Exception as e:
         log.exception("Unexpected error during query")
         _overlay_send(overlay_sock, {"cmd": "clear"})
         _overlay_close(overlay_sock)
-        notify_error("Unexpected error (check logs)")
+        short = str(e)[:200] if str(e) else type(e).__name__
+        notify_error(f"Error: {short}")
         if tts is not None:
             tts.stop()
         store.save(conv)
