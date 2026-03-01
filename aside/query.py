@@ -602,6 +602,9 @@ def send_query(
                 full_text += "\n\n"
             full_text += f"{tool_names}\n\n"
             _overlay_send(overlay_sock, {"cmd": "replace", "data": full_text})
+            # Show accent sweep while waiting for the next LLM response.
+            # CMD_TEXT in the overlay will clear thinking_active automatically.
+            _overlay_send(overlay_sock, {"cmd": "thinking"})
             if speak_on and tts is not None and tts._running:
                 status.set_status("speaking")
             else:
