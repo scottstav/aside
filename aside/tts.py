@@ -1,4 +1,4 @@
-"""TTS pipeline: Kokoro synthesis + sounddevice playback.
+"""TTS pipeline: Piper synthesis + sounddevice playback.
 
 Manages two threads: one for synthesis (sentence -> audio), one for
 playback (audio -> speakers). Supports interruption and lazy model loading.
@@ -9,6 +9,8 @@ import queue
 import threading
 import time
 
+import numpy as np
+
 log = logging.getLogger("aside")
 
 # Sentinel to signal threads to stop
@@ -17,13 +19,16 @@ _DONE = object()
 
 
 class TTSPipeline:
-    """Kokoro TTS synthesis and audio playback pipeline."""
+    """Piper TTS synthesis and audio playback pipeline."""
 
-    def __init__(self, model="af_heart", speed=1.0, lang="a"):
-        self._model_name = model
+    # Default voice: piper-voices-en-us package installs here
+    _DEFAULT_MODEL = "/usr/share/piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+
+    def __init__(self, model="", speed=1.0):
+        self._model_path = model or self._DEFAULT_MODEL
         self._speed = speed
-        self._lang = lang
-        self._pipeline = None  # Lazy-loaded KPipeline
+        self._voice = None  # Lazy-loaded PiperVoice
+        self._sample_rate = 22050  # Updated when voice loads
         self._sentence_q: queue.Queue = queue.Queue()
         self._audio_q: queue.Queue = queue.Queue()
         self._synth_thread: threading.Thread | None = None
@@ -32,25 +37,27 @@ class TTSPipeline:
         self._lock = threading.Lock()
 
     def _ensure_loaded(self):
-        """Lazy-load the Kokoro model on first use."""
-        if self._pipeline is not None:
+        """Lazy-load the Piper voice model on first use."""
+        if self._voice is not None:
             return
-        log.info("Loading Kokoro TTS model (voice=%s, lang=%s)...", self._model_name, self._lang)
+        if not self._model_path:
+            raise ValueError("No Piper model configured — set tts.model in config.toml")
+        log.info("Loading Piper TTS model: %s ...", self._model_path)
         try:
-            from kokoro import KPipeline
-            self._pipeline = KPipeline(lang_code=self._lang)
-            log.info("Kokoro TTS loaded successfully")
+            from piper import PiperVoice
+            self._voice = PiperVoice.load(self._model_path)
+            self._sample_rate = self._voice.config.sample_rate
+            log.info("Piper TTS loaded (sample_rate=%d)", self._sample_rate)
         except Exception:
-            log.exception("Failed to load Kokoro TTS")
+            log.exception("Failed to load Piper TTS")
             raise
 
-    def update_config(self, model: str, speed: float, lang: str):
+    def update_config(self, model: str, speed: float):
         """Update voice settings. Takes effect on next sentence."""
-        self._model_name = model
+        if model != self._model_path:
+            self._model_path = model
+            self._voice = None  # Force reload for new model
         self._speed = speed
-        if lang != self._lang:
-            self._lang = lang
-            self._pipeline = None  # Force reload for new language
 
     def start(self):
         """Start the synthesis and playback threads."""
@@ -117,12 +124,19 @@ class TTSPipeline:
             thread.join(timeout=min(remaining, 0.5))
 
     def _synth_loop(self):
-        """Thread: pull sentences, synthesize with Kokoro, push audio."""
+        """Thread: pull sentences, synthesize with Piper, push audio."""
         try:
             self._ensure_loaded()
         except Exception:
             self._audio_q.put(_STOP)
             return
+
+        from piper import SynthesisConfig
+
+        # Piper speed: length_scale < 1 = faster, > 1 = slower
+        # Our speed: > 1 = faster, so invert
+        length_scale = 1.0 / self._speed if self._speed > 0 else 1.0
+        syn_cfg = SynthesisConfig(length_scale=length_scale)
 
         while True:
             item = self._sentence_q.get()
@@ -133,13 +147,10 @@ class TTSPipeline:
                 self._audio_q.put(_DONE)
                 break
             try:
-                # Kokoro returns a generator; we take the first segment
-                for _gs, _ps, audio in self._pipeline(
-                    item, voice=self._model_name, speed=self._speed
-                ):
+                for chunk in self._voice.synthesize(item, syn_config=syn_cfg):
                     if not self._running:
                         break
-                    self._audio_q.put(audio)
+                    self._audio_q.put(chunk.audio_float_array)
             except Exception:
                 log.exception("TTS synthesis error for: %s", item[:50])
 
@@ -162,7 +173,7 @@ class TTSPipeline:
             if not self._running:
                 break
             try:
-                sd.play(item, samplerate=24000, device=pw_dev)
+                sd.play(item, samplerate=self._sample_rate, device=pw_dev)
                 # Poll _running during playback so stop() can interrupt us
                 # without relying on cross-thread sd.stop() (unreliable with PipeWire)
                 stream = sd.get_stream()

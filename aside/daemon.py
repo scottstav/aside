@@ -198,7 +198,8 @@ class Daemon:
 
         # Built-in tools directory (alongside this module)
         built_in_tools_dir = Path(__file__).parent / "tools"
-        plugin_dirs = [Path(d).expanduser() for d in config.get("plugins", {}).get("dirs", [])]
+        # User-configured plugin directories
+        plugin_dirs = [Path(d).expanduser() for d in config.get("tools", {}).get("dirs", [])]
         self.tools_dirs: list[Path] = [built_in_tools_dir] + plugin_dirs
         self._tools: list[dict] | None = None  # Lazy-loaded
 
@@ -208,15 +209,14 @@ class Daemon:
         tts_cfg = config.get("tts", {})
         try:
             if TTSPipeline is None:
-                raise ImportError("kokoro not installed")
+                raise ImportError("piper-tts not installed")
             self.tts = TTSPipeline(
-                model=tts_cfg.get("model", "af_heart"),
+                model=tts_cfg.get("model", ""),
                 speed=tts_cfg.get("speed", 1.0),
-                lang=tts_cfg.get("lang", "a"),
             )
             log.info("TTS pipeline initialised")
         except (ImportError, Exception):
-            log.info("TTS not available — kokoro not installed")
+            log.info("TTS not available — piper-tts not installed")
             self.tts = None
 
         # Query cancel state

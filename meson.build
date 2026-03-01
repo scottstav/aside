@@ -37,8 +37,6 @@ py.install_sources(
 py.install_sources(
   'aside/tools/__init__.py',
   'aside/tools/memory.py',
-  'aside/tools/shell.py',
-  'aside/tools/web_search.py',
   preserve_path: true,
 )
 

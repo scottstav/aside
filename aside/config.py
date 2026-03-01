@@ -32,9 +32,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "tts": {
         "enabled": False,
-        "model": "af_heart",
+        "model": "",
         "speed": 1.0,
-        "lang": "a",
         "filter": {
             "skip_code_blocks": True,
             "skip_urls": True,
@@ -67,7 +66,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "conversations_dir": "",
         "archive_dir": "",
     },
-    "plugins": {
+    "tools": {
         "dirs": [],
     },
     "notifications": {},

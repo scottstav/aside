@@ -73,14 +73,14 @@ max_capture_seconds = 60
 
 ## Text-to-Speech
 
-Requires `make install-extras-tts` for Kokoro dependencies.
+Requires `piper-tts` (`pip install piper-tts`) and a voice model (`.onnx` file).
+Download voices from [Piper voices](https://huggingface.co/rhasspy/piper-voices).
 
 ```toml
 [tts]
 enabled = false
-model = "af_heart"
+model = "/path/to/en_US-lessac-medium.onnx"
 speed = 1.0
-lang = "a"
 
 [tts.filter]
 skip_code_blocks = true
@@ -89,10 +89,9 @@ skip_urls = true
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `enabled` | `false` | Enable TTS output via Kokoro |
-| `model` | `af_heart` | Kokoro voice model name (e.g. `af_heart`, `af_bella`) |
+| `enabled` | `false` | Enable TTS output via Piper |
+| `model` | `""` | Path to Piper `.onnx` voice model file |
 | `speed` | `1.0` | Speech playback speed multiplier |
-| `lang` | `a` | Kokoro language code (`a` = American English) |
 | `filter.skip_code_blocks` | `true` | Don't read code blocks aloud |
 | `filter.skip_urls` | `true` | Don't read URLs aloud |
 

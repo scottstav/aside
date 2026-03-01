@@ -40,9 +40,8 @@
 # ---------------------------------------------------------------------------
 [tts]
 # enabled = false
-# model = "af_heart"             # kokoro voice model
+# model = "/usr/share/piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
 # speed = 1.0
-# lang = "a"                     # kokoro language code
 
 [tts.filter]
 # skip_code_blocks = true        # don't read code blocks aloud
@@ -83,10 +82,10 @@
 # archive_dir = ""               # default: $XDG_STATE_HOME/aside/archive
 
 # ---------------------------------------------------------------------------
-# Plugins
+# Tools
 # ---------------------------------------------------------------------------
-[plugins]
-# dirs = []                      # additional plugin directories to scan
+[tools]
+# dirs = []                      # additional tool directories to scan
 
 # ---------------------------------------------------------------------------
 # Notifications

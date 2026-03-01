@@ -1,6 +1,6 @@
 """Tests for the TTS pipeline.
 
-These tests do NOT require kokoro or sounddevice installed.
+These tests do NOT require piper-tts or sounddevice installed.
 They verify the pipeline's state management and API contracts.
 """
 
@@ -8,44 +8,41 @@ from aside.tts import TTSPipeline
 
 
 class TestConstruction:
-    """TTSPipeline can be created without loading kokoro."""
+    """TTSPipeline can be created without loading piper."""
 
     def test_default_construction(self):
         p = TTSPipeline()
-        assert p._model_name == "af_heart"
+        assert p._model_path == TTSPipeline._DEFAULT_MODEL
         assert p._speed == 1.0
-        assert p._lang == "a"
-        assert p._pipeline is None  # kokoro not loaded
+        assert p._voice is None  # piper not loaded
 
     def test_custom_construction(self):
-        p = TTSPipeline(model="bf_emma", speed=1.5, lang="b")
-        assert p._model_name == "bf_emma"
+        p = TTSPipeline(model="/tmp/voice.onnx", speed=1.5)
+        assert p._model_path == "/tmp/voice.onnx"
         assert p._speed == 1.5
-        assert p._lang == "b"
-        assert p._pipeline is None
+        assert p._voice is None
 
 
 class TestUpdateConfig:
     """update_config changes internal state."""
 
-    def test_updates_model_and_speed(self):
+    def test_updates_speed(self):
         p = TTSPipeline()
-        p.update_config(model="bf_emma", speed=1.5, lang="a")
-        assert p._model_name == "bf_emma"
+        p.update_config(model="", speed=1.5)
         assert p._speed == 1.5
 
-    def test_lang_change_clears_pipeline(self):
+    def test_model_change_clears_voice(self):
         p = TTSPipeline()
-        p._pipeline = "fake-loaded-pipeline"
-        p.update_config(model="af_heart", speed=1.0, lang="b")
-        assert p._lang == "b"
-        assert p._pipeline is None  # cleared for reload
+        p._voice = "fake-loaded-voice"
+        p.update_config(model="/tmp/new.onnx", speed=1.0)
+        assert p._model_path == "/tmp/new.onnx"
+        assert p._voice is None  # cleared for reload
 
-    def test_same_lang_keeps_pipeline(self):
-        p = TTSPipeline()
-        p._pipeline = "fake-loaded-pipeline"
-        p.update_config(model="bf_emma", speed=1.5, lang="a")
-        assert p._pipeline == "fake-loaded-pipeline"  # not cleared
+    def test_same_model_keeps_voice(self):
+        p = TTSPipeline(model="/tmp/voice.onnx")
+        p._voice = "fake-loaded-voice"
+        p.update_config(model="/tmp/voice.onnx", speed=1.5)
+        assert p._voice == "fake-loaded-voice"  # not cleared
 
 
 class TestRunningFlag:

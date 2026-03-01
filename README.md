@@ -2,10 +2,12 @@
 
 a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, and never lose focus on what you're doing.
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
+
 ![demo](demo.gif) ![demo](demo2.gif)
 
 - **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel.
-- **voice** — STT via faster-whisper, TTS via Kokoro. talk to it, it talks back.
+- **voice** — STT via faster-whisper, TTS via Piper. talk to it, it talks back.
 - **actions bar** — mic, transcript, and reply buttons after every response.
 - **input popup** — GTK4 window with conversation history. continue one or start fresh.
 
@@ -108,5 +110,15 @@ systemctl --user enable --now aside-daemon aside-overlay
 | [Configuration](docs/configuration.md) | config options |
 | [Plugins](docs/plugins.md) | plugin API |
 | [Architecture](docs/architecture.md) | system design |
+
+## donate
+
+<a id="donate"></a>
+
+| | |
+|---|---|
+| Ko-fi | [ko-fi.com/scottstav](https://ko-fi.com/scottstav) |
+| BTC | `bc1q7xeyf4k0ud3akgch8svjwmdmeucr5mxx8lt4h6` |
+| XMR | `864dQBZ5LTDhcUFX2P5mxV4ubjxLNFvCa4p8xLGd9b3XAEbeXXGrUa6M78eftfUpQkFk81BHrSHeCGXoQCXMcRGRTu8cM4u` |
 
 MIT

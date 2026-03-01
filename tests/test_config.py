@@ -36,7 +36,7 @@ class TestDefaultConfig:
     def test_top_level_sections(self):
         expected = {
             "model", "input", "voice", "tts", "overlay",
-            "storage", "plugins", "notifications", "status",
+            "storage", "tools", "notifications", "status",
         }
         assert expected == set(self.defaults.keys())
 
@@ -61,9 +61,8 @@ class TestDefaultConfig:
     def test_tts_defaults(self):
         t = self.defaults["tts"]
         assert t["enabled"] is False
-        assert t["model"] == "af_heart"
+        assert t["model"] == ""
         assert t["speed"] == 1.0
-        assert t["lang"] == "a"
         assert t["filter"]["skip_code_blocks"] is True
         assert t["filter"]["skip_urls"] is True
 
@@ -90,8 +89,8 @@ class TestDefaultConfig:
         assert s["conversations_dir"] == ""
         assert s["archive_dir"] == ""
 
-    def test_plugins_defaults(self):
-        assert self.defaults["plugins"]["dirs"] == []
+    def test_tools_defaults(self):
+        assert self.defaults["tools"]["dirs"] == []
 
     def test_notifications_defaults(self):
         n = self.defaults["notifications"]

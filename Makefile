@@ -23,7 +23,6 @@ dev:
 			ln -sf "$$src" "$(BIN)/$$cmd"; \
 		fi; \
 	done
-	cp -a plugins/* $(LIB)/plugins/ 2>/dev/null || true
 	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
 	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
 	systemctl --user daemon-reload
@@ -59,9 +58,6 @@ install:
 	else \
 		echo "    Config already exists — not overwriting"; \
 	fi
-	@echo "==> Installing plugins"
-	install -d $(LIB)/plugins
-	cp -a plugins/* $(LIB)/plugins/ 2>/dev/null || true
 	@echo "==> Installing waybar module config"
 	install -d $(HOME)/.config/waybar
 	install -Dm644 data/waybar/aside.json $(HOME)/.config/waybar/aside.json

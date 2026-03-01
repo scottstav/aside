@@ -59,7 +59,7 @@ The C overlay and Python package build together via meson-python — one command
 | Python >= 3.11, < 3.13 | Daemon and CLI               |
 | litellm             | LLM provider abstraction         |
 | faster-whisper      | Speech-to-text                    |
-| kokoro              | Text-to-speech synthesis          |
+| piper-tts           | Text-to-speech synthesis          |
 | PyGObject           | GTK4 Python bindings              |
 
 ### Optional
