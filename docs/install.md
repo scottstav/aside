@@ -6,10 +6,10 @@ You need a C toolchain and Wayland dev libraries (likely already present on any 
 
 ```bash
 # Arch
-pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
+pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell python-gobject
 
 # Debian/Ubuntu
-apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev
+apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev python3-gi
 ```
 
 Then install aside with [uv](https://docs.astral.sh/uv/):
@@ -62,6 +62,7 @@ uv pip install -e .
 | pango               | Overlay text layout               |
 | json-c              | Overlay JSON parsing              |
 | gtk4 + gtk4-layer-shell | Input window, reply bar      |
+| PyGObject (python-gobject) | GTK4 Python bindings      |
 | meson + ninja       | Build system (pulled in by meson-python) |
 
 ### Python (installed automatically)
@@ -72,7 +73,6 @@ uv pip install -e .
 | litellm             | LLM provider abstraction         |
 | faster-whisper      | Speech-to-text                    |
 | kokoro              | Text-to-speech synthesis          |
-| PyGObject           | GTK4 bindings                     |
 
 ### Optional
 

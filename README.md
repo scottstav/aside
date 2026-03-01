@@ -93,7 +93,7 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 
 ```bash
 # system deps (Arch — adjust for your distro)
-pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
+pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell python-gobject
 
 # install aside (uv auto-downloads Python 3.12 if needed)
 uv tool install aside-assistant
