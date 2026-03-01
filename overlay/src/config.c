@@ -22,6 +22,10 @@ void config_defaults(struct overlay_config *cfg)
     cfg->border_width    = 1;
     cfg->accent_height   = 3;
     cfg->margin_top      = 0;
+    cfg->margin_right    = 0;
+    cfg->margin_bottom   = 0;
+    cfg->margin_left     = 0;
+    snprintf(cfg->position, sizeof(cfg->position), "top-center");
     cfg->line_spacing    = 0;
     cfg->scroll_duration = 150;
     cfg->fade_duration   = 500;
@@ -101,6 +105,14 @@ static void config_set(struct overlay_config *cfg, const char *key,
         cfg->scroll_duration = (uint32_t)strtoul(value, NULL, 10);
     } else if (strcmp(key, "fade_duration") == 0) {
         cfg->fade_duration = (uint32_t)strtoul(value, NULL, 10);
+    } else if (strcmp(key, "margin_right") == 0) {
+        cfg->margin_right = (uint32_t)strtoul(value, NULL, 10);
+    } else if (strcmp(key, "margin_bottom") == 0) {
+        cfg->margin_bottom = (uint32_t)strtoul(value, NULL, 10);
+    } else if (strcmp(key, "margin_left") == 0) {
+        cfg->margin_left = (uint32_t)strtoul(value, NULL, 10);
+    } else if (strcmp(key, "position") == 0) {
+        snprintf(cfg->position, sizeof(cfg->position), "%s", value);
     } else if (strcmp(key, "socket_path") == 0) {
         snprintf(cfg->socket_path, sizeof(cfg->socket_path), "%s", value);
     }
@@ -142,5 +154,12 @@ bool config_load(struct overlay_config *cfg, const char *path)
     }
 
     fclose(fp);
+
+    /* Clamp values to sensible bounds */
+    if (cfg->width < 200) cfg->width = 200;
+    if (cfg->width > 2000) cfg->width = 2000;
+    if (cfg->max_lines < 1) cfg->max_lines = 1;
+    if (cfg->max_lines > 50) cfg->max_lines = 50;
+
     return true;
 }

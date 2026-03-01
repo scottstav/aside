@@ -1,4 +1,5 @@
 #include "wayland.h"
+#include "config.h"
 #include "shm.h"
 
 #include <stdio.h>
@@ -21,7 +22,10 @@ static void output_geometry(void *data, struct wl_output *output,
 static void output_mode(void *data, struct wl_output *output,
                         uint32_t flags, int32_t w, int32_t h, int32_t refresh)
 {
-    (void)data; (void)output; (void)flags; (void)w; (void)h; (void)refresh;
+    (void)output; (void)w; (void)refresh;
+    struct overlay_state *state = data;
+    if (flags & WL_OUTPUT_MODE_CURRENT)
+        state->output_mode_height = (uint32_t)h;
 }
 
 static void output_scale(void *data, struct wl_output *output, int32_t factor)
@@ -258,7 +262,7 @@ bool wayland_init(struct overlay_state *state)
 
 bool wayland_create_surface(struct overlay_state *state,
                             uint32_t width, uint32_t height,
-                            uint32_t margin_top)
+                            const struct overlay_config *cfg)
 {
     state->width = width;
     state->height = height;
@@ -282,14 +286,48 @@ bool wayland_create_surface(struct overlay_state *state,
         return false;
     }
 
-    /* Anchor top only -- centers horizontally */
-    zwlr_layer_surface_v1_set_anchor(state->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP);
+    /* Determine anchor from position string */
+    uint32_t anchor = 0;
+    const char *pos = cfg->position;
+    if (strstr(pos, "top"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+    if (strstr(pos, "bottom"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+    if (strstr(pos, "left"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT;
+    if (strstr(pos, "right"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+
+    /* For "center": use TOP anchor with computed margin instead of
+     * compositor centering (anchor=0).  This gives us a deterministic
+     * position so we can place embedded buttons and reply input
+     * relative to the overlay without guessing. */
+    if (strcmp(pos, "center") == 0) {
+        anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+    }
+
+    /* Default: top-center if position is empty or unrecognized */
+    if (anchor == 0)
+        anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+
+    zwlr_layer_surface_v1_set_anchor(state->layer_surface, anchor);
 
     /* 0 exclusive zone = respect others' reserved space, don't reserve our own */
     zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, 0);
 
-    zwlr_layer_surface_v1_set_margin(state->layer_surface, margin_top, 0, 0, 0);
+    zwlr_layer_surface_v1_set_margin(state->layer_surface,
+        cfg->margin_top, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
+
+    /* For center: override margin_top to vertically center the surface */
+    if (strcmp(cfg->position, "center") == 0) {
+        uint32_t s = state->scale > 1 ? (uint32_t)state->scale : 1;
+        uint32_t logical_h = state->output_mode_height / s;
+        if (logical_h > height) {
+            uint32_t center_margin = (logical_h - height) / 2;
+            zwlr_layer_surface_v1_set_margin(state->layer_surface,
+                center_margin, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
+        }
+    }
 
     /* Size is in logical pixels */
     zwlr_layer_surface_v1_set_size(state->layer_surface, width, height);

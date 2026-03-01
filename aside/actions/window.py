@@ -110,7 +110,11 @@ class ActionsWindow(Gtk.Window):
     def __init__(self, app: Adw.Application, conv_id: str,
                  width: int, margin_top: int,
                  reposition_fd: int | None = None,
-                 hold_fd: int | None = None) -> None:
+                 hold_fd: int | None = None,
+                 position: str = "top-center",
+                 margin_left: int = 0,
+                 margin_right: int = 0,
+                 reply_only: bool = False) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
@@ -118,19 +122,44 @@ class ActionsWindow(Gtk.Window):
         self._pointer_in = False
         self._in_input_mode = False
         self._holding = False
+        self._reply_only = reply_only
+
+        # Determine which vertical edge to anchor/margin on
+        self._bottom_anchored = "bottom" in position
 
         self.set_title("aside-actions")
         self.set_decorated(False)
         self.set_resizable(False)
 
-        # Layer shell setup
+        # Layer shell setup — match overlay anchoring
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
-        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
-        Gtk4LayerShell.set_keyboard_mode(
-            self, Gtk4LayerShell.KeyboardMode.NONE
-        )
+
+        if self._bottom_anchored:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.BOTTOM, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.BOTTOM, margin_top)
+        else:
+            # top-*, center, or fallback — all use TOP anchor
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
+
+        # Horizontal anchoring to follow overlay position
+        if "left" in position:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.LEFT, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.LEFT, margin_left)
+        elif "right" in position:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
+
+        # Reply-only mode: start with keyboard and input immediately
+        if reply_only:
+            Gtk4LayerShell.set_keyboard_mode(
+                self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+            )
+        else:
+            Gtk4LayerShell.set_keyboard_mode(
+                self, Gtk4LayerShell.KeyboardMode.NONE
+            )
         Gtk4LayerShell.set_namespace(self, "aside-actions")
 
         # CSS
@@ -147,9 +176,16 @@ class ActionsWindow(Gtk.Window):
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.set_transition_duration(150)
 
-        self._build_button_mode()
+        if not reply_only:
+            self._build_button_mode()
         self._build_input_mode()
         self.set_child(self._stack)
+
+        # In reply-only mode, start directly in input
+        if reply_only:
+            self._in_input_mode = True
+            self.set_size_request(self._input_width, -1)
+            self._stack.set_visible_child_name("input")
 
         # Keyboard shortcuts
         key_ctl = Gtk.EventControllerKey()
@@ -168,6 +204,10 @@ class ActionsWindow(Gtk.Window):
                 target=self._watch_reposition, args=(reposition_fd,),
                 daemon=True,
             ).start()
+
+        # Signal hold immediately in reply mode
+        if reply_only:
+            self._update_hold()
 
     def _watch_reposition(self, fd: int) -> None:
         """Read margin-top updates from the overlay over a pipe."""
@@ -193,7 +233,8 @@ class ActionsWindow(Gtk.Window):
             pass
 
     def _update_margin(self, margin: int) -> bool:
-        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin)
+        edge = Gtk4LayerShell.Edge.BOTTOM if self._bottom_anchored else Gtk4LayerShell.Edge.TOP
+        Gtk4LayerShell.set_margin(self, edge, margin)
         return False
 
     # -- Hold signalling to overlay --
@@ -267,7 +308,8 @@ class ActionsWindow(Gtk.Window):
         scrolled.set_child(self._textview)
 
         # Hint
-        hint = Gtk.Label(label="Enter to send \u2022 Shift+Enter for newline \u2022 Esc to go back")
+        hint_text = "Enter to send \u2022 Shift+Enter for newline \u2022 Esc to close" if self._reply_only else "Enter to send \u2022 Shift+Enter for newline \u2022 Esc to go back"
+        hint = Gtk.Label(label=hint_text)
         hint.add_css_class("reply-hint")
         hint.set_halign(Gtk.Align.CENTER)
         vbox.append(hint)
@@ -311,6 +353,9 @@ class ActionsWindow(Gtk.Window):
     def _on_key(self, ctl: Gtk.EventControllerKey,
                 keyval: int, keycode: int, state: Gdk.ModifierType) -> bool:
         if keyval == Gdk.KEY_Escape:
+            if self._reply_only:
+                self.close()
+                return True
             # If in input mode, go back to buttons
             if self._stack.get_visible_child_name() == "input":
                 self._in_input_mode = False
@@ -349,18 +394,30 @@ class ActionsWindow(Gtk.Window):
 class ActionsApp(Adw.Application):
     def __init__(self, conv_id: str, width: int, margin_top: int,
                  reposition_fd: int | None = None,
-                 hold_fd: int | None = None) -> None:
+                 hold_fd: int | None = None,
+                 position: str = "top-center",
+                 margin_left: int = 0,
+                 margin_right: int = 0,
+                 reply_only: bool = False) -> None:
         super().__init__(application_id="dev.aside.actions")
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
         self._reposition_fd = reposition_fd
         self._hold_fd = hold_fd
+        self._position = position
+        self._margin_left = margin_left
+        self._margin_right = margin_right
+        self._reply_only = reply_only
 
     def do_activate(self) -> None:
         win = ActionsWindow(self, self._conv_id, self._width, self._margin_top,
                             reposition_fd=self._reposition_fd,
-                            hold_fd=self._hold_fd)
+                            hold_fd=self._hold_fd,
+                            position=self._position,
+                            margin_left=self._margin_left,
+                            margin_right=self._margin_right,
+                            reply_only=self._reply_only)
         win.present()
 
 
@@ -372,12 +429,21 @@ def main() -> None:
     parser.add_argument("--conv-id", required=True)
     parser.add_argument("--width", type=int, default=600)
     parser.add_argument("--margin-top", type=int, default=60)
+    parser.add_argument("--position", default="top-center")
+    parser.add_argument("--margin-left", type=int, default=0)
+    parser.add_argument("--margin-right", type=int, default=0)
+    parser.add_argument("--margin-bottom", type=int, default=0)
     parser.add_argument("--reposition-fd", type=int, default=None)
     parser.add_argument("--hold-fd", type=int, default=None)
+    parser.add_argument("--reply", action="store_true", default=False)
     args = parser.parse_args()
     app = ActionsApp(args.conv_id, args.width, args.margin_top,
                      reposition_fd=args.reposition_fd,
-                     hold_fd=args.hold_fd)
+                     hold_fd=args.hold_fd,
+                     position=args.position,
+                     margin_left=args.margin_left,
+                     margin_right=args.margin_right,
+                     reply_only=args.reply)
     app.run([])
 
 

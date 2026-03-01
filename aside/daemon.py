@@ -121,7 +121,11 @@ _OVERLAY_SCALAR_KEYS = [
     "font",
     "width",
     "max_lines",
+    "position",
     "margin_top",
+    "margin_right",
+    "margin_bottom",
+    "margin_left",
     "padding_x",
     "padding_y",
     "corner_radius",
@@ -243,10 +247,14 @@ class Daemon:
         conversation_id=None,
         image: str | None = None,
         file: str | None = None,
+        from_mic: bool = False,
     ) -> None:
         """Spawn a query in a background thread.
 
         Cancels any existing running query first.
+        When *from_mic* is True, the overlay already shows the user's
+        transcribed text in thinking mode — the query pipeline will defer
+        the overlay "open" until the first LLM response chunk arrives.
         """
 
         cancel_event = threading.Event()
@@ -270,6 +278,7 @@ class Daemon:
                     tts=self.tts,
                     plugin_dirs=self.tools_dirs,
                     tools=self._get_tools(),
+                    from_mic=from_mic,
                 )
             except Exception:
                 log.exception("Query thread error")
@@ -342,6 +351,7 @@ class Daemon:
                                 "mode": "user",
                                 "conv_id": conv_id or "",
                             })
+                            _overlay_send(overlay_sock, {"cmd": "listening"})
 
                             def on_interim(text):
                                 _overlay_send(overlay_sock, {
@@ -353,12 +363,15 @@ class Daemon:
                                 self.config.get("voice", {}),
                                 on_interim=on_interim,
                             )
-                            _overlay_close(overlay_sock)
 
                             if text:
-                                self.start_query(text, conversation_id=conv_id)
+                                # Keep user text visible, start pulsing
+                                _overlay_send(overlay_sock, {"cmd": "thinking"})
+                                _overlay_close(overlay_sock)
+                                self.start_query(text, conversation_id=conv_id, from_mic=True)
                             else:
                                 log.info("Mic capture returned empty, no query started")
+                                _overlay_close(overlay_sock)
                                 _overlay_send(_connect_overlay(), {"cmd": "clear"})
                         except Exception:
                             log.exception("Mic capture error")

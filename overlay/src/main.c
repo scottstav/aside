@@ -19,25 +19,25 @@
 static volatile sig_atomic_t quit = 0;
 static char current_conv_id[64] = "";
 static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
-static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
-static int actions_write_fd = -1; /* write end of pipe to reposition actions */
-static int actions_hold_fd = -1;  /* read end of hold pipe from actions */
-static bool actions_holding = false; /* true while user interacts with actions */
-static uint64_t last_spawn_ms = 0; /* rate-limit respawn attempts */
+static bool listening_active = false;  /* true = show waveform animation */
+static uint64_t listening_start = 0;
+static bool thinking_active = false;   /* true = pulse text, sweep accent */
+static uint64_t thinking_start = 0;
+static bool show_buttons = false;      /* true = render embedded action buttons */
+static int hovered_button = -1;        /* -1 = none, 0-2 = mic/open/reply */
+static pid_t actions_pid = 0;     /* child PID of aside-actions reply input, 0 = none */
+static int actions_hold_fd = -1;  /* read end of hold pipe from reply input */
+static bool actions_holding = false; /* true while user interacts with reply input */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
 
-/* Kill the aside-actions child if running */
+/* Kill the aside-actions reply input child if running */
 static void kill_actions(void)
 {
     if (actions_pid > 0) {
         kill(actions_pid, SIGTERM);
         waitpid(actions_pid, NULL, 0);
         actions_pid = 0;
-    }
-    if (actions_write_fd >= 0) {
-        close(actions_write_fd);
-        actions_write_fd = -1;
     }
     if (actions_hold_fd >= 0) {
         close(actions_hold_fd);
@@ -54,10 +54,6 @@ static bool reap_actions(void)
     pid_t r = waitpid(actions_pid, &status, WNOHANG);
     if (r == actions_pid) {
         actions_pid = 0;
-        if (actions_write_fd >= 0) {
-            close(actions_write_fd);
-            actions_write_fd = -1;
-        }
         if (actions_hold_fd >= 0) {
             close(actions_hold_fd);
             actions_hold_fd = -1;
@@ -68,24 +64,52 @@ static bool reap_actions(void)
     return false;
 }
 
-/* Send new margin-top to the actions bar over its reposition pipe */
-static void reposition_actions(uint32_t margin_top, uint32_t height)
+/* Compute the margin for the reply input window's anchored edge */
+static uint32_t reply_input_margin(const struct overlay_config *cfg,
+                                   const struct overlay_state *state)
 {
-    if (actions_write_fd < 0) return;
-    char msg[32];
-    int n = snprintf(msg, sizeof(msg), "%u\n", margin_top + height + 4);
-    (void)write(actions_write_fd, msg, n);
+    const char *pos = cfg->position;
+    uint32_t gap = 4;
+
+    if (strstr(pos, "bottom"))
+        return cfg->margin_bottom + state->height + gap;
+    if (strcmp(pos, "center") == 0) {
+        uint32_t s = (uint32_t)(state->scale > 1 ? state->scale : 1);
+        uint32_t logical_h = state->output_mode_height / s;
+        if (logical_h > 0)
+            return (logical_h + state->height) / 2 + gap;
+    }
+    return cfg->margin_top + state->height + gap;
 }
 
-/* Spawn aside-actions bar below the overlay */
-static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
+/* Update layer-shell margin to keep overlay centered (center position only) */
+static void update_center_margin(const struct overlay_config *cfg,
+                                 struct overlay_state *state)
+{
+    if (strcmp(cfg->position, "center") != 0 || !state->layer_surface)
+        return;
+    uint32_t s = state->scale > 1 ? (uint32_t)state->scale : 1;
+    uint32_t logical_h = state->output_mode_height / s;
+    if (logical_h > state->height) {
+        uint32_t center_margin = (logical_h - state->height) / 2;
+        zwlr_layer_surface_v1_set_margin(state->layer_surface,
+            center_margin, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
+    }
+}
+
+/* Spawn aside-actions in reply-input-only mode */
+static void spawn_reply_input(const struct overlay_config *cfg,
+                               const struct overlay_state *state)
 {
     if (current_conv_id[0] == '\0') return;
 
     char margin_str[32], width_str[32];
+    char margin_left_str[32], margin_right_str[32];
     snprintf(margin_str, sizeof(margin_str), "%u",
-             cfg->margin_top + height + 4);
+             reply_input_margin(cfg, state));
     snprintf(width_str, sizeof(width_str), "%u", cfg->width);
+    snprintf(margin_left_str, sizeof(margin_left_str), "%u", cfg->margin_left);
+    snprintf(margin_right_str, sizeof(margin_right_str), "%u", cfg->margin_right);
 
     const char *home = getenv("HOME");
     char bin[512] = "aside-actions";
@@ -97,39 +121,30 @@ static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
 
     kill_actions();
 
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return;
-
     int holdpipe[2];
-    if (pipe(holdpipe) != 0) {
-        close(pipefd[0]); close(pipefd[1]);
-        return;
-    }
+    if (pipe(holdpipe) != 0) return;
 
     pid_t pid = fork();
     if (pid == 0) {
-        close(pipefd[1]);
         close(holdpipe[0]);
-        char fd_str[16], hold_fd_str[16];
-        snprintf(fd_str, sizeof(fd_str), "%d", pipefd[0]);
+        char hold_fd_str[16];
         snprintf(hold_fd_str, sizeof(hold_fd_str), "%d", holdpipe[1]);
         execl(bin, "aside-actions",
               "--conv-id", current_conv_id,
               "--width", width_str,
               "--margin-top", margin_str,
-              "--reposition-fd", fd_str,
+              "--position", cfg->position,
+              "--margin-left", margin_left_str,
+              "--margin-right", margin_right_str,
               "--hold-fd", hold_fd_str,
+              "--reply",
               NULL);
         _exit(1);
     } else if (pid > 0) {
-        close(pipefd[0]);
         close(holdpipe[1]);
         actions_pid = pid;
-        actions_write_fd = pipefd[1];
         actions_hold_fd = holdpipe[0];
     } else {
-        close(pipefd[0]);
-        close(pipefd[1]);
         close(holdpipe[0]);
         close(holdpipe[1]);
     }
@@ -279,9 +294,19 @@ int main(int argc, char *argv[])
 
             uint32_t s = state.scale > 1 ? state.scale : 1;
             uint32_t accent = user_mode ? cfg.user_accent_color : cfg.accent_color;
+            enum draw_mode mode = DRAW_NORMAL;
+            uint64_t anim_time = 0;
+            if (listening_active) {
+                mode = DRAW_LISTENING;
+                anim_time = anim_now_ms() - listening_start;
+            } else if (thinking_active) {
+                mode = DRAW_THINKING;
+                anim_time = anim_now_ms() - thinking_start;
+            }
             renderer_draw(&rend, &cfg, state.pixels,
                           state.configured_width * s, state.configured_height * s,
-                          text_buf, scroll_anim.current, fade_anim.current, accent);
+                          text_buf, scroll_anim.current, fade_anim.current, accent,
+                          mode, anim_time, show_buttons, hovered_button);
 
             wayland_commit(&state);
             state.needs_redraw = false;
@@ -298,13 +323,13 @@ int main(int argc, char *argv[])
 
         wl_display_flush(state.display);
 
-        /* Reap actions child; start linger when it exits (only after done) */
+        /* Reap reply input child; start linger when it exits (only after done) */
         if (reap_actions() && done_at == 0 && done_received && current_conv_id[0]) {
             done_at = anim_now_ms();
         }
 
         /* Check linger timer: start fade after delay, unless pointer hovers
-         * or user is interacting with the actions bar */
+         * or user is interacting with the reply input */
         if (done_at > 0 && !state.pointer_over && !actions_holding) {
             uint64_t now = anim_now_ms();
             if (now - done_at >= linger_ms) {
@@ -331,7 +356,28 @@ int main(int argc, char *argv[])
                 break;
         }
 
-        /* --- Read hold signals from actions bar --- */
+        /* --- Track button hover state --- */
+        if (show_buttons && state.pointer_over && state.surface_visible) {
+            int new_hover = -1;
+            for (int i = 0; i < 3; i++) {
+                struct button_rect *br = &rend.button_rects[i];
+                if (br->w > 0 &&
+                    state.pointer_x >= br->x && state.pointer_x <= br->x + br->w &&
+                    state.pointer_y >= br->y && state.pointer_y <= br->y + br->h) {
+                    new_hover = i;
+                    break;
+                }
+            }
+            if (new_hover != hovered_button) {
+                hovered_button = new_hover;
+                state.needs_redraw = true;
+            }
+        } else if (hovered_button >= 0) {
+            hovered_button = -1;
+            state.needs_redraw = true;
+        }
+
+        /* --- Read hold signals from reply input --- */
         if (hold_idx >= 0 && (fds[hold_idx].revents & POLLIN)) {
             char hbuf[16];
             ssize_t hn = read(actions_hold_fd, hbuf, sizeof(hbuf));
@@ -347,7 +393,7 @@ int main(int argc, char *argv[])
                     }
                 }
             } else if (hn == 0) {
-                /* Pipe closed: actions exited */
+                /* Pipe closed: reply input exited */
                 close(actions_hold_fd);
                 actions_hold_fd = -1;
                 actions_holding = false;
@@ -366,7 +412,7 @@ int main(int argc, char *argv[])
             state.needs_redraw = true;
         }
         /* Restart linger when pointer leaves after hover-pause
-         * (only if user is not interacting with actions bar) */
+         * (only if user is not interacting with reply input) */
         if (!state.pointer_over && !actions_holding && done_at == 0
             && !fade_anim.active && done_received && current_conv_id[0]) {
             done_at = anim_now_ms();
@@ -410,44 +456,70 @@ int main(int argc, char *argv[])
             uint32_t btn = state.pending_button;
             state.pending_button = 0;
 
+            bool do_dismiss = false;
+
             if (btn == BTN_LEFT) {
-                /* Left click: dismiss overlay */
-                kill_actions();
-                text_buf[0] = '\0';
-                text_len = 0;
-                fade_anim.current = 1.0;
-                fade_anim.active = false;
-                done_at = 0;
-                done_received = false;
-                scroll_anim.current = 0.0;
-                scroll_anim.active = false;
-                user_scrolling = false;
-                if (timer_armed) {
-                    arm_timer(timer_fd, false);
-                    timer_armed = false;
+                /* Check embedded button clicks first */
+                if (show_buttons && hovered_button >= 0 && actions_pid == 0) {
+                    if (hovered_button == 0) {
+                        /* Mic: voice reply */
+                        char msg[256];
+                        snprintf(msg, sizeof(msg),
+                                 "{\"action\":\"query\",\"conversation_id\":\"%s\",\"mic\":true}\n",
+                                 current_conv_id);
+                        send_daemon_action(msg);
+                        do_dismiss = true;
+                    } else if (hovered_button == 1) {
+                        /* Open transcript */
+                        pid_t p = fork();
+                        if (p == 0) {
+                            const char *h = getenv("HOME");
+                            char aside_bin[512] = "aside";
+                            if (h) {
+                                snprintf(aside_bin, sizeof(aside_bin),
+                                         "%s/.local/bin/aside", h);
+                                if (access(aside_bin, X_OK) != 0)
+                                    snprintf(aside_bin, sizeof(aside_bin), "aside");
+                            }
+                            execl(aside_bin, "aside", "open", current_conv_id, NULL);
+                            _exit(1);
+                        }
+                        do_dismiss = true;
+                    } else if (hovered_button == 2) {
+                        /* Reply: spawn text input, keep overlay visible */
+                        spawn_reply_input(&cfg, &state);
+                    }
+                } else {
+                    /* Left click (not on button): dismiss overlay */
+                    do_dismiss = true;
                 }
-                wayland_destroy_surface(&state);
             } else if (btn == BTN_RIGHT) {
                 /* Right click: cancel query (stops stream + TTS + overlay) */
-                kill_actions();
                 send_daemon_action("{\"action\":\"cancel\"}\n");
-                text_buf[0] = '\0';
-                text_len = 0;
-                fade_anim.current = 1.0;
-                fade_anim.active = false;
-                done_at = 0;
-                done_received = false;
-                scroll_anim.current = 0.0;
-                scroll_anim.active = false;
-                user_scrolling = false;
-                if (timer_armed) {
-                    arm_timer(timer_fd, false);
-                    timer_armed = false;
-                }
-                wayland_destroy_surface(&state);
+                do_dismiss = true;
             } else if (btn == BTN_MIDDLE) {
                 /* Middle click: stop TTS only, text keeps streaming */
                 send_daemon_action("{\"action\":\"stop_tts\"}\n");
+            }
+
+            if (do_dismiss) {
+                kill_actions();
+                show_buttons = false;
+                hovered_button = -1;
+                text_buf[0] = '\0';
+                text_len = 0;
+                fade_anim.current = 1.0;
+                fade_anim.active = false;
+                done_at = 0;
+                done_received = false;
+                scroll_anim.current = 0.0;
+                scroll_anim.active = false;
+                user_scrolling = false;
+                if (timer_armed) {
+                    arm_timer(timer_fd, false);
+                    timer_armed = false;
+                }
+                wayland_destroy_surface(&state);
             }
         } else {
             state.pending_button = 0;
@@ -462,16 +534,21 @@ int main(int argc, char *argv[])
             bool scroll_active = anim_update(&scroll_anim, now);
             bool fade_active = anim_update(&fade_anim, now);
 
-            if (scroll_active || fade_active) {
+            /* Continuous animation modes always need redraws */
+            if (listening_active || thinking_active) {
+                state.needs_redraw = true;
+            } else if (scroll_active || fade_active) {
                 state.needs_redraw = true;
             } else {
-                /* Both animations done -- disarm timer */
+                /* All animations done -- disarm timer */
                 arm_timer(timer_fd, false);
                 timer_armed = false;
 
                 /* If fade completed (opacity ~0), destroy surface */
                 if (fade_anim.current <= 0.01 && state.surface_visible) {
                     kill_actions();
+                    show_buttons = false;
+                    hovered_button = -1;
                     done_received = false;
                     wayland_destroy_surface(&state);
                 }
@@ -487,6 +564,10 @@ int main(int argc, char *argv[])
         switch (cmd.cmd) {
         case CMD_OPEN:
             kill_actions();
+            show_buttons = false;
+            hovered_button = -1;
+            listening_active = false;
+            thinking_active = false;
             strncpy(current_conv_id, cmd.conv_id,
                     sizeof(current_conv_id) - 1);
             current_conv_id[sizeof(current_conv_id) - 1] = '\0';
@@ -504,18 +585,17 @@ int main(int argc, char *argv[])
             user_scrolling = false;
             if (!state.surface_visible) {
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_OPEN\n");
                     break;
                 }
             }
-            /* Spawn actions immediately (not user/mic mode) */
-            if (!user_mode)
-                spawn_actions(&cfg, state.height);
             state.needs_redraw = true;
             break;
 
         case CMD_TEXT:
+            listening_active = false;
+            thinking_active = false;
             /* Append text data to buffer */
             {
                 size_t chunk_len = strlen(cmd.data);
@@ -533,7 +613,7 @@ int main(int argc, char *argv[])
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_TEXT\n");
                     break;
                 }
@@ -552,9 +632,9 @@ int main(int argc, char *argv[])
                 if (target_h != state.height && state.layer_surface) {
                     zwlr_layer_surface_v1_set_size(state.layer_surface,
                                                    cfg.width, target_h);
-                    wl_surface_commit(state.surface);
                     state.height = target_h;
-                    reposition_actions(cfg.margin_top, state.height);
+                    update_center_margin(&cfg, &state);
+                    wl_surface_commit(state.surface);
                     /* Configure callback will set needs_redraw */
                 }
             }
@@ -576,25 +656,28 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_DONE: {
-            /* Final resize + reposition actions */
+            /* Show embedded action buttons */
+            show_buttons = true;
+            hovered_button = -1;
+
+            /* Final resize including button bar */
             int content_h = renderer_measure(&rend, &cfg, text_buf);
-            uint32_t max_h = cfg.padding_y * 2 + (uint32_t)rend.line_height * cfg.max_lines;
-            uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2;
+            uint32_t max_h = cfg.padding_y * 2
+                + (uint32_t)rend.line_height * cfg.max_lines + BUTTON_BAR_HEIGHT;
+            uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2
+                + BUTTON_BAR_HEIGHT;
             if (target_h > max_h) target_h = max_h;
-            uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
+            uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height
+                + BUTTON_BAR_HEIGHT;
             if (target_h < min_h) target_h = min_h;
 
             if (target_h != state.height && state.layer_surface) {
                 zwlr_layer_surface_v1_set_size(state.layer_surface,
                                                 cfg.width, target_h);
-                wl_surface_commit(state.surface);
                 state.height = target_h;
-                reposition_actions(cfg.margin_top, state.height);
+                update_center_margin(&cfg, &state);
+                wl_surface_commit(state.surface);
             }
-
-            /* Spawn actions now if not already running (e.g. user-mode open) */
-            if (actions_pid == 0 && current_conv_id[0] != '\0')
-                spawn_actions(&cfg, state.height);
 
             state.needs_redraw = true;
             done_received = true;
@@ -604,6 +687,10 @@ int main(int argc, char *argv[])
 
         case CMD_CLEAR:
             kill_actions();
+            show_buttons = false;
+            hovered_button = -1;
+            listening_active = false;
+            thinking_active = false;
             text_buf[0] = '\0';
             text_len = 0;
             fade_anim.current = 1.0;
@@ -622,6 +709,8 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_REPLACE:
+            listening_active = false;
+            thinking_active = false;
             text_buf[0] = '\0';
             text_len = 0;
             {
@@ -638,7 +727,7 @@ int main(int argc, char *argv[])
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_REPLACE\n");
                     break;
                 }
@@ -646,19 +735,23 @@ int main(int argc, char *argv[])
             /* Resize surface for new content */
             {
                 int content_h = renderer_measure(&rend, &cfg, text_buf);
+                uint32_t btn_extra = show_buttons ? BUTTON_BAR_HEIGHT : 0;
                 uint32_t max_h = cfg.padding_y * 2
-                    + (uint32_t)rend.line_height * cfg.max_lines;
-                uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2;
+                    + (uint32_t)rend.line_height * cfg.max_lines + btn_extra;
+                uint32_t target_h = (uint32_t)content_h + cfg.padding_y * 2
+                    + btn_extra;
                 if (target_h > max_h)
                     target_h = max_h;
-                uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
+                uint32_t min_h = cfg.padding_y * 2 + (uint32_t)rend.line_height
+                    + btn_extra;
                 if (target_h < min_h)
                     target_h = min_h;
                 if (target_h != state.height && state.layer_surface) {
                     zwlr_layer_surface_v1_set_size(state.layer_surface,
                                                    cfg.width, target_h);
-                    wl_surface_commit(state.surface);
                     state.height = target_h;
+                    update_center_margin(&cfg, &state);
+                    wl_surface_commit(state.surface);
                 }
             }
             /* Compute scroll target for replaced content */
@@ -681,20 +774,37 @@ int main(int argc, char *argv[])
             state.needs_redraw = true;
             break;
 
+        case CMD_LISTENING:
+            listening_active = true;
+            thinking_active = false;
+            show_buttons = false;
+            hovered_button = -1;
+            listening_start = anim_now_ms();
+            /* Resize to 2 lines for a nice waveform area */
+            if (state.surface_visible && state.layer_surface) {
+                uint32_t listen_h = cfg.padding_y * 2 + (uint32_t)rend.line_height * 2;
+                if (listen_h != state.height) {
+                    zwlr_layer_surface_v1_set_size(state.layer_surface,
+                                                   cfg.width, listen_h);
+                    state.height = listen_h;
+                    update_center_margin(&cfg, &state);
+                    wl_surface_commit(state.surface);
+                }
+            }
+            ensure_timer(timer_fd, &timer_armed);
+            state.needs_redraw = true;
+            break;
+
+        case CMD_THINKING:
+            thinking_active = true;
+            listening_active = false;
+            thinking_start = anim_now_ms();
+            ensure_timer(timer_fd, &timer_armed);
+            state.needs_redraw = true;
+            break;
+
         case CMD_NONE:
             break;
-        }
-
-        /* --- Invariant: actions bar must exist when overlay is visible ---
-         * This catches every edge case (dismiss-during-stream, actions
-         * crash, implicit reopen via CMD_TEXT, etc.) in one place.  */
-        if (state.surface_visible && !user_mode
-            && current_conv_id[0] != '\0' && actions_pid == 0) {
-            uint64_t now = anim_now_ms();
-            if (now - last_spawn_ms >= 1000) {
-                last_spawn_ms = now;
-                spawn_actions(&cfg, state.height);
-            }
         }
     }
 

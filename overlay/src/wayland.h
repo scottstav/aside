@@ -37,6 +37,9 @@ struct overlay_state {
     /* Scale (detected from wl_output) */
     int32_t scale;
 
+    /* Output dimensions (physical pixels from wl_output.mode) */
+    uint32_t output_mode_height;
+
     /* Pointer / scroll input */
     double pending_scroll_delta;
     uint32_t pending_button;   /* button code from last press, 0 = none */
@@ -52,7 +55,8 @@ struct overlay_state {
 };
 
 bool wayland_init(struct overlay_state *state);
-bool wayland_create_surface(struct overlay_state *state, uint32_t width, uint32_t height, uint32_t margin_top);
+struct overlay_config;  /* forward declaration */
+bool wayland_create_surface(struct overlay_state *state, uint32_t width, uint32_t height, const struct overlay_config *cfg);
 void wayland_destroy_surface(struct overlay_state *state);
 bool wayland_alloc_buffer(struct overlay_state *state);
 void wayland_commit(struct overlay_state *state);

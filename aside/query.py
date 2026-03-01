@@ -297,6 +297,7 @@ def stream_response(
     tts,  # TTSPipeline | None
     sentence_buf: SentenceBuffer,
     speak_on: bool,
+    deferred_open: dict | None = None,
 ) -> tuple[str, list[dict], dict]:
     """Stream an LLM response via LiteLLM.
 
@@ -305,6 +306,10 @@ def stream_response(
     - *tool_calls* is a list of ``{"id": ..., "name": ..., "arguments": {...}}``.
     - *usage_dict* has ``model``, ``input_tokens``, ``output_tokens`` (may be
       zeroed if the provider doesn't report usage).
+
+    When *deferred_open* is provided (mic→agent transition), the overlay
+    "open" command is sent only when the first content chunk arrives,
+    keeping the user's transcribed text visible until then.
     """
     api_kwargs: dict = {
         "model": model,
@@ -319,6 +324,7 @@ def stream_response(
     accumulated_text = ""
     accumulated_tool_calls: dict[int, dict] = {}
     usage = {"model": model, "input_tokens": 0, "output_tokens": 0}
+    open_sent = deferred_open is None  # True if no deferred open needed
 
     response_stream = litellm.completion(**api_kwargs)
 
@@ -340,6 +346,11 @@ def stream_response(
             continue
 
         delta = choice.delta
+
+        # Send deferred open on first real content (text or tool call).
+        if not open_sent and delta and (delta.content or delta.tool_calls):
+            _overlay_send(overlay_sock, deferred_open)
+            open_sent = True
 
         # Text content.
         if delta and delta.content:
@@ -363,6 +374,10 @@ def stream_response(
             usage["input_tokens"] = getattr(chunk.usage, "prompt_tokens", 0) or 0
             usage["output_tokens"] = getattr(chunk.usage, "completion_tokens", 0) or 0
             usage["model"] = getattr(chunk, "model", model) or model
+
+    # If stream ended without sending the deferred open, send it now.
+    if not open_sent and deferred_open:
+        _overlay_send(overlay_sock, deferred_open)
 
     # Flush remaining TTS.
     if speak_on and tts is not None:
@@ -391,6 +406,7 @@ def send_query(
     tts=None,       # TTSPipeline | None
     plugin_dirs: list[Path] | None = None,
     tools: list[dict] | None = None,
+    from_mic: bool = False,
 ) -> str | None:
     """Send text to an LLM.  The single entry point for all query paths.
 
@@ -422,6 +438,10 @@ def send_query(
         Directories to scan for tool plugins.
     tools:
         Pre-loaded tool definitions (OpenAI format).  If ``None``, no tools.
+    from_mic:
+        When True, the overlay already shows the user's transcribed text
+        in thinking/pulsing mode.  The "open" command is deferred until
+        the first LLM response chunk arrives.
 
     Returns the conversation id, or ``None`` if cancelled before any streaming.
     """
@@ -483,7 +503,16 @@ def send_query(
     # ------------------------------------------------------------------
     full_text = ""
     overlay_sock = _connect_overlay()
-    _overlay_send(overlay_sock, {"cmd": "open", "mode": "agent", "conv_id": conv["id"]})
+    open_cmd = {"cmd": "open", "mode": "agent", "conv_id": conv["id"]}
+    deferred_open: dict | None = None
+
+    if from_mic:
+        # Overlay is already visible with user text pulsing (thinking mode).
+        # Defer the "open" until the first LLM response chunk arrives.
+        deferred_open = open_cmd
+    else:
+        _overlay_send(overlay_sock, open_cmd)
+
     sentence_buf = SentenceBuffer()
     session_tokens = 0
     dirs = plugin_dirs or []
@@ -509,7 +538,9 @@ def send_query(
                 tts=tts,
                 sentence_buf=sentence_buf,
                 speak_on=speak_on,
+                deferred_open=deferred_open,
             )
+            deferred_open = None  # Only defer on the first iteration
 
             # Cancelled.
             if cancel_event and cancel_event.is_set() and not resp_text and not tool_calls:
@@ -571,6 +602,9 @@ def send_query(
                 full_text += "\n\n"
             full_text += f"{tool_names}\n\n"
             _overlay_send(overlay_sock, {"cmd": "replace", "data": full_text})
+            # Show accent sweep while waiting for the next LLM response.
+            # CMD_TEXT in the overlay will clear thinking_active automatically.
+            _overlay_send(overlay_sock, {"cmd": "thinking"})
             if speak_on and tts is not None and tts._running:
                 status.set_status("speaking")
             else:

@@ -56,9 +56,14 @@
 # ---------------------------------------------------------------------------
 [overlay]
 # font = "Sans 13"
-# width = 600
-# max_lines = 40
+# width = 600                    # 200–2000 logical pixels
+# max_lines = 40                 # 1–50 lines of visible text
+# position = "top-center"        # top-left, top-center, top-right,
+#                                # bottom-left, bottom-center, bottom-right, center
 # margin_top = 10
+# margin_right = 0
+# margin_bottom = 0
+# margin_left = 0
 # padding_x = 20
 # padding_y = 16
 # corner_radius = 12

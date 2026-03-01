@@ -19,6 +19,10 @@ struct overlay_config {
     uint32_t border_width;
     uint32_t accent_height;  // pixels, 0 = disabled
     uint32_t margin_top;
+    uint32_t margin_right;
+    uint32_t margin_bottom;
+    uint32_t margin_left;
+    char position[16];       // "top-center", "top-left", "top-right", etc.
     uint32_t line_spacing;   // extra pixels between lines (Pango spacing)
     uint32_t scroll_duration; // milliseconds
     uint32_t fade_duration;   // milliseconds

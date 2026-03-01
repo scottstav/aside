@@ -32,6 +32,8 @@ static bool parse_command(const char *line, struct overlay_command *cmd)
     else if (strcmp(cmd_str, "done") == 0)    cmd->cmd = CMD_DONE;
     else if (strcmp(cmd_str, "clear") == 0)   cmd->cmd = CMD_CLEAR;
     else if (strcmp(cmd_str, "replace") == 0) cmd->cmd = CMD_REPLACE;
+    else if (strcmp(cmd_str, "listening") == 0) cmd->cmd = CMD_LISTENING;
+    else if (strcmp(cmd_str, "thinking") == 0) cmd->cmd = CMD_THINKING;
 
     struct json_object *data_obj;
     if (json_object_object_get_ex(root, "data", &data_obj)) {

@@ -26,6 +26,8 @@ void renderer_init(struct renderer *r, const struct overlay_config *cfg)
     g_object_unref(tmp_layout);
     cairo_destroy(tmp_cr);
     cairo_surface_destroy(tmp_surf);
+
+    memset(r->button_rects, 0, sizeof(r->button_rects));
 }
 
 static void setup_layout(PangoLayout *layout, struct renderer *r,
@@ -78,10 +80,80 @@ static void color_rgba(uint32_t c, double *r, double *g, double *b, double *a)
     *a = (c & 0xFF) / 255.0;
 }
 
+/* --- Button icon drawing (Cairo paths) --- */
+
+static void draw_mic_icon(cairo_t *cr, double cx, double cy)
+{
+    /* Capsule body */
+    rounded_rect(cr, cx - 3, cy - 6, 6, 8.5, 3);
+    cairo_fill(cr);
+    /* U-shaped holder */
+    cairo_new_path(cr);
+    cairo_arc(cr, cx, cy + 1.5, 5.5, 0, M_PI);
+    cairo_set_line_width(cr, 1.5);
+    cairo_stroke(cr);
+    /* Stem + base */
+    cairo_move_to(cr, cx, cy + 7);
+    cairo_line_to(cr, cx, cy + 8.5);
+    cairo_stroke(cr);
+}
+
+static void draw_open_icon(cairo_t *cr, double cx, double cy)
+{
+    cairo_set_line_width(cr, 1.5);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    /* Box */
+    cairo_rectangle(cr, cx - 6, cy - 3, 8, 8);
+    cairo_stroke(cr);
+    /* Diagonal arrow */
+    cairo_move_to(cr, cx - 1, cy + 2);
+    cairo_line_to(cr, cx + 6, cy - 5);
+    cairo_stroke(cr);
+    /* Arrowhead */
+    cairo_move_to(cr, cx + 6, cy - 5);
+    cairo_line_to(cr, cx + 2, cy - 5);
+    cairo_stroke(cr);
+    cairo_move_to(cr, cx + 6, cy - 5);
+    cairo_line_to(cr, cx + 6, cy - 1);
+    cairo_stroke(cr);
+}
+
+static void draw_reply_icon(cairo_t *cr, double cx, double cy)
+{
+    cairo_set_line_width(cr, 1.5);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+    /* Speech bubble: rounded rectangle body */
+    double bx = cx - 7, by = cy - 6, bw = 14, bh = 10, br = 3;
+    rounded_rect(cr, bx, by, bw, bh, br);
+    cairo_stroke(cr);
+    /* Tail/pointer at bottom-left */
+    cairo_move_to(cr, cx - 3, by + bh);
+    cairo_line_to(cr, cx - 5, by + bh + 4);
+    cairo_line_to(cr, cx,     by + bh);
+    cairo_stroke(cr);
+}
+
+static void draw_button_icon(cairo_t *cr, int index, double cx, double cy,
+                              uint32_t color, double alpha)
+{
+    double r, g, b, a;
+    color_rgba(color, &r, &g, &b, &a);
+    cairo_set_source_rgba(cr, r, g, b, alpha);
+
+    switch (index) {
+    case 0: draw_mic_icon(cr, cx, cy); break;
+    case 1: draw_open_icon(cr, cx, cy); break;
+    case 2: draw_reply_icon(cr, cx, cy); break;
+    }
+}
+
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
                    const char *text, double scroll_y, double opacity,
-                   uint32_t accent)
+                   uint32_t accent, enum draw_mode mode,
+                   uint64_t anim_time_ms,
+                   bool show_buttons, int hovered_button)
 {
     cairo_surface_t *surface = cairo_image_surface_create_for_data(
         (unsigned char *)pixels, CAIRO_FORMAT_ARGB32,
@@ -153,26 +225,81 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_arc(cr, rx + cr_radius, ry + cr_radius, cr_radius, M_PI, 3 * M_PI / 2);
         cairo_arc(cr, rx + rw - cr_radius, ry + cr_radius, cr_radius, -M_PI / 2, 0);
 
-        /* Gradient source: fade in from left edge, solid middle, fade out right */
-        cairo_pattern_t *accent_grad = cairo_pattern_create_linear(rx, 0, rx + rw, 0);
-        cairo_pattern_add_color_stop_rgba(accent_grad, 0.0,  ac_r, ac_g, ac_b, 0.0);
-        cairo_pattern_add_color_stop_rgba(accent_grad, 0.12, ac_r, ac_g, ac_b, ac_a);
-        cairo_pattern_add_color_stop_rgba(accent_grad, 0.88, ac_r, ac_g, ac_b, ac_a);
-        cairo_pattern_add_color_stop_rgba(accent_grad, 1.0,  ac_r, ac_g, ac_b, 0.0);
-        cairo_set_source(cr, accent_grad);
-        cairo_set_line_width(cr, ah * 2);  /* doubled because half is outside clip */
-        cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
-        cairo_stroke(cr);
-        cairo_pattern_destroy(accent_grad);
+        if (mode == DRAW_THINKING) {
+            /* Animated sweep: a bright pulse travels across the accent line */
+            double time_s = anim_time_ms / 1000.0;
+            double sweep = fmod(time_s * 0.5, 1.4) - 0.2;  /* -0.2..1.2 for smooth edges */
+            double dim = 0.30;  /* base accent brightness while thinking */
+
+            cairo_pattern_t *accent_grad = cairo_pattern_create_linear(rx, 0, rx + rw, 0);
+            /* Left edge fade */
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.0, ac_r, ac_g, ac_b, 0.0);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.05, ac_r, ac_g, ac_b, ac_a * dim);
+
+            /* Sweep pulse — bright spot centered at 'sweep' position */
+            double s0 = sweep - 0.12;
+            double s1 = sweep;
+            double s2 = sweep + 0.12;
+            if (s0 < 0.05) s0 = 0.05;
+            if (s2 > 0.95) s2 = 0.95;
+            if (s1 < s0) s1 = s0;
+            if (s1 > s2) s1 = s2;
+            cairo_pattern_add_color_stop_rgba(accent_grad, s0, ac_r, ac_g, ac_b, ac_a * dim);
+            cairo_pattern_add_color_stop_rgba(accent_grad, s1, ac_r, ac_g, ac_b, ac_a);
+            cairo_pattern_add_color_stop_rgba(accent_grad, s2, ac_r, ac_g, ac_b, ac_a * dim);
+
+            /* Right edge fade */
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.95, ac_r, ac_g, ac_b, ac_a * dim);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 1.0, ac_r, ac_g, ac_b, 0.0);
+            cairo_set_source(cr, accent_grad);
+            cairo_set_line_width(cr, ah * 2);
+            cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
+            cairo_stroke(cr);
+            cairo_pattern_destroy(accent_grad);
+        } else if (mode == DRAW_LISTENING) {
+            /* Breathing accent: gentle pulse while listening */
+            double time_s = anim_time_ms / 1000.0;
+            double breath = 0.4 + 0.6 * (0.5 + 0.5 * sin(time_s * 2.0));
+
+            cairo_pattern_t *accent_grad = cairo_pattern_create_linear(rx, 0, rx + rw, 0);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.0,  ac_r, ac_g, ac_b, 0.0);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.12, ac_r, ac_g, ac_b, ac_a * breath);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.88, ac_r, ac_g, ac_b, ac_a * breath);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 1.0,  ac_r, ac_g, ac_b, 0.0);
+            cairo_set_source(cr, accent_grad);
+            cairo_set_line_width(cr, ah * 2);
+            cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
+            cairo_stroke(cr);
+            cairo_pattern_destroy(accent_grad);
+        } else {
+            /* Normal static accent */
+            cairo_pattern_t *accent_grad = cairo_pattern_create_linear(rx, 0, rx + rw, 0);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.0,  ac_r, ac_g, ac_b, 0.0);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.12, ac_r, ac_g, ac_b, ac_a);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 0.88, ac_r, ac_g, ac_b, ac_a);
+            cairo_pattern_add_color_stop_rgba(accent_grad, 1.0,  ac_r, ac_g, ac_b, 0.0);
+            cairo_set_source(cr, accent_grad);
+            cairo_set_line_width(cr, ah * 2);
+            cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT);
+            cairo_stroke(cr);
+            cairo_pattern_destroy(accent_grad);
+        }
 
         /* Subtle glow/bloom below the accent */
-        cairo_pattern_t *glow = cairo_pattern_create_linear(0, ry, 0, ry + 40);
-        cairo_pattern_add_color_stop_rgba(glow, 0.0, ac_r, ac_g, ac_b, 0.06);
-        cairo_pattern_add_color_stop_rgba(glow, 1.0, ac_r, ac_g, ac_b, 0.0);
-        cairo_set_source(cr, glow);
-        cairo_rectangle(cr, rx, ry, rw, 40);
-        cairo_fill(cr);
-        cairo_pattern_destroy(glow);
+        {
+            double glow_alpha = 0.06;
+            if (mode == DRAW_THINKING) {
+                double time_s = anim_time_ms / 1000.0;
+                glow_alpha = 0.03 + 0.05 * (0.5 + 0.5 * sin(time_s * 2.5));
+            }
+            cairo_pattern_t *glow = cairo_pattern_create_linear(0, ry, 0, ry + 40);
+            cairo_pattern_add_color_stop_rgba(glow, 0.0, ac_r, ac_g, ac_b, glow_alpha);
+            cairo_pattern_add_color_stop_rgba(glow, 1.0, ac_r, ac_g, ac_b, 0.0);
+            cairo_set_source(cr, glow);
+            cairo_rectangle(cr, rx, ry, rw, 40);
+            cairo_fill(cr);
+            cairo_pattern_destroy(glow);
+        }
 
         cairo_restore(cr);
     }
@@ -206,75 +333,173 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_restore(cr);
     }
 
-    /* --- Text content (rendered into a sub-group for bottom fade) --- */
+    /* --- Content area --- */
     {
         cairo_save(cr);
         double px = cfg->padding_x;
         double py = cfg->padding_y;
+        double btn_space = show_buttons ? BUTTON_BAR_HEIGHT : 0;
         double content_w = logical_w - 2 * px;
-        double content_h = logical_h - 2 * py;
+        double content_h = logical_h - 2 * py - btn_space;
 
         cairo_rectangle(cr, px, py, content_w, content_h);
         cairo_clip(cr);
 
-        /* Render text into a group so we can mask the bottom */
-        cairo_push_group(cr);
+        if (mode == DRAW_LISTENING) {
+            /* --- Animated waveform bars --- */
+            double time_s = anim_time_ms / 1000.0;
 
-        /* Apply scroll offset */
-        cairo_translate(cr, px, py - scroll_y);
+            double ac_r, ac_g, ac_b, ac_a;
+            color_rgba(accent, &ac_r, &ac_g, &ac_b, &ac_a);
 
-        /* Create Pango layout for text rendering */
-        PangoLayout *layout = pango_cairo_create_layout(cr);
-        setup_layout(layout, r, cfg, (uint32_t)logical_w);
-        pango_layout_set_text(layout, text, -1);
+            int num_bars = 5;
+            double bar_w = 3.5;
+            double bar_gap = 5.0;
+            double total_w = num_bars * bar_w + (num_bars - 1) * bar_gap;
+            double start_x = (logical_w - total_w) / 2.0;
 
-        /* Set text color and render */
-        double tc_r, tc_g, tc_b, tc_a;
-        color_rgba(cfg->text_color, &tc_r, &tc_g, &tc_b, &tc_a);
-        cairo_set_source_rgba(cr, tc_r, tc_g, tc_b, tc_a);
-        pango_cairo_show_layout(cr, layout);
+            double max_bar_h = content_h * 0.75;
+            double min_bar_h = 4.0;
+            double center_y = py + content_h / 2.0;
 
-        g_object_unref(layout);
+            double phases[] = {0.0, 1.2, 0.6, 2.0, 0.9};
+            double freqs[]  = {3.0, 4.5, 2.5, 3.8, 3.2};
 
-        /* Edge fades: soft fade at top/bottom when content is clipped */
-        int content_text_h = renderer_measure(r, cfg, text);
-        uint32_t visible_h = (uint32_t)r->line_height * cfg->max_lines;
-        double max_scroll = content_text_h > (int)visible_h
-            ? (double)(content_text_h - (int)visible_h) : 0.0;
+            for (int i = 0; i < num_bars; i++) {
+                double t = sin(time_s * freqs[i] + phases[i]);
+                double h = min_bar_h + (max_bar_h - min_bar_h) * (0.5 + 0.5 * t);
+                double x = start_x + i * (bar_w + bar_gap);
+                double y = center_y - h / 2.0;
+                double bar_r = bar_w / 2.0;
 
-        /* Top fade when scrolled down (content above) */
-        if (scroll_y > 1.0) {
-            double fade_h = 24.0;
-            cairo_set_operator(cr, CAIRO_OPERATOR_DEST_OUT);
-            cairo_pattern_t *fade = cairo_pattern_create_linear(
-                0, py, 0, py + fade_h);
-            cairo_pattern_add_color_stop_rgba(fade, 0.0, 0, 0, 0, 1.0);
-            cairo_pattern_add_color_stop_rgba(fade, 1.0, 0, 0, 0, 0.0);
-            cairo_set_source(cr, fade);
-            cairo_rectangle(cr, px, py, content_w, fade_h);
-            cairo_fill(cr);
-            cairo_pattern_destroy(fade);
-            cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+                /* Rounded bar */
+                rounded_rect(cr, x, y, bar_w, h, bar_r);
+
+                /* Vertical gradient: brighter at center, dimmer at ends */
+                cairo_pattern_t *bar_grad = cairo_pattern_create_linear(0, y, 0, y + h);
+                cairo_pattern_add_color_stop_rgba(bar_grad, 0.0, ac_r, ac_g, ac_b, ac_a * 0.4);
+                cairo_pattern_add_color_stop_rgba(bar_grad, 0.5, ac_r, ac_g, ac_b, ac_a * 0.9);
+                cairo_pattern_add_color_stop_rgba(bar_grad, 1.0, ac_r, ac_g, ac_b, ac_a * 0.4);
+                cairo_set_source(cr, bar_grad);
+                cairo_fill(cr);
+                cairo_pattern_destroy(bar_grad);
+            }
+        } else {
+            /* --- Text content (rendered into a sub-group for bottom fade) --- */
+            cairo_push_group(cr);
+
+            /* Apply scroll offset */
+            cairo_translate(cr, px, py - scroll_y);
+
+            /* Create Pango layout for text rendering */
+            PangoLayout *layout = pango_cairo_create_layout(cr);
+            setup_layout(layout, r, cfg, (uint32_t)logical_w);
+            pango_layout_set_text(layout, text, -1);
+
+            /* Set text color — pulse alpha in thinking mode */
+            double tc_r, tc_g, tc_b, tc_a;
+            color_rgba(cfg->text_color, &tc_r, &tc_g, &tc_b, &tc_a);
+
+            if (mode == DRAW_THINKING) {
+                double time_s = anim_time_ms / 1000.0;
+                double pulse = 0.5 + 0.5 * (0.5 + 0.5 * sin(time_s * 2.0));
+                tc_a *= pulse;
+            }
+
+            cairo_set_source_rgba(cr, tc_r, tc_g, tc_b, tc_a);
+            pango_cairo_show_layout(cr, layout);
+
+            g_object_unref(layout);
+
+            /* Edge fades: soft fade at top/bottom when content is clipped */
+            int content_text_h = renderer_measure(r, cfg, text);
+            uint32_t visible_h = (uint32_t)r->line_height * cfg->max_lines;
+            double max_scroll = content_text_h > (int)visible_h
+                ? (double)(content_text_h - (int)visible_h) : 0.0;
+
+            /* Top fade when scrolled down (content above) */
+            if (scroll_y > 1.0) {
+                double fade_h = 24.0;
+                cairo_set_operator(cr, CAIRO_OPERATOR_DEST_OUT);
+                cairo_pattern_t *fade = cairo_pattern_create_linear(
+                    0, py, 0, py + fade_h);
+                cairo_pattern_add_color_stop_rgba(fade, 0.0, 0, 0, 0, 1.0);
+                cairo_pattern_add_color_stop_rgba(fade, 1.0, 0, 0, 0, 0.0);
+                cairo_set_source(cr, fade);
+                cairo_rectangle(cr, px, py, content_w, fade_h);
+                cairo_fill(cr);
+                cairo_pattern_destroy(fade);
+                cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+            }
+
+            /* Bottom fade when more content below */
+            if (scroll_y < max_scroll - 1.0) {
+                double fade_h = 24.0;
+                double fade_top = py + content_h - fade_h;
+                cairo_set_operator(cr, CAIRO_OPERATOR_DEST_OUT);
+                cairo_pattern_t *fade = cairo_pattern_create_linear(
+                    0, fade_top, 0, py + content_h);
+                cairo_pattern_add_color_stop_rgba(fade, 0.0, 0, 0, 0, 0.0);
+                cairo_pattern_add_color_stop_rgba(fade, 1.0, 0, 0, 0, 1.0);
+                cairo_set_source(cr, fade);
+                cairo_rectangle(cr, px, fade_top, content_w, fade_h);
+                cairo_fill(cr);
+                cairo_pattern_destroy(fade);
+                cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+            }
+
+            cairo_pop_group_to_source(cr);
+            cairo_paint(cr);
+        }
+        cairo_restore(cr);
+    }
+
+    /* --- Action buttons at the bottom of the panel --- */
+    if (show_buttons) {
+        cairo_save(cr);
+        /* Clip to the panel rounded rect */
+        rounded_rect(cr, rx, ry, rw, rh, cr_radius);
+        cairo_clip(cr);
+
+        double btn_bar_y = logical_h - BUTTON_BAR_HEIGHT;
+
+        /* Subtle separator line */
+        double tc_r2, tc_g2, tc_b2, tc_a2;
+        color_rgba(cfg->text_color, &tc_r2, &tc_g2, &tc_b2, &tc_a2);
+        cairo_set_source_rgba(cr, tc_r2, tc_g2, tc_b2, 0.08);
+        cairo_move_to(cr, cfg->padding_x, btn_bar_y);
+        cairo_line_to(cr, logical_w - cfg->padding_x, btn_bar_y);
+        cairo_set_line_width(cr, 0.5);
+        cairo_stroke(cr);
+
+        /* Button layout */
+        double btn_w = 36, btn_h = 26, btn_gap = 6, btn_r = 8;
+        double total_w = 3 * btn_w + 2 * btn_gap;
+        double start_x = (logical_w - total_w) / 2;
+        double btn_y = btn_bar_y + (BUTTON_BAR_HEIGHT - btn_h) / 2;
+
+        double ac_r2, ac_g2, ac_b2, ac_a2;
+        color_rgba(accent, &ac_r2, &ac_g2, &ac_b2, &ac_a2);
+
+        for (int i = 0; i < 3; i++) {
+            double bx = start_x + i * (btn_w + btn_gap);
+            r->button_rects[i] = (struct button_rect){bx, btn_y, btn_w, btn_h};
+
+            /* Hover background */
+            if (i == hovered_button) {
+                rounded_rect(cr, bx, btn_y, btn_w, btn_h, btn_r);
+                cairo_set_source_rgba(cr, ac_r2, ac_g2, ac_b2, 0.15);
+                cairo_fill(cr);
+            }
+
+            /* Icon */
+            double icx = bx + btn_w / 2;
+            double icy = btn_y + btn_h / 2;
+            uint32_t icon_color = (i == hovered_button) ? accent : cfg->text_color;
+            double icon_alpha = (i == hovered_button) ? 0.9 : 0.4;
+            draw_button_icon(cr, i, icx, icy, icon_color, icon_alpha);
         }
 
-        /* Bottom fade when more content below */
-        if (scroll_y < max_scroll - 1.0) {
-            double fade_h = 24.0;
-            double fade_top = py + content_h - fade_h;
-            cairo_set_operator(cr, CAIRO_OPERATOR_DEST_OUT);
-            cairo_pattern_t *fade = cairo_pattern_create_linear(
-                0, fade_top, 0, py + content_h);
-            cairo_pattern_add_color_stop_rgba(fade, 0.0, 0, 0, 0, 0.0);
-            cairo_pattern_add_color_stop_rgba(fade, 1.0, 0, 0, 0, 1.0);
-            cairo_set_source(cr, fade);
-            cairo_rectangle(cr, px, fade_top, content_w, fade_h);
-            cairo_fill(cr);
-            cairo_pattern_destroy(fade);
-            cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-        }
-
-        cairo_pop_group_to_source(cr);
-        cairo_paint(cr);
         cairo_restore(cr);
     }
 

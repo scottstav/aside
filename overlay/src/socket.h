@@ -12,6 +12,8 @@ enum overlay_cmd {
     CMD_DONE,
     CMD_CLEAR,
     CMD_REPLACE,
+    CMD_LISTENING,
+    CMD_THINKING,
 };
 
 struct overlay_command {
