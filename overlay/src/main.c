@@ -19,6 +19,10 @@
 static volatile sig_atomic_t quit = 0;
 static char current_conv_id[64] = "";
 static bool user_mode = false;    /* true = mic/user accent, false = agent accent */
+static bool listening_active = false;  /* true = show waveform animation */
+static uint64_t listening_start = 0;
+static bool thinking_active = false;   /* true = pulse text, sweep accent */
+static uint64_t thinking_start = 0;
 static pid_t actions_pid = 0;     /* child PID of aside-actions, 0 = none */
 static int actions_write_fd = -1; /* write end of pipe to reposition actions */
 static int actions_hold_fd = -1;  /* read end of hold pipe from actions */
@@ -279,9 +283,19 @@ int main(int argc, char *argv[])
 
             uint32_t s = state.scale > 1 ? state.scale : 1;
             uint32_t accent = user_mode ? cfg.user_accent_color : cfg.accent_color;
+            enum draw_mode mode = DRAW_NORMAL;
+            uint64_t anim_time = 0;
+            if (listening_active) {
+                mode = DRAW_LISTENING;
+                anim_time = anim_now_ms() - listening_start;
+            } else if (thinking_active) {
+                mode = DRAW_THINKING;
+                anim_time = anim_now_ms() - thinking_start;
+            }
             renderer_draw(&rend, &cfg, state.pixels,
                           state.configured_width * s, state.configured_height * s,
-                          text_buf, scroll_anim.current, fade_anim.current, accent);
+                          text_buf, scroll_anim.current, fade_anim.current, accent,
+                          mode, anim_time);
 
             wayland_commit(&state);
             state.needs_redraw = false;
@@ -462,10 +476,13 @@ int main(int argc, char *argv[])
             bool scroll_active = anim_update(&scroll_anim, now);
             bool fade_active = anim_update(&fade_anim, now);
 
-            if (scroll_active || fade_active) {
+            /* Continuous animation modes always need redraws */
+            if (listening_active || thinking_active) {
+                state.needs_redraw = true;
+            } else if (scroll_active || fade_active) {
                 state.needs_redraw = true;
             } else {
-                /* Both animations done -- disarm timer */
+                /* All animations done -- disarm timer */
                 arm_timer(timer_fd, false);
                 timer_armed = false;
 
@@ -487,6 +504,8 @@ int main(int argc, char *argv[])
         switch (cmd.cmd) {
         case CMD_OPEN:
             kill_actions();
+            listening_active = false;
+            thinking_active = false;
             strncpy(current_conv_id, cmd.conv_id,
                     sizeof(current_conv_id) - 1);
             current_conv_id[sizeof(current_conv_id) - 1] = '\0';
@@ -504,7 +523,7 @@ int main(int argc, char *argv[])
             user_scrolling = false;
             if (!state.surface_visible) {
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_OPEN\n");
                     break;
                 }
@@ -516,6 +535,8 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_TEXT:
+            listening_active = false;
+            thinking_active = false;
             /* Append text data to buffer */
             {
                 size_t chunk_len = strlen(cmd.data);
@@ -533,7 +554,7 @@ int main(int argc, char *argv[])
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_TEXT\n");
                     break;
                 }
@@ -604,6 +625,8 @@ int main(int argc, char *argv[])
 
         case CMD_CLEAR:
             kill_actions();
+            listening_active = false;
+            thinking_active = false;
             text_buf[0] = '\0';
             text_len = 0;
             fade_anim.current = 1.0;
@@ -622,6 +645,8 @@ int main(int argc, char *argv[])
             break;
 
         case CMD_REPLACE:
+            listening_active = false;
+            thinking_active = false;
             text_buf[0] = '\0';
             text_len = 0;
             {
@@ -638,7 +663,7 @@ int main(int argc, char *argv[])
                 scroll_anim.current = 0.0;
                 scroll_anim.active = false;
                 uint32_t h = cfg.padding_y * 2 + (uint32_t)rend.line_height;
-                if (!wayland_create_surface(&state, cfg.width, h, cfg.margin_top)) {
+                if (!wayland_create_surface(&state, cfg.width, h, &cfg)) {
                     fprintf(stderr, "Failed to create surface on CMD_REPLACE\n");
                     break;
                 }
@@ -678,6 +703,32 @@ int main(int argc, char *argv[])
                     user_scrolling = false;
                 }
             }
+            state.needs_redraw = true;
+            break;
+
+        case CMD_LISTENING:
+            listening_active = true;
+            thinking_active = false;
+            listening_start = anim_now_ms();
+            /* Resize to 2 lines for a nice waveform area */
+            if (state.surface_visible && state.layer_surface) {
+                uint32_t listen_h = cfg.padding_y * 2 + (uint32_t)rend.line_height * 2;
+                if (listen_h != state.height) {
+                    zwlr_layer_surface_v1_set_size(state.layer_surface,
+                                                   cfg.width, listen_h);
+                    wl_surface_commit(state.surface);
+                    state.height = listen_h;
+                }
+            }
+            ensure_timer(timer_fd, &timer_armed);
+            state.needs_redraw = true;
+            break;
+
+        case CMD_THINKING:
+            thinking_active = true;
+            listening_active = false;
+            thinking_start = anim_now_ms();
+            ensure_timer(timer_fd, &timer_armed);
             state.needs_redraw = true;
             break;
 

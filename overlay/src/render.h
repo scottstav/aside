@@ -6,6 +6,12 @@
 #include <pango/pangocairo.h>
 #include "config.h"
 
+enum draw_mode {
+    DRAW_NORMAL = 0,
+    DRAW_LISTENING,
+    DRAW_THINKING,
+};
+
 struct renderer {
     PangoFontDescription *font_desc;
     int line_height;  // Pixel height of one line of text
@@ -24,10 +30,13 @@ int renderer_measure(struct renderer *r, const struct overlay_config *cfg,
 // scroll_y: how many pixels of content to skip from the top (for scrolling).
 // opacity: 0.0-1.0 for fade animation.
 // accent: accent color override (used instead of cfg->accent_color).
+// mode: DRAW_NORMAL, DRAW_LISTENING (waveform), or DRAW_THINKING (pulsing).
+// anim_time_ms: monotonic time for animations (only used when mode != DRAW_NORMAL).
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
                    const char *text, double scroll_y, double opacity,
-                   uint32_t accent);
+                   uint32_t accent, enum draw_mode mode,
+                   uint64_t anim_time_ms);
 
 void renderer_cleanup(struct renderer *r);
 

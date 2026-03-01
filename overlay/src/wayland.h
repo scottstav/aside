@@ -52,7 +52,8 @@ struct overlay_state {
 };
 
 bool wayland_init(struct overlay_state *state);
-bool wayland_create_surface(struct overlay_state *state, uint32_t width, uint32_t height, uint32_t margin_top);
+struct overlay_config;  /* forward declaration */
+bool wayland_create_surface(struct overlay_state *state, uint32_t width, uint32_t height, const struct overlay_config *cfg);
 void wayland_destroy_surface(struct overlay_state *state);
 bool wayland_alloc_buffer(struct overlay_state *state);
 void wayland_commit(struct overlay_state *state);

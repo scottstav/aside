@@ -1,4 +1,5 @@
 #include "wayland.h"
+#include "config.h"
 #include "shm.h"
 
 #include <stdio.h>
@@ -258,7 +259,7 @@ bool wayland_init(struct overlay_state *state)
 
 bool wayland_create_surface(struct overlay_state *state,
                             uint32_t width, uint32_t height,
-                            uint32_t margin_top)
+                            const struct overlay_config *cfg)
 {
     state->width = width;
     state->height = height;
@@ -282,14 +283,29 @@ bool wayland_create_surface(struct overlay_state *state,
         return false;
     }
 
-    /* Anchor top only -- centers horizontally */
-    zwlr_layer_surface_v1_set_anchor(state->layer_surface,
-        ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP);
+    /* Determine anchor from position string */
+    uint32_t anchor = 0;
+    const char *pos = cfg->position;
+    if (strstr(pos, "top"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+    if (strstr(pos, "bottom"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+    if (strstr(pos, "left"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT;
+    if (strstr(pos, "right"))
+        anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+
+    /* Default: top-center if position is empty or unrecognized */
+    if (anchor == 0 && strcmp(pos, "center") != 0)
+        anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+
+    zwlr_layer_surface_v1_set_anchor(state->layer_surface, anchor);
 
     /* 0 exclusive zone = respect others' reserved space, don't reserve our own */
     zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, 0);
 
-    zwlr_layer_surface_v1_set_margin(state->layer_surface, margin_top, 0, 0, 0);
+    zwlr_layer_surface_v1_set_margin(state->layer_surface,
+        cfg->margin_top, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
 
     /* Size is in logical pixels */
     zwlr_layer_surface_v1_set_size(state->layer_surface, width, height);

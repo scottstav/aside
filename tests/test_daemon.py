@@ -313,8 +313,11 @@ class TestCommandParsing:
                 # Give the thread time to run
                 import time
                 time.sleep(0.15)
-        mock_cap.assert_called_once_with(minimal_config.get("voice", {}))
-        mock_sq.assert_called_once_with("hello", conversation_id=None)
+        mock_cap.assert_called_once()
+        args, kwargs = mock_cap.call_args
+        assert args[0] == minimal_config.get("voice", {})
+        assert "on_interim" in kwargs
+        mock_sq.assert_called_once_with("hello", conversation_id=None, from_mic=True)
 
     def test_query_mic_empty_no_query(self, minimal_config, tmp_path):
         """query with mic:true returning empty should not start a query."""
