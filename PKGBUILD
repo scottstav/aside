@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/scottstav/aside"
 license=('MIT')
 depends=(
-    'python311'
+    'python>=3.11'
     'python-litellm'
     'wayland'
     'cairo'

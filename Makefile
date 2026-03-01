@@ -1,5 +1,5 @@
 PREFIX   ?= $(HOME)/.local
-PYTHON   ?= python3.11
+PYTHON   ?= python3
 VENV     := $(PREFIX)/lib/aside/venv
 BIN      := $(PREFIX)/bin
 LIB      := $(PREFIX)/lib/aside
@@ -22,7 +22,9 @@ overlay:
 # Fast dev reinstall — reuses existing venv, restarts services
 # ---------------------------------------------------------------------------
 dev: overlay
-	$(VENV)/bin/pip install ".[gtk,voice,tts]"
+	$(VENV)/bin/pip install ".[gtk]"
+	@$(VENV)/bin/pip install ".[voice]" 2>/dev/null || echo "  Note: voice extras not available"
+	@$(VENV)/bin/pip install ".[tts]" 2>/dev/null || echo "  Note: tts extras not available"
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@install -d $(BIN)
 	@for cmd in aside aside-input aside-status aside-actions; do \
@@ -45,7 +47,17 @@ install: overlay
 	@echo "==> Creating venv at $(VENV)"
 	$(PYTHON) -m venv $(VENV) --clear
 	$(VENV)/bin/pip install --upgrade pip setuptools
-	$(VENV)/bin/pip install ".[gtk,voice,tts]"
+	$(VENV)/bin/pip install ".[gtk]"
+	@failed=""; \
+	$(VENV)/bin/pip install ".[voice]" 2>/dev/null || failed="$$failed voice"; \
+	$(VENV)/bin/pip install ".[tts]" 2>/dev/null || failed="$$failed tts"; \
+	if [ -n "$$failed" ]; then \
+		echo ""; \
+		echo "  WARNING: failed to install optional extras:$$failed"; \
+		echo "  The app will work, but those features will be unavailable."; \
+		echo "  This usually means your Python version ($$($(PYTHON) --version)) is too new for some deps."; \
+		echo ""; \
+	fi
 	@echo "==> Installing overlay binary"
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@echo "==> Installing wrapper scripts"
