@@ -1,8 +1,6 @@
-"""GTK4 layer-shell action bar for aside overlay.
+"""GTK4 layer-shell reply window for aside overlay.
 
-Appears below the overlay after a query completes.
-Shows action buttons (mic, open, reply) and transitions
-to a text input box when reply is clicked.
+Text input box that appears below the overlay for follow-up queries.
 """
 
 from __future__ import annotations
@@ -54,31 +52,6 @@ window {
 window.background {
     background-color: transparent;
 }
-.action-bar {
-    background-color: alpha(@window_bg_color, 0.90);
-    border-radius: 14px;
-    border: 1px solid alpha(@accent_color, 0.25);
-    padding: 2px;
-    margin: 0;
-}
-button.action-btn {
-    border-radius: 10px;
-    padding: 2px 8px;
-    min-height: 0;
-    min-width: 0;
-    margin: 0;
-    background: transparent;
-    border: none;
-    color: alpha(@window_fg_color, 0.5);
-    -gtk-icon-size: 14px;
-}
-button.action-btn:hover {
-    background: alpha(@accent_color, 0.15);
-    color: @accent_color;
-}
-button.action-btn:active {
-    background: alpha(@accent_color, 0.25);
-}
 .input-bar {
     background-color: alpha(@window_bg_color, 0.95);
     border-radius: 12px;
@@ -104,8 +77,8 @@ button.action-btn:active {
 """
 
 
-class ActionsWindow(Gtk.Window):
-    """Layer-shell action bar that appears below the overlay."""
+class ReplyWindow(Gtk.Window):
+    """Layer-shell reply input that appears below the overlay."""
 
     def __init__(self, app: Adw.Application, conv_id: str,
                  width: int, margin_top: int,
@@ -113,16 +86,13 @@ class ActionsWindow(Gtk.Window):
                  hold_fd: int | None = None,
                  position: str = "top-center",
                  margin_left: int = 0,
-                 margin_right: int = 0,
-                 reply_only: bool = False) -> None:
+                 margin_right: int = 0) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
         self._hold_fd = hold_fd
         self._pointer_in = False
-        self._in_input_mode = False
         self._holding = False
-        self._reply_only = reply_only
 
         # Determine which vertical edge to anchor/margin on
         self._bottom_anchored = "bottom" in position
@@ -151,15 +121,9 @@ class ActionsWindow(Gtk.Window):
             Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT, True)
             Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
 
-        # Reply-only mode: start with keyboard and input immediately
-        if reply_only:
-            Gtk4LayerShell.set_keyboard_mode(
-                self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
-            )
-        else:
-            Gtk4LayerShell.set_keyboard_mode(
-                self, Gtk4LayerShell.KeyboardMode.NONE
-            )
+        Gtk4LayerShell.set_keyboard_mode(
+            self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+        )
         Gtk4LayerShell.set_namespace(self, "aside-reply")
 
         # CSS
@@ -170,22 +134,9 @@ class ActionsWindow(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Build UI
-        self._stack = Gtk.Stack()
-        self._stack.set_vhomogeneous(False)
-        self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        self._stack.set_transition_duration(150)
-
-        if not reply_only:
-            self._build_button_mode()
+        # Build UI — input is the only mode
         self._build_input_mode()
-        self.set_child(self._stack)
-
-        # In reply-only mode, start directly in input
-        if reply_only:
-            self._in_input_mode = True
-            self.set_size_request(self._input_width, -1)
-            self._stack.set_visible_child_name("input")
+        self.set_size_request(self._input_width, -1)
 
         # Keyboard shortcuts
         key_ctl = Gtk.EventControllerKey()
@@ -205,9 +156,8 @@ class ActionsWindow(Gtk.Window):
                 daemon=True,
             ).start()
 
-        # Signal hold immediately in reply mode
-        if reply_only:
-            self._update_hold()
+        # Signal hold immediately — we always have keyboard focus
+        self._update_hold()
 
     def _watch_reposition(self, fd: int) -> None:
         """Read margin-top updates from the overlay over a pipe."""
@@ -247,7 +197,7 @@ class ActionsWindow(Gtk.Window):
                 pass
 
     def _update_hold(self) -> None:
-        should_hold = self._pointer_in or self._in_input_mode
+        should_hold = self._pointer_in or True  # always in input mode
         if should_hold != self._holding:
             self._holding = should_hold
             self._send_hold(should_hold)
@@ -260,30 +210,6 @@ class ActionsWindow(Gtk.Window):
     def _on_pointer_leave(self, ctl: Gtk.EventControllerMotion) -> None:
         self._pointer_in = False
         self._update_hold()
-
-    def _build_button_mode(self) -> None:
-        """Create the action buttons view."""
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        box.add_css_class("action-bar")
-        box.set_halign(Gtk.Align.CENTER)
-
-        for icon_name, tooltip, callback in [
-            ("audio-input-microphone-symbolic", "Voice reply", self._on_mic),
-            ("document-open-symbolic", "Open transcript", self._on_open),
-            ("mail-reply-sender-symbolic", "Text reply", self._on_reply),
-        ]:
-            img = Gtk.Image.new_from_icon_name(icon_name)
-            img.set_pixel_size(14)
-            btn = Gtk.Button()
-            btn.set_child(img)
-            btn.set_has_frame(False)
-            btn.set_tooltip_text(tooltip)
-            btn.add_css_class("action-btn")
-            btn.connect("clicked", callback)
-            box.append(btn)
-
-        self._stack.add_named(box, "buttons")
-        self._stack.set_visible_child_name("buttons")
 
     def _build_input_mode(self) -> None:
         """Create the text input view."""
@@ -308,8 +234,7 @@ class ActionsWindow(Gtk.Window):
         scrolled.set_child(self._textview)
 
         # Hint
-        hint_text = "Enter to send \u2022 Shift+Enter for newline \u2022 Esc to close" if self._reply_only else "Enter to send \u2022 Shift+Enter for newline \u2022 Esc to go back"
-        hint = Gtk.Label(label=hint_text)
+        hint = Gtk.Label(label="Enter to send \u2022 Shift+Enter for newline \u2022 Esc to close")
         hint.add_css_class("reply-hint")
         hint.set_halign(Gtk.Align.CENTER)
         vbox.append(hint)
@@ -319,54 +244,13 @@ class ActionsWindow(Gtk.Window):
         tv_key.connect("key-pressed", self._on_input_key)
         self._textview.add_controller(tv_key)
 
-        self._stack.add_named(vbox, "input")
-
-    # -- Button callbacks --
-
-    def _on_mic(self, btn: Gtk.Button) -> None:
-        import threading
-        msg = {"action": "query", "conversation_id": self._conv_id, "mic": True}
-        threading.Thread(target=_send_to_daemon, args=(msg,), daemon=True).start()
-        self.close()
-
-    def _on_open(self, btn: Gtk.Button) -> None:
-        import subprocess
-        home = os.path.expanduser("~")
-        aside_bin = os.path.join(home, ".local", "bin", "aside")
-        if not os.path.isfile(aside_bin):
-            aside_bin = "aside"
-        subprocess.Popen([aside_bin, "open", self._conv_id])
-        self.close()
-
-    def _on_reply(self, btn: Gtk.Button) -> None:
-        self._in_input_mode = True
-        self._update_hold()
-        Gtk4LayerShell.set_keyboard_mode(
-            self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
-        )
-        self.set_size_request(self._input_width, -1)
-        self._stack.set_visible_child_name("input")
-        self._textview.grab_focus()
+        self.set_child(vbox)
 
     # -- Key handling --
 
     def _on_key(self, ctl: Gtk.EventControllerKey,
                 keyval: int, keycode: int, state: Gdk.ModifierType) -> bool:
         if keyval == Gdk.KEY_Escape:
-            if self._reply_only:
-                self.close()
-                return True
-            # If in input mode, go back to buttons
-            if self._stack.get_visible_child_name() == "input":
-                self._in_input_mode = False
-                self._update_hold()
-                Gtk4LayerShell.set_keyboard_mode(
-                    self, Gtk4LayerShell.KeyboardMode.NONE
-                )
-                self.set_size_request(-1, -1)
-                self._stack.set_visible_child_name("buttons")
-                return True
-            # If in button mode, close
             self.close()
             return True
         return False
@@ -391,14 +275,13 @@ class ActionsWindow(Gtk.Window):
         self.close()
 
 
-class ActionsApp(Adw.Application):
+class ReplyApp(Adw.Application):
     def __init__(self, conv_id: str, width: int, margin_top: int,
                  reposition_fd: int | None = None,
                  hold_fd: int | None = None,
                  position: str = "top-center",
                  margin_left: int = 0,
-                 margin_right: int = 0,
-                 reply_only: bool = False) -> None:
+                 margin_right: int = 0) -> None:
         super().__init__(application_id="dev.aside.reply")
         self._conv_id = conv_id
         self._width = width
@@ -408,16 +291,14 @@ class ActionsApp(Adw.Application):
         self._position = position
         self._margin_left = margin_left
         self._margin_right = margin_right
-        self._reply_only = reply_only
 
     def do_activate(self) -> None:
-        win = ActionsWindow(self, self._conv_id, self._width, self._margin_top,
-                            reposition_fd=self._reposition_fd,
-                            hold_fd=self._hold_fd,
-                            position=self._position,
-                            margin_left=self._margin_left,
-                            margin_right=self._margin_right,
-                            reply_only=self._reply_only)
+        win = ReplyWindow(self, self._conv_id, self._width, self._margin_top,
+                          reposition_fd=self._reposition_fd,
+                          hold_fd=self._hold_fd,
+                          position=self._position,
+                          margin_left=self._margin_left,
+                          margin_right=self._margin_right)
         win.present()
 
 
@@ -435,15 +316,15 @@ def main() -> None:
     parser.add_argument("--margin-bottom", type=int, default=0)
     parser.add_argument("--reposition-fd", type=int, default=None)
     parser.add_argument("--hold-fd", type=int, default=None)
+    # Accept --reply for backward compat with overlay but ignore it
     parser.add_argument("--reply", action="store_true", default=False)
     args = parser.parse_args()
-    app = ActionsApp(args.conv_id, args.width, args.margin_top,
-                     reposition_fd=args.reposition_fd,
-                     hold_fd=args.hold_fd,
-                     position=args.position,
-                     margin_left=args.margin_left,
-                     margin_right=args.margin_right,
-                     reply_only=args.reply)
+    app = ReplyApp(args.conv_id, args.width, args.margin_top,
+                   reposition_fd=args.reposition_fd,
+                   hold_fd=args.hold_fd,
+                   position=args.position,
+                   margin_left=args.margin_left,
+                   margin_right=args.margin_right)
     app.run([])
 
 
