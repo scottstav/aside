@@ -6,23 +6,34 @@ LIB      := $(PREFIX)/lib/aside
 SYSTEMD  := $(HOME)/.config/systemd/user
 APPS     := $(HOME)/.local/share/applications
 CONFIG   := $(HOME)/.config/aside
+BUILDDIR := builddir
 
-.PHONY: all install dev uninstall clean
+.PHONY: all install dev uninstall clean overlay
 
 all: install
 
 # ---------------------------------------------------------------------------
+# Build the C overlay via meson/ninja
+# ---------------------------------------------------------------------------
+overlay:
+	@if [ ! -d $(BUILDDIR) ]; then \
+		meson setup $(BUILDDIR) --prefix=$(PREFIX); \
+	fi
+	ninja -C $(BUILDDIR)
+
+# ---------------------------------------------------------------------------
 # Fast dev reinstall — reuses existing venv, restarts services
 # ---------------------------------------------------------------------------
-dev:
+dev: overlay
 	$(VENV)/bin/pip install -e .
 	@install -d $(BIN)
-	@for cmd in aside aside-input aside-reply aside-overlay; do \
+	@for cmd in aside aside-input aside-reply aside-status; do \
 		src="$(VENV)/bin/$$cmd"; \
 		if [ -f "$$src" ]; then \
 			ln -sf "$$src" "$(BIN)/$$cmd"; \
 		fi; \
 	done
+	install -Dm755 $(BUILDDIR)/overlay/aside-overlay $(BIN)/aside-overlay
 	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
 	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
 	systemctl --user daemon-reload
@@ -32,19 +43,20 @@ dev:
 # ---------------------------------------------------------------------------
 # Full install
 # ---------------------------------------------------------------------------
-install:
+install: overlay
 	@echo "==> Creating venv at $(VENV)"
 	$(PYTHON) -m venv $(VENV) --clear
 	$(VENV)/bin/pip install --upgrade pip
 	$(VENV)/bin/pip install .
 	@echo "==> Installing wrapper symlinks"
 	install -d $(BIN)
-	@for cmd in aside aside-input aside-reply aside-overlay; do \
+	@for cmd in aside aside-input aside-reply aside-status; do \
 		src="$(VENV)/bin/$$cmd"; \
 		if [ -f "$$src" ]; then \
 			ln -sf "$$src" "$(BIN)/$$cmd"; \
 		fi; \
 	done
+	install -Dm755 $(BUILDDIR)/overlay/aside-overlay $(BIN)/aside-overlay
 	@echo "==> Installing systemd units"
 	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
 	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service

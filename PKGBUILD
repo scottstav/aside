@@ -42,7 +42,10 @@ source=(
     "en_US-lessac-medium.onnx::https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
     "en_US-lessac-medium.onnx.json::https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
 )
-sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+sha256sums=('6cc556b31e0784dbd7f46c8510c0bc616b91b6bad0d028cb24340e2755568fcd'
+            '2ed52a87bb7a2b7a181f6ad38d8f78f3f753ff9fc02c68377e897f20b6ae8247'
+            '5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f'
+            'efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0')
 
 prepare() {
     cd "$srcdir/piper1-gpl-$_piperver"
