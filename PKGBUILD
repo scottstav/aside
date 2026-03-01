@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/scottstav/aside"
 license=('MIT')
 depends=(
-    'python>=3.11'
+    'python311'
     'python-litellm'
     'wayland'
     'cairo'
@@ -27,7 +27,6 @@ optdepends=(
     'python-kokoro: text-to-speech support'
     'python-sounddevice: TTS audio output'
     'python-soundfile: TTS audio file handling'
-    'python-openwakeword: voice wake word detection'
     'python-faster-whisper: speech-to-text'
     'python-webrtcvad-wheels: voice activity detection'
     'python-gobject: GTK4 input window'

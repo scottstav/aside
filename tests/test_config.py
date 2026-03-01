@@ -51,15 +51,12 @@ class TestDefaultConfig:
     def test_voice_defaults(self):
         v = self.defaults["voice"]
         assert v["enabled"] is False
-        assert v["pre_roll_seconds"] == 0.5
         assert v["stt_model"] == "base"
         assert v["stt_device"] == "cpu"
         assert v["smart_silence"] is True
         assert v["silence_timeout"] == 2.5
         assert v["no_speech_timeout"] == 3.0
         assert v["force_send_phrases"] == ["send it", "that's it"]
-        assert "wake_word_model" not in v
-        assert "wake_word_threshold" not in v
 
     def test_tts_defaults(self):
         t = self.defaults["tts"]

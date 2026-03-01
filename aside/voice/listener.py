@@ -3,8 +3,6 @@
 Provides ``capture_one_shot(config)`` which opens the microphone, records
 until the user stops speaking (using VAD + silence detection), transcribes
 via STT, and returns the text.  This is a blocking call.
-
-No wake-word detection, no persistent listener thread.
 """
 
 import logging
@@ -25,7 +23,7 @@ def capture_one_shot(config: dict, on_interim=None) -> str:
     Args:
         config: The ``[voice]`` section of the aside config dict.
                 Expected keys: ``stt_model``, ``stt_device``,
-                ``pre_roll_seconds``, ``smart_silence``, ``silence_timeout``,
+                ``smart_silence``, ``silence_timeout``,
                 ``no_speech_timeout``, ``force_send_phrases``, and
                 optionally ``max_capture_seconds``.
         on_interim: Optional callback ``(text: str) -> None`` called with
@@ -44,9 +42,7 @@ def capture_one_shot(config: dict, on_interim=None) -> str:
         "device": config.get("stt_device", "cpu"),
     }
 
-    audio = AudioPipeline(
-        pre_roll_seconds=config.get("pre_roll_seconds", 0.5),
-    )
+    audio = AudioPipeline()
     detector = SpeechEndDetector(
         silence_timeout=config.get("silence_timeout", 2.5),
         smart_silence=config.get("smart_silence", True),
@@ -70,7 +66,7 @@ def _do_capture(audio, detector, whisper_config: dict, config: dict, on_interim=
     from .speech_detector import SpeechEndDetector
     from .stt import transcribe
 
-    audio.begin_capture(skip_pre_roll=False)
+    audio.begin_capture()
     detector.on_speech_start()
 
     silence_frames = 0

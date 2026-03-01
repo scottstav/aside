@@ -28,9 +28,6 @@
 # ---------------------------------------------------------------------------
 [voice]
 # enabled = false
-# wake_word_model = ""           # path to openwakeword .onnx model
-# wake_word_threshold = 0.5
-# pre_roll_seconds = 0.5         # audio buffered before wake word detection
 # stt_model = "base"             # faster-whisper model size
 # stt_device = "cpu"             # "cpu" or "cuda"
 # smart_silence = true           # end recording on silence detection

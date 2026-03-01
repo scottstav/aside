@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Wayland-native LLM desktop assistant"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "litellm>=1.30.0",
 ]
 
 [project.optional-dependencies]
 tts = ["kokoro>=0.9.4", "soundfile", "sounddevice"]
-voice = ["openwakeword==0.6.0", "faster-whisper==1.2.1", "webrtcvad-wheels>=2.0.10", "numpy>=2.0", "pyyaml>=6.0"]
+voice = ["faster-whisper==1.2.1", "webrtcvad-wheels>=2.0.10", "numpy>=2.0"]
 gtk = ["PyGObject>=3.50"]
 
 [project.scripts]

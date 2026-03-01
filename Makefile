@@ -1,5 +1,5 @@
 PREFIX   ?= $(HOME)/.local
-PYTHON   ?= python3
+PYTHON   ?= python3.11
 VENV     := $(PREFIX)/lib/aside/venv
 BIN      := $(PREFIX)/bin
 LIB      := $(PREFIX)/lib/aside
@@ -7,7 +7,7 @@ SYSTEMD  := $(HOME)/.config/systemd/user
 APPS     := $(HOME)/.local/share/applications
 CONFIG   := $(HOME)/.config/aside
 
-.PHONY: all overlay install dev install-extras-tts install-extras-voice install-extras-gtk uninstall clean
+.PHONY: all overlay install install-minimal dev install-extras-tts install-extras-voice install-extras-gtk uninstall clean
 
 all: overlay
 
@@ -22,7 +22,7 @@ overlay:
 # Fast dev reinstall — reuses existing venv, restarts services
 # ---------------------------------------------------------------------------
 dev: overlay
-	$(VENV)/bin/pip install ".[gtk]"
+	$(VENV)/bin/pip install ".[gtk,voice,tts]"
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@install -d $(BIN)
 	@for cmd in aside aside-input aside-status aside-actions; do \
@@ -39,13 +39,13 @@ dev: overlay
 	@echo "==> Dev reinstall done"
 
 # ---------------------------------------------------------------------------
-# Install everything
+# Full install (core + gtk + voice + tts)
 # ---------------------------------------------------------------------------
 install: overlay
 	@echo "==> Creating venv at $(VENV)"
 	$(PYTHON) -m venv $(VENV) --clear
 	$(VENV)/bin/pip install --upgrade pip setuptools
-	$(VENV)/bin/pip install ".[gtk]"
+	$(VENV)/bin/pip install ".[gtk,voice,tts]"
 	@echo "==> Installing overlay binary"
 	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
 	@echo "==> Installing wrapper scripts"
@@ -82,7 +82,51 @@ install: overlay
 	@echo "    systemctl --user enable --now aside-daemon aside-overlay"
 
 # ---------------------------------------------------------------------------
-# Optional extras
+# Minimal install (core + gtk only — no voice, no tts)
+# ---------------------------------------------------------------------------
+install-minimal: overlay
+	@echo "==> Creating venv at $(VENV)"
+	$(PYTHON) -m venv $(VENV) --clear
+	$(VENV)/bin/pip install --upgrade pip setuptools
+	$(VENV)/bin/pip install ".[gtk]"
+	@echo "==> Installing overlay binary"
+	install -Dm755 overlay/build/aside-overlay $(BIN)/aside-overlay
+	@echo "==> Installing wrapper scripts"
+	install -d $(BIN)
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.cli "$$@"'; } > $(BIN)/aside
+	chmod 755 $(BIN)/aside
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.input.window "$$@"'; } > $(BIN)/aside-input
+	chmod 755 $(BIN)/aside-input
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.status "$$@"'; } > $(BIN)/aside-status
+	chmod 755 $(BIN)/aside-status
+	{ echo '#!/bin/sh'; echo 'exec $(VENV)/bin/python3 -m aside.actions.window "$$@"'; } > $(BIN)/aside-actions
+	chmod 755 $(BIN)/aside-actions
+	@echo "==> Installing systemd units"
+	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
+	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
+	@echo "==> Installing desktop entry"
+	install -Dm644 data/aside.desktop $(APPS)/aside.desktop
+	@echo "==> Installing example config"
+	install -d $(CONFIG)
+	@if [ ! -f $(CONFIG)/config.toml ]; then \
+		install -Dm644 data/config.toml.example $(CONFIG)/config.toml; \
+		echo "    Installed example config to $(CONFIG)/config.toml"; \
+	else \
+		echo "    Config already exists — not overwriting"; \
+	fi
+	@echo "==> Installing plugins"
+	install -d $(LIB)/plugins
+	cp -a plugins/* $(LIB)/plugins/ 2>/dev/null || true
+	@echo "==> Installing waybar module config"
+	install -d $(HOME)/.config/waybar
+	install -Dm644 data/waybar/aside.json $(HOME)/.config/waybar/aside.json
+	systemctl --user daemon-reload
+	@echo "==> Done (minimal — no voice/tts). Enable with:"
+	@echo "    systemctl --user enable --now aside-daemon aside-overlay"
+	@echo "    To add voice/tts later: make install-extras-voice install-extras-tts"
+
+# ---------------------------------------------------------------------------
+# Optional extras (install into existing venv)
 # ---------------------------------------------------------------------------
 install-extras-tts:
 	$(VENV)/bin/pip install ".[tts]"

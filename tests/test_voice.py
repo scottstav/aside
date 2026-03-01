@@ -216,7 +216,6 @@ class TestCaptureOneShot:
 
     def _make_config(self, **overrides):
         cfg = {
-            "pre_roll_seconds": 0.5,
             "stt_model": "base",
             "stt_device": "cpu",
             "smart_silence": True,

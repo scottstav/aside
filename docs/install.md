@@ -8,7 +8,9 @@ cd aside
 make install
 ```
 
-This builds the C overlay and installs the Python package into a venv.
+This builds the C overlay and installs the Python package with all extras (voice, TTS, GTK) into a venv.
+
+For a lighter install without voice/TTS deps, use `make install-minimal` instead.
 
 Copy the example config and set your API key:
 
@@ -26,13 +28,15 @@ Start the services:
 systemctl --user enable --now aside-daemon aside-overlay
 ```
 
-## Optional extras
+## Install targets
 
-```bash
-make install-extras-tts    # text-to-speech (kokoro)
-make install-extras-voice  # voice input (openwakeword, faster-whisper)
-make install-extras-gtk    # GTK4 input window (PyGObject)
-```
+| Target | What it installs |
+|--------|-----------------|
+| `make install` | Full install: core + GTK + voice + TTS |
+| `make install-minimal` | Core + GTK only (no voice, no TTS) |
+| `make install-extras-voice` | Add voice deps to existing venv |
+| `make install-extras-tts` | Add TTS deps to existing venv |
+| `make install-extras-gtk` | Add GTK deps to existing venv |
 
 ## Building from source
 
@@ -70,7 +74,6 @@ python -m venv .venv && source .venv/bin/activate && pip install -e .
 | kokoro              | Text-to-speech synthesis          | `make install-extras-tts` |
 | sounddevice         | TTS audio output                  | `make install-extras-tts` |
 | soundfile           | TTS audio file handling           | `make install-extras-tts` |
-| openwakeword        | Wake word detection               | `make install-extras-voice`|
 | faster-whisper      | Speech-to-text                    | `make install-extras-voice`|
 | webrtcvad-wheels    | Voice activity detection          | `make install-extras-voice`|
 | PyGObject + GTK4    | Input window                      | `make install-extras-gtk` |

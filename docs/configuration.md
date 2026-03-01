@@ -56,10 +56,7 @@ stt_device = "cpu"
 smart_silence = true
 silence_timeout = 2.5
 no_speech_timeout = 3.0
-pre_roll_seconds = 0.5
 force_send_phrases = ["send it", "that's it"]
-wake_word_model = ""
-wake_word_threshold = 0.5
 max_capture_seconds = 60
 ```
 
@@ -71,11 +68,8 @@ max_capture_seconds = 60
 | `smart_silence` | `true` | Dynamically adjust silence timeout based on transcript content. Waits longer mid-sentence, shorter after sentence-ending punctuation |
 | `silence_timeout` | `2.5` | Base seconds of silence before auto-sending |
 | `no_speech_timeout` | `3.0` | Seconds without any detected speech before cancelling capture |
-| `pre_roll_seconds` | `0.5` | Seconds of audio buffered before wake word detection, so the start of your speech isn't clipped |
 | `force_send_phrases` | `["send it", "that's it"]` | Phrases that trigger an immediate send, bypassing silence detection |
 | `max_capture_seconds` | `60` | Hard maximum recording duration |
-| `wake_word_model` | `""` | Path to an OpenWakeWord `.onnx` model file. Leave empty to disable wake word detection |
-| `wake_word_threshold` | `0.5` | Wake word confidence threshold (0.0–1.0). Higher = fewer false positives |
 
 ## Text-to-Speech
 

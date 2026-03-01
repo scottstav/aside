@@ -23,7 +23,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "voice": {
         "enabled": False,
-        "pre_roll_seconds": 0.5,
         "stt_model": "base",
         "stt_device": "cpu",
         "smart_silence": True,

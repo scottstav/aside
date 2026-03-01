@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 
 from aside.config import (
@@ -338,19 +339,28 @@ class Daemon:
                         conv_id = raw_conv
 
                     def _mic_capture():
+                        from aside.query import _connect_overlay, _overlay_send, _overlay_close
+
+                        overlay_sock = None
                         try:
-                            if capture_one_shot is None:
-                                log.warning("Voice deps not installed -- mic capture unavailable")
-                                return
-
-                            from aside.query import _connect_overlay, _overlay_send, _overlay_close
-
                             overlay_sock = _connect_overlay()
                             _overlay_send(overlay_sock, {
                                 "cmd": "open",
                                 "mode": "user",
                                 "conv_id": conv_id or "",
                             })
+
+                            if capture_one_shot is None:
+                                log.warning("Voice deps not installed -- mic capture unavailable")
+                                _overlay_send(overlay_sock, {
+                                    "cmd": "replace",
+                                    "data": "Voice deps not installed — run: make install-extras-voice",
+                                })
+                                time.sleep(2)
+                                _overlay_close(overlay_sock)
+                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
+                                return
+
                             _overlay_send(overlay_sock, {"cmd": "listening"})
 
                             def on_interim(text):
@@ -373,8 +383,24 @@ class Daemon:
                                 log.info("Mic capture returned empty, no query started")
                                 _overlay_close(overlay_sock)
                                 _overlay_send(_connect_overlay(), {"cmd": "clear"})
-                        except Exception:
+                        except Exception as exc:
                             log.exception("Mic capture error")
+                            try:
+                                err_sock = overlay_sock or _connect_overlay()
+                                if overlay_sock is None:
+                                    _overlay_send(err_sock, {
+                                        "cmd": "open",
+                                        "mode": "user",
+                                    })
+                                _overlay_send(err_sock, {
+                                    "cmd": "replace",
+                                    "data": f"Mic error: {exc}",
+                                })
+                                time.sleep(2)
+                                _overlay_close(err_sock)
+                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
+                            except Exception:
+                                log.debug("Failed to show mic error in overlay")
 
                     threading.Thread(target=_mic_capture, daemon=True).start()
                     log.info("Socket: mic capture started (conv=%s)", raw_conv or "auto")
