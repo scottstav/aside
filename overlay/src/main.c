@@ -25,13 +25,13 @@ static bool thinking_active = false;   /* true = pulse text, sweep accent */
 static uint64_t thinking_start = 0;
 static bool show_buttons = false;      /* true = render embedded action buttons */
 static int hovered_button = -1;        /* -1 = none, 0-2 = mic/open/reply */
-static pid_t actions_pid = 0;     /* child PID of aside-actions reply input, 0 = none */
+static pid_t actions_pid = 0;     /* child PID of aside-reply input, 0 = none */
 static int actions_hold_fd = -1;  /* read end of hold pipe from reply input */
 static bool actions_holding = false; /* true while user interacts with reply input */
 
 static void handle_signal(int sig) { (void)sig; quit = 1; }
 
-/* Kill the aside-actions reply input child if running */
+/* Kill the aside-reply input child if running */
 static void kill_actions(void)
 {
     if (actions_pid > 0) {
@@ -46,7 +46,7 @@ static void kill_actions(void)
     actions_holding = false;
 }
 
-/* Check if aside-actions child has exited; returns true if it just died */
+/* Check if aside-reply child has exited; returns true if it just died */
 static bool reap_actions(void)
 {
     if (actions_pid <= 0) return false;
@@ -97,7 +97,7 @@ static void update_center_margin(const struct overlay_config *cfg,
     }
 }
 
-/* Spawn aside-actions in reply-input-only mode */
+/* Spawn aside-reply input */
 static void spawn_reply_input(const struct overlay_config *cfg,
                                const struct overlay_state *state)
 {
@@ -112,11 +112,11 @@ static void spawn_reply_input(const struct overlay_config *cfg,
     snprintf(margin_right_str, sizeof(margin_right_str), "%u", cfg->margin_right);
 
     const char *home = getenv("HOME");
-    char bin[512] = "aside-actions";
+    char bin[512] = "aside-reply";
     if (home) {
-        snprintf(bin, sizeof(bin), "%s/.local/bin/aside-actions", home);
+        snprintf(bin, sizeof(bin), "%s/.local/bin/aside-reply", home);
         if (access(bin, X_OK) != 0)
-            snprintf(bin, sizeof(bin), "aside-actions");
+            snprintf(bin, sizeof(bin), "aside-reply");
     }
 
     kill_actions();
@@ -129,7 +129,7 @@ static void spawn_reply_input(const struct overlay_config *cfg,
         close(holdpipe[0]);
         char hold_fd_str[16];
         snprintf(hold_fd_str, sizeof(hold_fd_str), "%d", holdpipe[1]);
-        execl(bin, "aside-actions",
+        execl(bin, "aside-reply",
               "--conv-id", current_conv_id,
               "--width", width_str,
               "--margin-top", margin_str,

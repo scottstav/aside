@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
+requires = ["meson-python>=0.16", "meson>=0.64"]
+build-backend = "mesonpy"
 
 [project]
 name = "aside"
@@ -8,21 +8,19 @@ version = "0.1.0"
 description = "Wayland-native LLM desktop assistant"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "litellm>=1.30.0",
+    "faster-whisper==1.2.1",
+    "webrtcvad-wheels>=2.0.10",
+    "numpy>=2.0",
+    "PyGObject>=3.50",
+    "kokoro>=0.7.0",
+    "soundfile",
+    "sounddevice",
 ]
-
-[project.optional-dependencies]
-tts = ["kokoro>=0.7.0", "soundfile", "sounddevice"]
-voice = ["faster-whisper==1.2.1", "webrtcvad-wheels>=2.0.10", "numpy>=2.0"]
-gtk = ["PyGObject>=3.50"]
 
 [project.scripts]
 aside = "aside.cli:main"
 aside-input = "aside.input.window:main"
-aside-actions = "aside.actions.window:main"
-aside-status = "aside.status:main"
-
-[tool.setuptools.packages.find]
-include = ["aside*"]
+aside-reply = "aside.reply.window:main"

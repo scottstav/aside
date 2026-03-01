@@ -34,13 +34,13 @@ GTK4 text entry popup. Opens a lightweight input window with conversation histor
 - `Ctrl+N` / `Ctrl+P` — navigate conversation list
 - `Tab` — move focus to text input
 
-## `aside-actions`
+## `aside-reply`
 
-GTK4 layer-shell action bar. Appears below the overlay after a response completes. Provides quick-access buttons for voice reply, open transcript, and text reply.
+GTK4 layer-shell reply input. Appears below the overlay after a response completes. Provides a text input for follow-up replies.
 
 Auto-dismisses after 5 seconds of inactivity.
 
-## `aside-status`
+## `aside status`
 
 Waybar custom module. Reads the daemon's `status.json` and prints waybar-compatible JSON to stdout. Shows model name, cost tracking, and activity status.
 

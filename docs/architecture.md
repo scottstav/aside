@@ -36,7 +36,7 @@ The **daemon** is the central process. It listens on a Unix socket for commands 
 
 The **overlay** is a standalone C program using wlr-layer-shell. It reads configuration from `~/.config/aside/overlay.conf` (written by the daemon on startup) and receives streaming text deltas over its own Unix socket.
 
-**Clients** (`aside` CLI, `aside-input` GTK4 window, `aside-actions` action bar) connect to the daemon socket to send commands. `aside-status` reads the status file directly for waybar integration.
+**Clients** (`aside` CLI, `aside-input` GTK4 window, `aside-reply` reply input) connect to the daemon socket to send commands. `aside status` reads the status file directly for waybar integration.
 
 ## Socket protocol
 

@@ -127,7 +127,7 @@ class ActionsWindow(Gtk.Window):
         # Determine which vertical edge to anchor/margin on
         self._bottom_anchored = "bottom" in position
 
-        self.set_title("aside-actions")
+        self.set_title("aside-reply")
         self.set_decorated(False)
         self.set_resizable(False)
 
@@ -160,7 +160,7 @@ class ActionsWindow(Gtk.Window):
             Gtk4LayerShell.set_keyboard_mode(
                 self, Gtk4LayerShell.KeyboardMode.NONE
             )
-        Gtk4LayerShell.set_namespace(self, "aside-actions")
+        Gtk4LayerShell.set_namespace(self, "aside-reply")
 
         # CSS
         css_provider = Gtk.CssProvider()
@@ -399,7 +399,7 @@ class ActionsApp(Adw.Application):
                  margin_left: int = 0,
                  margin_right: int = 0,
                  reply_only: bool = False) -> None:
-        super().__init__(application_id="dev.aside.actions")
+        super().__init__(application_id="dev.aside.reply")
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
