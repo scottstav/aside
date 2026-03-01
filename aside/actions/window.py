@@ -110,7 +110,10 @@ class ActionsWindow(Gtk.Window):
     def __init__(self, app: Adw.Application, conv_id: str,
                  width: int, margin_top: int,
                  reposition_fd: int | None = None,
-                 hold_fd: int | None = None) -> None:
+                 hold_fd: int | None = None,
+                 position: str = "top-center",
+                 margin_left: int = 0,
+                 margin_right: int = 0) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
@@ -123,11 +126,20 @@ class ActionsWindow(Gtk.Window):
         self.set_decorated(False)
         self.set_resizable(False)
 
-        # Layer shell setup
+        # Layer shell setup — match overlay anchoring
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.OVERLAY)
         Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
         Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
+
+        # Horizontal anchoring to follow overlay position
+        if "left" in position:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.LEFT, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.LEFT, margin_left)
+        elif "right" in position:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
+
         Gtk4LayerShell.set_keyboard_mode(
             self, Gtk4LayerShell.KeyboardMode.NONE
         )
@@ -349,18 +361,27 @@ class ActionsWindow(Gtk.Window):
 class ActionsApp(Adw.Application):
     def __init__(self, conv_id: str, width: int, margin_top: int,
                  reposition_fd: int | None = None,
-                 hold_fd: int | None = None) -> None:
+                 hold_fd: int | None = None,
+                 position: str = "top-center",
+                 margin_left: int = 0,
+                 margin_right: int = 0) -> None:
         super().__init__(application_id="dev.aside.actions")
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
         self._reposition_fd = reposition_fd
         self._hold_fd = hold_fd
+        self._position = position
+        self._margin_left = margin_left
+        self._margin_right = margin_right
 
     def do_activate(self) -> None:
         win = ActionsWindow(self, self._conv_id, self._width, self._margin_top,
                             reposition_fd=self._reposition_fd,
-                            hold_fd=self._hold_fd)
+                            hold_fd=self._hold_fd,
+                            position=self._position,
+                            margin_left=self._margin_left,
+                            margin_right=self._margin_right)
         win.present()
 
 
@@ -372,12 +393,18 @@ def main() -> None:
     parser.add_argument("--conv-id", required=True)
     parser.add_argument("--width", type=int, default=600)
     parser.add_argument("--margin-top", type=int, default=60)
+    parser.add_argument("--position", default="top-center")
+    parser.add_argument("--margin-left", type=int, default=0)
+    parser.add_argument("--margin-right", type=int, default=0)
     parser.add_argument("--reposition-fd", type=int, default=None)
     parser.add_argument("--hold-fd", type=int, default=None)
     args = parser.parse_args()
     app = ActionsApp(args.conv_id, args.width, args.margin_top,
                      reposition_fd=args.reposition_fd,
-                     hold_fd=args.hold_fd)
+                     hold_fd=args.hold_fd,
+                     position=args.position,
+                     margin_left=args.margin_left,
+                     margin_right=args.margin_right)
     app.run([])
 
 

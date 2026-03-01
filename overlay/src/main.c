@@ -87,9 +87,12 @@ static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
     if (current_conv_id[0] == '\0') return;
 
     char margin_str[32], width_str[32];
+    char margin_left_str[32], margin_right_str[32];
     snprintf(margin_str, sizeof(margin_str), "%u",
              cfg->margin_top + height + 4);
     snprintf(width_str, sizeof(width_str), "%u", cfg->width);
+    snprintf(margin_left_str, sizeof(margin_left_str), "%u", cfg->margin_left);
+    snprintf(margin_right_str, sizeof(margin_right_str), "%u", cfg->margin_right);
 
     const char *home = getenv("HOME");
     char bin[512] = "aside-actions";
@@ -121,6 +124,9 @@ static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
               "--conv-id", current_conv_id,
               "--width", width_str,
               "--margin-top", margin_str,
+              "--position", cfg->position,
+              "--margin-left", margin_left_str,
+              "--margin-right", margin_right_str,
               "--reposition-fd", fd_str,
               "--hold-fd", hold_fd_str,
               NULL);
