@@ -37,6 +37,9 @@ struct overlay_state {
     /* Scale (detected from wl_output) */
     int32_t scale;
 
+    /* Output dimensions (physical pixels from wl_output.mode) */
+    uint32_t output_mode_height;
+
     /* Pointer / scroll input */
     double pending_scroll_delta;
     uint32_t pending_button;   /* button code from last press, 0 = none */

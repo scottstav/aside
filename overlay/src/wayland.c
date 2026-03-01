@@ -22,7 +22,10 @@ static void output_geometry(void *data, struct wl_output *output,
 static void output_mode(void *data, struct wl_output *output,
                         uint32_t flags, int32_t w, int32_t h, int32_t refresh)
 {
-    (void)data; (void)output; (void)flags; (void)w; (void)h; (void)refresh;
+    (void)output; (void)w; (void)refresh;
+    struct overlay_state *state = data;
+    if (flags & WL_OUTPUT_MODE_CURRENT)
+        state->output_mode_height = (uint32_t)h;
 }
 
 static void output_scale(void *data, struct wl_output *output, int32_t factor)

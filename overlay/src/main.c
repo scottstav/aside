@@ -72,27 +72,55 @@ static bool reap_actions(void)
     return false;
 }
 
-/* Send new margin-top to the actions bar over its reposition pipe */
-static void reposition_actions(uint32_t margin_top, uint32_t height)
+/* Compute the margin value for the actions bar's anchored edge */
+static uint32_t actions_margin(const struct overlay_config *cfg,
+                               const struct overlay_state *state)
+{
+    const char *pos = cfg->position;
+    uint32_t gap = 4;
+
+    if (strstr(pos, "bottom")) {
+        /* Actions bar anchors BOTTOM; larger margin = further from edge = above overlay */
+        return cfg->margin_bottom + state->height + gap;
+    }
+    if (strcmp(pos, "center") == 0) {
+        /* Overlay is compositor-centered; compute absolute offset from top */
+        uint32_t oh = state->output_mode_height;
+        uint32_t s = (uint32_t)(state->scale > 1 ? state->scale : 1);
+        uint32_t logical_h = oh / s;
+        if (logical_h > 0)
+            return (logical_h + state->height) / 2 + gap;
+        /* Fallback if output height unknown */
+    }
+    /* top-* or fallback */
+    return cfg->margin_top + state->height + gap;
+}
+
+/* Send new margin to the actions bar over its reposition pipe */
+static void reposition_actions(const struct overlay_config *cfg,
+                               const struct overlay_state *state)
 {
     if (actions_write_fd < 0) return;
     char msg[32];
-    int n = snprintf(msg, sizeof(msg), "%u\n", margin_top + height + 4);
+    int n = snprintf(msg, sizeof(msg), "%u\n", actions_margin(cfg, state));
     (void)write(actions_write_fd, msg, n);
 }
 
 /* Spawn aside-actions bar below the overlay */
-static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
+static void spawn_actions(const struct overlay_config *cfg,
+                          const struct overlay_state *state)
 {
     if (current_conv_id[0] == '\0') return;
 
     char margin_str[32], width_str[32];
     char margin_left_str[32], margin_right_str[32];
+    char margin_bottom_str[32];
     snprintf(margin_str, sizeof(margin_str), "%u",
-             cfg->margin_top + height + 4);
+             actions_margin(cfg, state));
     snprintf(width_str, sizeof(width_str), "%u", cfg->width);
     snprintf(margin_left_str, sizeof(margin_left_str), "%u", cfg->margin_left);
     snprintf(margin_right_str, sizeof(margin_right_str), "%u", cfg->margin_right);
+    snprintf(margin_bottom_str, sizeof(margin_bottom_str), "%u", cfg->margin_bottom);
 
     const char *home = getenv("HOME");
     char bin[512] = "aside-actions";
@@ -127,6 +155,7 @@ static void spawn_actions(const struct overlay_config *cfg, uint32_t height)
               "--position", cfg->position,
               "--margin-left", margin_left_str,
               "--margin-right", margin_right_str,
+              "--margin-bottom", margin_bottom_str,
               "--reposition-fd", fd_str,
               "--hold-fd", hold_fd_str,
               NULL);
@@ -536,7 +565,7 @@ int main(int argc, char *argv[])
             }
             /* Spawn actions immediately (not user/mic mode) */
             if (!user_mode)
-                spawn_actions(&cfg, state.height);
+                spawn_actions(&cfg, &state);
             state.needs_redraw = true;
             break;
 
@@ -581,7 +610,7 @@ int main(int argc, char *argv[])
                                                    cfg.width, target_h);
                     wl_surface_commit(state.surface);
                     state.height = target_h;
-                    reposition_actions(cfg.margin_top, state.height);
+                    reposition_actions(&cfg, &state);
                     /* Configure callback will set needs_redraw */
                 }
             }
@@ -616,12 +645,12 @@ int main(int argc, char *argv[])
                                                 cfg.width, target_h);
                 wl_surface_commit(state.surface);
                 state.height = target_h;
-                reposition_actions(cfg.margin_top, state.height);
+                reposition_actions(&cfg, &state);
             }
 
             /* Spawn actions now if not already running (e.g. user-mode open) */
             if (actions_pid == 0 && current_conv_id[0] != '\0')
-                spawn_actions(&cfg, state.height);
+                spawn_actions(&cfg, &state);
 
             state.needs_redraw = true;
             done_received = true;
@@ -750,7 +779,7 @@ int main(int argc, char *argv[])
             uint64_t now = anim_now_ms();
             if (now - last_spawn_ms >= 1000) {
                 last_spawn_ms = now;
-                spawn_actions(&cfg, state.height);
+                spawn_actions(&cfg, &state);
             }
         }
     }

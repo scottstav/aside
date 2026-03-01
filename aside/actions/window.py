@@ -122,6 +122,9 @@ class ActionsWindow(Gtk.Window):
         self._in_input_mode = False
         self._holding = False
 
+        # Determine which vertical edge to anchor/margin on
+        self._bottom_anchored = "bottom" in position
+
         self.set_title("aside-actions")
         self.set_decorated(False)
         self.set_resizable(False)
@@ -129,8 +132,14 @@ class ActionsWindow(Gtk.Window):
         # Layer shell setup — match overlay anchoring
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
-        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
+
+        if self._bottom_anchored:
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.BOTTOM, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.BOTTOM, margin_top)
+        else:
+            # top-*, center, or fallback — all use TOP anchor
+            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
+            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
 
         # Horizontal anchoring to follow overlay position
         if "left" in position:
@@ -205,7 +214,8 @@ class ActionsWindow(Gtk.Window):
             pass
 
     def _update_margin(self, margin: int) -> bool:
-        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin)
+        edge = Gtk4LayerShell.Edge.BOTTOM if self._bottom_anchored else Gtk4LayerShell.Edge.TOP
+        Gtk4LayerShell.set_margin(self, edge, margin)
         return False
 
     # -- Hold signalling to overlay --
@@ -396,6 +406,7 @@ def main() -> None:
     parser.add_argument("--position", default="top-center")
     parser.add_argument("--margin-left", type=int, default=0)
     parser.add_argument("--margin-right", type=int, default=0)
+    parser.add_argument("--margin-bottom", type=int, default=0)
     parser.add_argument("--reposition-fd", type=int, default=None)
     parser.add_argument("--hold-fd", type=int, default=None)
     args = parser.parse_args()
