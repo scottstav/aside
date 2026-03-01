@@ -2,23 +2,25 @@
 
 ## Quick install
 
-You need a C toolchain and Wayland dev libraries (likely already present on any Wayland desktop):
+System deps:
 
 ```bash
 # Arch
-pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell python-gobject
+pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
 
 # Debian/Ubuntu
-apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev python3-gi
+apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev
 ```
 
-Then install aside with [uv](https://docs.astral.sh/uv/):
+Then:
 
 ```bash
-uv tool install aside-assistant
+git clone https://github.com/scottstav/aside.git
+cd aside
+make install
 ```
 
-`uv` auto-downloads Python 3.12 if your system Python is too new (e.g. Arch 3.14). All dependencies — including voice and TTS — are installed automatically.
+This builds the C overlay and Python package in one shot (via meson-python) and installs everything into a venv at `~/.local/lib/aside/venv/`.
 
 Set your API key and start the services:
 
@@ -29,30 +31,17 @@ systemctl --user enable --now aside-daemon aside-overlay
 
 See [configuration.md](configuration.md#api-key-configuration) for all key storage options (keyring, env file, env vars).
 
-## From source
-
-```bash
-git clone https://github.com/scottstav/aside.git
-cd aside
-make install
-systemctl --user enable --now aside-daemon aside-overlay
-```
-
-This builds the C overlay and Python package into a venv at `~/.local/lib/aside/venv/`.
-
 ## Dev install
 
-The C overlay and Python package build together via meson-python:
-
 ```bash
-uv venv .venv --python 3.12
-source .venv/bin/activate
-uv pip install -e .
+python -m venv .venv && source .venv/bin/activate && pip install -e .
 ```
+
+The C overlay and Python package build together via meson-python — one command.
 
 ## Dependencies
 
-### System (C overlay)
+### System (C overlay + GTK)
 
 | Dependency          | Purpose                          |
 |---------------------|----------------------------------|
@@ -62,10 +51,8 @@ uv pip install -e .
 | pango               | Overlay text layout               |
 | json-c              | Overlay JSON parsing              |
 | gtk4 + gtk4-layer-shell | Input window, reply bar      |
-| PyGObject (python-gobject) | GTK4 Python bindings      |
-| meson + ninja       | Build system (pulled in by meson-python) |
 
-### Python (installed automatically)
+### Python (installed automatically into venv)
 
 | Dependency          | Purpose                          |
 |---------------------|----------------------------------|
@@ -73,6 +60,7 @@ uv pip install -e .
 | litellm             | LLM provider abstraction         |
 | faster-whisper      | Speech-to-text                    |
 | kokoro              | Text-to-speech synthesis          |
+| PyGObject           | GTK4 Python bindings              |
 
 ### Optional
 

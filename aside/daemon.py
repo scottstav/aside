@@ -91,7 +91,11 @@ def _restore_api_keys() -> None:
         pass  # non-fatal
 
 
-from aside.tts import TTSPipeline
+try:
+    from aside.tts import TTSPipeline
+except ImportError:
+    TTSPipeline = None  # type: ignore[misc,assignment]
+
 from aside.voice.listener import capture_one_shot
 
 
@@ -203,14 +207,16 @@ class Daemon:
         self.tts = None
         tts_cfg = config.get("tts", {})
         try:
+            if TTSPipeline is None:
+                raise ImportError("kokoro not installed")
             self.tts = TTSPipeline(
                 model=tts_cfg.get("model", "af_heart"),
                 speed=tts_cfg.get("speed", 1.0),
                 lang=tts_cfg.get("lang", "a"),
             )
             log.info("TTS pipeline initialised")
-        except Exception:
-            log.warning("TTS init failed — TTS disabled", exc_info=True)
+        except (ImportError, Exception):
+            log.info("TTS not available — kokoro not installed")
             self.tts = None
 
         # Query cancel state
