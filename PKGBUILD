@@ -8,34 +8,29 @@ url="https://github.com/scottstav/aside"
 license=('MIT')
 depends=(
     'python>=3.11'
-    'python-litellm'
     'wayland'
     'cairo'
     'pango'
     'json-c'
+    'pipewire'
 )
 makedepends=(
     'meson'
     'ninja'
+    'python-pip'
     'python-setuptools'
     'python-build'
-    'python-installer'
     'python-wheel'
     'wayland-protocols'
 )
 optdepends=(
-    'python-kokoro: text-to-speech support'
-    'python-sounddevice: TTS audio output'
-    'python-soundfile: TTS audio file handling'
-    'python-faster-whisper: speech-to-text'
-    'python-webrtcvad-wheels: voice activity detection'
-    'python-gobject: GTK4 input window'
-    'gtk4: GTK4 input window'
     'grim: screenshot plugin'
     'slurp: screenshot region selection'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
+
+_venv=/opt/aside/venv
 
 build() {
     cd "$srcdir/$pkgname-$pkgver"
@@ -46,8 +41,11 @@ build() {
     ninja -C build
     cd ..
 
-    # Build Python package
-    python -m build --wheel --no-isolation
+    # Build Python venv with all deps
+    python -m venv "$srcdir/venv"
+    "$srcdir/venv/bin/pip" install --upgrade pip setuptools
+    "$srcdir/venv/bin/pip" install ".[gtk,voice]"
+    "$srcdir/venv/bin/pip" install ".[tts]" || echo "Note: TTS extras not available for Python $(python --version)"
 }
 
 package() {
@@ -56,33 +54,31 @@ package() {
     # Install C overlay
     DESTDIR="$pkgdir" ninja -C overlay/build install
 
-    # Install Python package
-    python -m installer --destdir="$pkgdir" dist/*.whl
+    # Install bundled venv
+    install -d "$pkgdir$(dirname $_venv)"
+    cp -a "$srcdir/venv" "$pkgdir$_venv"
+
+    # Fix venv shebang paths (they point to $srcdir during build)
+    find "$pkgdir$_venv/bin" -type f -exec \
+        sed -i "s|$srcdir/venv|$_venv|g" {} +
+
+    # Fix the pyvenv.cfg home path
+    sed -i "s|$srcdir/venv|$_venv|g" "$pkgdir$_venv/pyvenv.cfg"
 
     # Wrapper scripts
     install -d "$pkgdir/usr/bin"
 
-    cat > "$pkgdir/usr/bin/aside" << 'WRAPPER'
+    for cmd in aside aside-input aside-status aside-actions; do
+        cat > "$pkgdir/usr/bin/$cmd" << WRAPPER
 #!/bin/sh
-exec python3 -m aside.cli "$@"
+exec $_venv/bin/$cmd "\$@"
 WRAPPER
-    chmod 755 "$pkgdir/usr/bin/aside"
-
-    cat > "$pkgdir/usr/bin/aside-input" << 'WRAPPER'
-#!/bin/sh
-exec python3 -m aside.input.window "$@"
-WRAPPER
-    chmod 755 "$pkgdir/usr/bin/aside-input"
-
-    cat > "$pkgdir/usr/bin/aside-status" << 'WRAPPER'
-#!/bin/sh
-exec python3 -m aside.status "$@"
-WRAPPER
-    chmod 755 "$pkgdir/usr/bin/aside-status"
+        chmod 755 "$pkgdir/usr/bin/$cmd"
+    done
 
     # Systemd units (patch paths for system-wide install)
     install -Dm644 data/aside-daemon.service "$pkgdir/usr/lib/systemd/user/aside-daemon.service"
-    sed -i 's|%h/.local/lib/aside/venv/bin/python3|/usr/bin/python3|' \
+    sed -i "s|%h/.local/lib/aside/venv/bin/python3 -m aside.daemon|$_venv/bin/python3 -m aside.daemon|" \
         "$pkgdir/usr/lib/systemd/user/aside-daemon.service"
     install -Dm644 data/aside-overlay.service "$pkgdir/usr/lib/systemd/user/aside-overlay.service"
     sed -i 's|%h/.local/bin/aside-overlay|/usr/bin/aside-overlay|' \
