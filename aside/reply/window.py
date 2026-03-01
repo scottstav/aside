@@ -91,7 +91,6 @@ class ReplyWindow(Gtk.Window):
         self._conv_id = conv_id
         self._input_width = width
         self._hold_fd = hold_fd
-        self._pointer_in = False
         self._holding = False
 
         # Determine which vertical edge to anchor/margin on
@@ -143,12 +142,6 @@ class ReplyWindow(Gtk.Window):
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
 
-        # Pointer enter/leave to signal hold to overlay
-        motion = Gtk.EventControllerMotion()
-        motion.connect("enter", self._on_pointer_enter)
-        motion.connect("leave", self._on_pointer_leave)
-        self.add_controller(motion)
-
         # Watch for reposition messages from overlay (pipe fd)
         if reposition_fd is not None:
             threading.Thread(
@@ -197,19 +190,9 @@ class ReplyWindow(Gtk.Window):
                 pass
 
     def _update_hold(self) -> None:
-        should_hold = self._pointer_in or True  # always in input mode
-        if should_hold != self._holding:
-            self._holding = should_hold
-            self._send_hold(should_hold)
-
-    def _on_pointer_enter(self, ctl: Gtk.EventControllerMotion,
-                          x: float, y: float) -> None:
-        self._pointer_in = True
-        self._update_hold()
-
-    def _on_pointer_leave(self, ctl: Gtk.EventControllerMotion) -> None:
-        self._pointer_in = False
-        self._update_hold()
+        if not self._holding:
+            self._holding = True
+            self._send_hold(True)
 
     def _build_input_mode(self) -> None:
         """Create the text input view."""
@@ -316,8 +299,6 @@ def main() -> None:
     parser.add_argument("--margin-bottom", type=int, default=0)
     parser.add_argument("--reposition-fd", type=int, default=None)
     parser.add_argument("--hold-fd", type=int, default=None)
-    # Accept --reply for backward compat with overlay but ignore it
-    parser.add_argument("--reply", action="store_true", default=False)
     args = parser.parse_args()
     app = ReplyApp(args.conv_id, args.width, args.margin_top,
                    reposition_fd=args.reposition_fd,

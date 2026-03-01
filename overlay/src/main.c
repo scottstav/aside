@@ -137,7 +137,6 @@ static void spawn_reply_input(const struct overlay_config *cfg,
               "--margin-left", margin_left_str,
               "--margin-right", margin_right_str,
               "--hold-fd", hold_fd_str,
-              "--reply",
               NULL);
         _exit(1);
     } else if (pid > 0) {
