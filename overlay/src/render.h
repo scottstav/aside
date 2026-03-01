@@ -12,7 +12,7 @@ enum draw_mode {
     DRAW_THINKING,
 };
 
-#define BUTTON_BAR_HEIGHT 28
+#define BUTTON_BAR_HEIGHT 36
 
 struct button_rect {
     double x, y, w, h;

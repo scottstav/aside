@@ -85,58 +85,52 @@ static void color_rgba(uint32_t c, double *r, double *g, double *b, double *a)
 static void draw_mic_icon(cairo_t *cr, double cx, double cy)
 {
     /* Capsule body */
-    rounded_rect(cr, cx - 2.5, cy - 5, 5, 7, 2.5);
+    rounded_rect(cr, cx - 3, cy - 6, 6, 8.5, 3);
     cairo_fill(cr);
     /* U-shaped holder */
     cairo_new_path(cr);
-    cairo_arc(cr, cx, cy + 1, 4.5, 0, M_PI);
-    cairo_set_line_width(cr, 1.3);
+    cairo_arc(cr, cx, cy + 1.5, 5.5, 0, M_PI);
+    cairo_set_line_width(cr, 1.5);
     cairo_stroke(cr);
     /* Stem + base */
-    cairo_move_to(cr, cx, cy + 5.5);
-    cairo_line_to(cr, cx, cy + 7);
+    cairo_move_to(cr, cx, cy + 7);
+    cairo_line_to(cr, cx, cy + 8.5);
     cairo_stroke(cr);
 }
 
 static void draw_open_icon(cairo_t *cr, double cx, double cy)
 {
-    cairo_set_line_width(cr, 1.3);
+    cairo_set_line_width(cr, 1.5);
     cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
     /* Box */
-    cairo_rectangle(cr, cx - 5, cy - 2.5, 6.5, 6.5);
+    cairo_rectangle(cr, cx - 6, cy - 3, 8, 8);
     cairo_stroke(cr);
     /* Diagonal arrow */
-    cairo_move_to(cr, cx - 1, cy + 1);
-    cairo_line_to(cr, cx + 5, cy - 5);
+    cairo_move_to(cr, cx - 1, cy + 2);
+    cairo_line_to(cr, cx + 6, cy - 5);
     cairo_stroke(cr);
     /* Arrowhead */
-    cairo_move_to(cr, cx + 5, cy - 5);
-    cairo_line_to(cr, cx + 1.5, cy - 5);
+    cairo_move_to(cr, cx + 6, cy - 5);
+    cairo_line_to(cr, cx + 2, cy - 5);
     cairo_stroke(cr);
-    cairo_move_to(cr, cx + 5, cy - 5);
-    cairo_line_to(cr, cx + 5, cy - 1.5);
+    cairo_move_to(cr, cx + 6, cy - 5);
+    cairo_line_to(cr, cx + 6, cy - 1);
     cairo_stroke(cr);
 }
 
 static void draw_reply_icon(cairo_t *cr, double cx, double cy)
 {
-    cairo_set_line_width(cr, 1.3);
+    cairo_set_line_width(cr, 1.5);
     cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
-    /* Curved arrow body */
-    cairo_new_path(cr);
-    cairo_arc(cr, cx + 1, cy - 1, 5, M_PI * 0.5, M_PI);
+    /* Speech bubble: rounded rectangle body */
+    double bx = cx - 7, by = cy - 6, bw = 14, bh = 10, br = 3;
+    rounded_rect(cr, bx, by, bw, bh, br);
     cairo_stroke(cr);
-    /* Arrowhead */
-    double ax = cx + 1 - 5;  /* = cx - 4 */
-    double ay = cy - 1;
-    cairo_move_to(cr, ax + 3, ay - 3);
-    cairo_line_to(cr, ax, ay);
-    cairo_line_to(cr, ax + 3, ay + 3);
-    cairo_stroke(cr);
-    /* Horizontal tail */
-    cairo_move_to(cr, cx + 1, cy + 4);
-    cairo_line_to(cr, cx + 5, cy + 4);
+    /* Tail/pointer at bottom-left */
+    cairo_move_to(cr, cx - 3, by + bh);
+    cairo_line_to(cr, cx - 5, by + bh + 4);
+    cairo_line_to(cr, cx,     by + bh);
     cairo_stroke(cr);
 }
 
@@ -479,7 +473,7 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_stroke(cr);
 
         /* Button layout */
-        double btn_w = 28, btn_h = 20, btn_gap = 4, btn_r = 8;
+        double btn_w = 36, btn_h = 26, btn_gap = 6, btn_r = 8;
         double total_w = 3 * btn_w + 2 * btn_gap;
         double start_x = (logical_w - total_w) / 2;
         double btn_y = btn_bar_y + (BUTTON_BAR_HEIGHT - btn_h) / 2;
