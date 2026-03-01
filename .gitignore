@@ -11,6 +11,9 @@ build/
 # C overlay build
 overlay/build/
 
+# Meson build directory
+builddir/
+
 # IDE
 .idea/
 .vscode/

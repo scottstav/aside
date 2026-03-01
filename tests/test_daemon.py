@@ -330,16 +330,6 @@ class TestCommandParsing:
         mock_cap.assert_called_once()
         mock_sq.assert_not_called()
 
-    def test_query_mic_unavailable(self, minimal_config, tmp_path):
-        """query with mic:true when capture_one_shot is None should not crash."""
-        d = self._make_daemon(minimal_config, tmp_path)
-        with mock.patch("aside.daemon.capture_one_shot", None):
-            with mock.patch.object(d, "start_query") as mock_sq:
-                self._run_command(d, {"action": "query", "mic": True})
-                import time
-                time.sleep(0.15)
-        mock_sq.assert_not_called()
-
     def test_toggle_tts(self, minimal_config, tmp_path):
         d = self._make_daemon(minimal_config, tmp_path)
         assert d.status.speak_enabled is False

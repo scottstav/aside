@@ -92,12 +92,14 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 ## install
 
 ```bash
-git clone https://github.com/scottstav/aside.git
-cd aside
-make install
-make install-extras-voice  # faster-whisper + VAD
-make install-extras-tts    # kokoro TTS
-make install-extras-gtk    # input popup
+# system deps (Arch — adjust for your distro)
+pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
+
+# install aside (uv auto-downloads Python 3.12 if needed)
+uv tool install aside-assistant
+
+# set an API key and start
+aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
 ```
 

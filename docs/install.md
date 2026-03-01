@@ -2,82 +2,83 @@
 
 ## Quick install
 
+You need a C toolchain and Wayland dev libraries (likely already present on any Wayland desktop):
+
 ```bash
-git clone https://github.com/scottstav/aside.git
-cd aside
-make install
+# Arch
+pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
+
+# Debian/Ubuntu
+apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev
 ```
 
-This builds the C overlay and installs the Python package with all extras (voice, TTS, GTK) into a venv.
-
-For a lighter install without voice/TTS deps, use `make install-minimal` instead.
-
-Copy the example config and set your API key:
+Then install aside with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-cp ~/.config/aside/config.toml.example ~/.config/aside/config.toml
-# Edit config.toml — at minimum set model.name
+uv tool install aside-assistant
+```
+
+`uv` auto-downloads Python 3.12 if your system Python is too new (e.g. Arch 3.14). All dependencies — including voice and TTS — are installed automatically.
+
+Set your API key and start the services:
+
+```bash
 aside set-key anthropic sk-ant-...   # or: aside set-key openai sk-...
+systemctl --user enable --now aside-daemon aside-overlay
 ```
 
 See [configuration.md](configuration.md#api-key-configuration) for all key storage options (keyring, env file, env vars).
 
-Start the services:
+## From source
 
 ```bash
+git clone https://github.com/scottstav/aside.git
+cd aside
+make install
 systemctl --user enable --now aside-daemon aside-overlay
 ```
 
-## Install targets
+This builds the C overlay and Python package into a venv at `~/.local/lib/aside/venv/`.
 
-| Target | What it installs |
-|--------|-----------------|
-| `make install` | Full install: core + GTK + voice + TTS |
-| `make install-minimal` | Core + GTK only (no voice, no TTS) |
-| `make install-extras-voice` | Add voice deps to existing venv |
-| `make install-extras-tts` | Add TTS deps to existing venv |
-| `make install-extras-gtk` | Add GTK deps to existing venv |
+## Dev install
 
-## Building from source
-
-### C overlay
+The C overlay and Python package build together via meson-python:
 
 ```bash
-cd overlay && meson setup build --prefix=/usr && ninja -C build
-```
-
-### Python package
-
-```bash
-python -m venv .venv && source .venv/bin/activate && pip install -e .
+uv venv .venv --python 3.12
+source .venv/bin/activate
+uv pip install -e .
 ```
 
 ## Dependencies
 
-### Required
+### System (C overlay)
 
 | Dependency          | Purpose                          |
 |---------------------|----------------------------------|
-| Python >= 3.11      | Daemon and CLI                   |
-| litellm             | LLM provider abstraction         |
 | wayland-client      | Overlay Wayland connection        |
 | wayland-protocols   | Layer-shell protocol (build)      |
 | cairo               | Overlay 2D rendering              |
 | pango               | Overlay text layout               |
 | json-c              | Overlay JSON parsing              |
-| meson + ninja       | Overlay build system              |
+| gtk4 + gtk4-layer-shell | Input window, reply bar      |
+| meson + ninja       | Build system (pulled in by meson-python) |
+
+### Python (installed automatically)
+
+| Dependency          | Purpose                          |
+|---------------------|----------------------------------|
+| Python >= 3.11, < 3.13 | Daemon and CLI               |
+| litellm             | LLM provider abstraction         |
+| faster-whisper      | Speech-to-text                    |
+| kokoro              | Text-to-speech synthesis          |
+| PyGObject           | GTK4 bindings                     |
 
 ### Optional
 
-| Dependency          | Purpose                           | Install target            |
-|---------------------|-----------------------------------|---------------------------|
-| kokoro              | Text-to-speech synthesis          | `make install-extras-tts` |
-| sounddevice         | TTS audio output                  | `make install-extras-tts` |
-| soundfile           | TTS audio file handling           | `make install-extras-tts` |
-| faster-whisper      | Speech-to-text                    | `make install-extras-voice`|
-| webrtcvad-wheels    | Voice activity detection          | `make install-extras-voice`|
-| PyGObject + GTK4    | Input window                      | `make install-extras-gtk` |
-| grim + slurp        | Screenshot plugin                 | system package            |
+| Dependency          | Purpose                           |
+|---------------------|-----------------------------------|
+| grim + slurp        | Screenshot plugin                 |
 
 ## Arch Linux (AUR)
 

@@ -3,7 +3,7 @@ requires = ["meson-python>=0.16", "meson>=0.64"]
 build-backend = "mesonpy"
 
 [project]
-name = "aside"
+name = "aside-assistant"
 version = "0.1.0"
 description = "Wayland-native LLM desktop assistant"
 readme = "README.md"

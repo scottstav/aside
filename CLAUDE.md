@@ -13,10 +13,7 @@ Wayland-native LLM desktop assistant. C overlay + Python daemon + plugins.
 ## Building
 
 ```bash
-# C overlay
-cd overlay && meson setup build --prefix=/usr && ninja -C build
-
-# Python package (always use venv)
+# Everything (C overlay + Python package) in one shot
 python -m venv .venv && source .venv/bin/activate && pip install -e .
 ```
 

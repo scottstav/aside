@@ -131,7 +131,7 @@ def _build_output(status_data: dict) -> dict:
 
 
 def main() -> None:
-    """Entry point registered as ``aside-status`` in pyproject.toml.
+    """Entry point for ``aside status`` subcommand.
 
     Reads status.json and prints waybar-compatible JSON to stdout.
     """

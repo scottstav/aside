@@ -202,7 +202,7 @@ signal = 12
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `signal` | `12` | SIGRTMIN+N signal number sent to waybar for status updates. The `aside-status` waybar module listens on this signal |
+| `signal` | `12` | SIGRTMIN+N signal number sent to waybar for status updates. The `aside status` waybar module listens on this signal |
 
 ---
 

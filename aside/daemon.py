@@ -91,17 +91,8 @@ def _restore_api_keys() -> None:
         pass  # non-fatal
 
 
-# Try to import optional heavy dependencies.  These are kept at module level
-# so tests can mock them easily, but failures are deferred to __init__.
-try:
-    from aside.tts import TTSPipeline
-except ImportError:
-    TTSPipeline = None  # type: ignore[misc,assignment]
-
-try:
-    from aside.voice.listener import capture_one_shot
-except ImportError:
-    capture_one_shot = None  # type: ignore[misc,assignment]
+from aside.tts import TTSPipeline
+from aside.voice.listener import capture_one_shot
 
 
 # ---------------------------------------------------------------------------
@@ -212,16 +203,14 @@ class Daemon:
         self.tts = None
         tts_cfg = config.get("tts", {})
         try:
-            if TTSPipeline is None:
-                raise ImportError("TTSPipeline not available")
             self.tts = TTSPipeline(
                 model=tts_cfg.get("model", "af_heart"),
                 speed=tts_cfg.get("speed", 1.0),
                 lang=tts_cfg.get("lang", "a"),
             )
             log.info("TTS pipeline initialised")
-        except (ImportError, Exception):
-            log.warning("TTS deps not installed — TTS disabled", exc_info=True)
+        except Exception:
+            log.warning("TTS init failed — TTS disabled", exc_info=True)
             self.tts = None
 
         # Query cancel state
@@ -349,17 +338,6 @@ class Daemon:
                                 "mode": "user",
                                 "conv_id": conv_id or "",
                             })
-
-                            if capture_one_shot is None:
-                                log.warning("Voice deps not installed -- mic capture unavailable")
-                                _overlay_send(overlay_sock, {
-                                    "cmd": "replace",
-                                    "data": "Voice deps not installed — run: make install-extras-voice",
-                                })
-                                time.sleep(2)
-                                _overlay_close(overlay_sock)
-                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
-                                return
 
                             _overlay_send(overlay_sock, {"cmd": "listening"})
 
