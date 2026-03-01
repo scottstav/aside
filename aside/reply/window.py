@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import socket
-import sys
 import threading
 
 _LAYER_SHELL_LIB = os.environ.get("GTK4_LAYER_SHELL_LIB", "libgtk4-layer-shell.so")
@@ -45,35 +44,49 @@ def _send_to_daemon(msg: dict) -> None:
         log.exception("Failed to send message to daemon at %s", sock_path)
 
 
-CSS = """
-window {
+def _rgb(color: str) -> str:
+    """Return '#RRGGBB' from '#RRGGBB' or '#RRGGBBAA'."""
+    if len(color) == 9:  # #RRGGBBAA
+        return color[:7]
+    return color
+
+
+def _build_css(colors: dict) -> str:
+    bg = _rgb(colors.get("background", "#1a1b26"))
+    fg = _rgb(colors.get("foreground", "#c0caf5"))
+    accent = _rgb(colors.get("accent", "#7aa2f7"))
+    border = _rgb(colors.get("border", "#414868"))
+
+    return f"""
+window {{
     background-color: transparent;
-}
-window.background {
+}}
+window.background {{
     background-color: transparent;
-}
-.input-bar {
-    background-color: alpha(@window_bg_color, 0.95);
+}}
+.input-bar {{
+    background-color: alpha({bg}, 0.95);
     border-radius: 12px;
-    border: 1px solid alpha(@accent_color, 0.3);
+    border: 1px solid alpha({accent}, 0.3);
     padding: 4px;
-}
-.reply-input {
-    background-color: alpha(@window_fg_color, 0.04);
+}}
+.reply-input {{
+    background-color: alpha({fg}, 0.04);
     border-radius: 6px;
-    border: 1px solid alpha(@accent_color, 0.5);
+    border: 1px solid alpha({border}, 0.5);
     padding: 8px;
-    caret-color: @accent_color;
-}
-.reply-input:focus {
-    border-color: @accent_color;
-    box-shadow: 0 0 0 1px alpha(@accent_color, 0.3);
-}
-.reply-hint {
+    caret-color: {accent};
+    color: {fg};
+}}
+.reply-input:focus {{
+    border-color: {accent};
+    box-shadow: 0 0 0 1px alpha({accent}, 0.3);
+}}
+.reply-hint {{
     font-size: 0.8em;
-    color: alpha(@window_fg_color, 0.4);
+    color: alpha({fg}, 0.4);
     margin-top: 2px;
-}
+}}
 """
 
 
@@ -86,7 +99,8 @@ class ReplyWindow(Gtk.Window):
                  hold_fd: int | None = None,
                  position: str = "top-center",
                  margin_left: int = 0,
-                 margin_right: int = 0) -> None:
+                 margin_right: int = 0,
+                 colors: dict | None = None) -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
@@ -127,7 +141,7 @@ class ReplyWindow(Gtk.Window):
 
         # CSS
         css_provider = Gtk.CssProvider()
-        css_provider.load_from_string(CSS)
+        css_provider.load_from_string(_build_css(colors or {}))
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
@@ -276,12 +290,15 @@ class ReplyApp(Adw.Application):
         self._margin_right = margin_right
 
     def do_activate(self) -> None:
+        cfg = load_config()
+        colors = cfg.get("overlay", {}).get("colors", {})
         win = ReplyWindow(self, self._conv_id, self._width, self._margin_top,
                           reposition_fd=self._reposition_fd,
                           hold_fd=self._hold_fd,
                           position=self._position,
                           margin_left=self._margin_left,
-                          margin_right=self._margin_right)
+                          margin_right=self._margin_right,
+                          colors=colors)
         win.present()
 
 
