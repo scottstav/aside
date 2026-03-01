@@ -117,9 +117,6 @@ EOF
     # ── example config ────────────────────────────────────────────────────
     install -Dm644 data/config.toml.example "$pkgdir/usr/share/aside/config.toml.example"
 
-    # ── waybar module ─────────────────────────────────────────────────────
-    install -Dm644 data/waybar/aside.json "$pkgdir/usr/share/aside/waybar/aside.json"
-
     # ── default TTS voice model ───────────────────────────────────────────
     install -Dm644 "$srcdir/en_US-lessac-medium.onnx" \
         "$pkgdir/usr/share/piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx"

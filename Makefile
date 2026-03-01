@@ -70,9 +70,6 @@ install: overlay
 	else \
 		echo "    Config already exists — not overwriting"; \
 	fi
-	@echo "==> Installing waybar module config"
-	install -d $(HOME)/.config/waybar
-	install -Dm644 data/waybar/aside.json $(HOME)/.config/waybar/aside.json
 	systemctl --user daemon-reload
 	@echo "==> Done. Enable with:"
 	@echo "    systemctl --user enable --now aside-daemon aside-overlay"
