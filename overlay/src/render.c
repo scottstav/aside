@@ -26,6 +26,8 @@ void renderer_init(struct renderer *r, const struct overlay_config *cfg)
     g_object_unref(tmp_layout);
     cairo_destroy(tmp_cr);
     cairo_surface_destroy(tmp_surf);
+
+    memset(r->button_rects, 0, sizeof(r->button_rects));
 }
 
 static void setup_layout(PangoLayout *layout, struct renderer *r,
@@ -78,11 +80,86 @@ static void color_rgba(uint32_t c, double *r, double *g, double *b, double *a)
     *a = (c & 0xFF) / 255.0;
 }
 
+/* --- Button icon drawing (Cairo paths) --- */
+
+static void draw_mic_icon(cairo_t *cr, double cx, double cy)
+{
+    /* Capsule body */
+    rounded_rect(cr, cx - 2.5, cy - 5, 5, 7, 2.5);
+    cairo_fill(cr);
+    /* U-shaped holder */
+    cairo_new_path(cr);
+    cairo_arc(cr, cx, cy + 1, 4.5, 0, M_PI);
+    cairo_set_line_width(cr, 1.3);
+    cairo_stroke(cr);
+    /* Stem + base */
+    cairo_move_to(cr, cx, cy + 5.5);
+    cairo_line_to(cr, cx, cy + 7);
+    cairo_stroke(cr);
+}
+
+static void draw_open_icon(cairo_t *cr, double cx, double cy)
+{
+    cairo_set_line_width(cr, 1.3);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    /* Box */
+    cairo_rectangle(cr, cx - 5, cy - 2.5, 6.5, 6.5);
+    cairo_stroke(cr);
+    /* Diagonal arrow */
+    cairo_move_to(cr, cx - 1, cy + 1);
+    cairo_line_to(cr, cx + 5, cy - 5);
+    cairo_stroke(cr);
+    /* Arrowhead */
+    cairo_move_to(cr, cx + 5, cy - 5);
+    cairo_line_to(cr, cx + 1.5, cy - 5);
+    cairo_stroke(cr);
+    cairo_move_to(cr, cx + 5, cy - 5);
+    cairo_line_to(cr, cx + 5, cy - 1.5);
+    cairo_stroke(cr);
+}
+
+static void draw_reply_icon(cairo_t *cr, double cx, double cy)
+{
+    cairo_set_line_width(cr, 1.3);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+    /* Curved arrow body */
+    cairo_new_path(cr);
+    cairo_arc(cr, cx + 1, cy - 1, 5, M_PI * 0.5, M_PI);
+    cairo_stroke(cr);
+    /* Arrowhead */
+    double ax = cx + 1 - 5;  /* = cx - 4 */
+    double ay = cy - 1;
+    cairo_move_to(cr, ax + 3, ay - 3);
+    cairo_line_to(cr, ax, ay);
+    cairo_line_to(cr, ax + 3, ay + 3);
+    cairo_stroke(cr);
+    /* Horizontal tail */
+    cairo_move_to(cr, cx + 1, cy + 4);
+    cairo_line_to(cr, cx + 5, cy + 4);
+    cairo_stroke(cr);
+}
+
+static void draw_button_icon(cairo_t *cr, int index, double cx, double cy,
+                              uint32_t color, double alpha)
+{
+    double r, g, b, a;
+    color_rgba(color, &r, &g, &b, &a);
+    cairo_set_source_rgba(cr, r, g, b, alpha);
+
+    switch (index) {
+    case 0: draw_mic_icon(cr, cx, cy); break;
+    case 1: draw_open_icon(cr, cx, cy); break;
+    case 2: draw_reply_icon(cr, cx, cy); break;
+    }
+}
+
 void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
                    uint32_t *pixels, uint32_t buf_width, uint32_t buf_height,
                    const char *text, double scroll_y, double opacity,
                    uint32_t accent, enum draw_mode mode,
-                   uint64_t anim_time_ms)
+                   uint64_t anim_time_ms,
+                   bool show_buttons, int hovered_button)
 {
     cairo_surface_t *surface = cairo_image_surface_create_for_data(
         (unsigned char *)pixels, CAIRO_FORMAT_ARGB32,
@@ -267,8 +344,9 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
         cairo_save(cr);
         double px = cfg->padding_x;
         double py = cfg->padding_y;
+        double btn_space = show_buttons ? BUTTON_BAR_HEIGHT : 0;
         double content_w = logical_w - 2 * px;
-        double content_h = logical_h - 2 * py;
+        double content_h = logical_h - 2 * py - btn_space;
 
         cairo_rectangle(cr, px, py, content_w, content_h);
         cairo_clip(cr);
@@ -379,6 +457,55 @@ void renderer_draw(struct renderer *r, const struct overlay_config *cfg,
             cairo_pop_group_to_source(cr);
             cairo_paint(cr);
         }
+        cairo_restore(cr);
+    }
+
+    /* --- Action buttons at the bottom of the panel --- */
+    if (show_buttons) {
+        cairo_save(cr);
+        /* Clip to the panel rounded rect */
+        rounded_rect(cr, rx, ry, rw, rh, cr_radius);
+        cairo_clip(cr);
+
+        double btn_bar_y = logical_h - BUTTON_BAR_HEIGHT;
+
+        /* Subtle separator line */
+        double tc_r2, tc_g2, tc_b2, tc_a2;
+        color_rgba(cfg->text_color, &tc_r2, &tc_g2, &tc_b2, &tc_a2);
+        cairo_set_source_rgba(cr, tc_r2, tc_g2, tc_b2, 0.08);
+        cairo_move_to(cr, cfg->padding_x, btn_bar_y);
+        cairo_line_to(cr, logical_w - cfg->padding_x, btn_bar_y);
+        cairo_set_line_width(cr, 0.5);
+        cairo_stroke(cr);
+
+        /* Button layout */
+        double btn_w = 28, btn_h = 20, btn_gap = 4, btn_r = 8;
+        double total_w = 3 * btn_w + 2 * btn_gap;
+        double start_x = (logical_w - total_w) / 2;
+        double btn_y = btn_bar_y + (BUTTON_BAR_HEIGHT - btn_h) / 2;
+
+        double ac_r2, ac_g2, ac_b2, ac_a2;
+        color_rgba(accent, &ac_r2, &ac_g2, &ac_b2, &ac_a2);
+
+        for (int i = 0; i < 3; i++) {
+            double bx = start_x + i * (btn_w + btn_gap);
+            r->button_rects[i] = (struct button_rect){bx, btn_y, btn_w, btn_h};
+
+            /* Hover background */
+            if (i == hovered_button) {
+                rounded_rect(cr, bx, btn_y, btn_w, btn_h, btn_r);
+                cairo_set_source_rgba(cr, ac_r2, ac_g2, ac_b2, 0.15);
+                cairo_fill(cr);
+            }
+
+            /* Icon */
+            double icx = bx + btn_w / 2;
+            double icy = btn_y + btn_h / 2;
+            uint32_t icon_color = (i == hovered_button) ? accent : cfg->text_color;
+            double icon_alpha = (i == hovered_button) ? 0.9 : 0.4;
+            draw_button_icon(cr, i, icx, icy, icon_color, icon_alpha);
+        }
+
         cairo_restore(cr);
     }
 

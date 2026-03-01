@@ -298,8 +298,16 @@ bool wayland_create_surface(struct overlay_state *state,
     if (strstr(pos, "right"))
         anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
 
+    /* For "center": use TOP anchor with computed margin instead of
+     * compositor centering (anchor=0).  This gives us a deterministic
+     * position so we can place embedded buttons and reply input
+     * relative to the overlay without guessing. */
+    if (strcmp(pos, "center") == 0) {
+        anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+    }
+
     /* Default: top-center if position is empty or unrecognized */
-    if (anchor == 0 && strcmp(pos, "center") != 0)
+    if (anchor == 0)
         anchor = ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
 
     zwlr_layer_surface_v1_set_anchor(state->layer_surface, anchor);
@@ -309,6 +317,17 @@ bool wayland_create_surface(struct overlay_state *state,
 
     zwlr_layer_surface_v1_set_margin(state->layer_surface,
         cfg->margin_top, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
+
+    /* For center: override margin_top to vertically center the surface */
+    if (strcmp(cfg->position, "center") == 0) {
+        uint32_t s = state->scale > 1 ? (uint32_t)state->scale : 1;
+        uint32_t logical_h = state->output_mode_height / s;
+        if (logical_h > height) {
+            uint32_t center_margin = (logical_h - height) / 2;
+            zwlr_layer_surface_v1_set_margin(state->layer_surface,
+                center_margin, cfg->margin_right, cfg->margin_bottom, cfg->margin_left);
+        }
+    }
 
     /* Size is in logical pixels */
     zwlr_layer_surface_v1_set_size(state->layer_surface, width, height);
