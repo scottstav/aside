@@ -9,8 +9,6 @@ import queue
 import threading
 import time
 
-import numpy as np
-
 log = logging.getLogger("aside")
 
 # Sentinel to signal threads to stop

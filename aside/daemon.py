@@ -96,7 +96,10 @@ try:
 except ImportError:
     TTSPipeline = None  # type: ignore[misc,assignment]
 
-from aside.voice.listener import capture_one_shot
+try:
+    from aside.voice.listener import capture_one_shot
+except ImportError:
+    capture_one_shot = None  # type: ignore[misc,assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +338,17 @@ class Daemon:
 
             if action == "query":
                 if msg.get("mic"):
+                    if capture_one_shot is None:
+                        from aside.query import _connect_overlay, _overlay_send, _overlay_close
+                        sock = _connect_overlay()
+                        _overlay_send(sock, {"cmd": "open", "mode": "user"})
+                        _overlay_send(sock, {"cmd": "replace", "data": "STT not installed. Run: sudo aside enable-stt"})
+                        await asyncio.sleep(3)
+                        _overlay_send(sock, {"cmd": "done"})
+                        _overlay_close(sock)
+                        log.warning("STT not installed — mic query rejected")
+                        return
+
                     # Cancel any running query/TTS/mic before starting
                     self.cancel_query()
 

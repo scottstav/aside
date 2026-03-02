@@ -142,6 +142,12 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside disable-tts
     sub.add_parser("disable-tts", help="Uninstall piper-tts (requires sudo)")
 
+    # aside enable-stt
+    sub.add_parser("enable-stt", help="Install speech-to-text packages (requires sudo)")
+
+    # aside disable-stt
+    sub.add_parser("disable-stt", help="Uninstall speech-to-text packages (requires sudo)")
+
     # aside status
     sub.add_parser("status", help="Print daemon status as JSON")
 
@@ -320,6 +326,35 @@ def _cmd_disable_tts(args: argparse.Namespace) -> None:
     print("Uninstalling piper-tts...")
     subprocess.run([_VENV_PIP, "uninstall", "-y", "piper-tts"], check=False)
     print("TTS disabled. Restart the daemon: systemctl --user restart aside-daemon")
+
+
+_STT_PACKAGES = ["faster-whisper", "webrtcvad-wheels", "sounddevice", "numpy"]
+
+
+def _cmd_enable_stt(args: argparse.Namespace) -> None:
+    """Install STT packages into the aside venv."""
+    if os.geteuid() != 0:
+        print("Error: enable-stt must be run as root (sudo aside enable-stt)", file=sys.stderr)
+        sys.exit(1)
+
+    print("Installing STT packages...")
+    ret = subprocess.run([_VENV_PIP, "install"] + _STT_PACKAGES, check=False)
+    if ret.returncode != 0:
+        print("Error: pip install failed", file=sys.stderr)
+        sys.exit(1)
+
+    print("STT enabled. Restart the daemon: systemctl --user restart aside-daemon")
+
+
+def _cmd_disable_stt(args: argparse.Namespace) -> None:
+    """Uninstall STT packages from the aside venv."""
+    if os.geteuid() != 0:
+        print("Error: disable-stt must be run as root (sudo aside disable-stt)", file=sys.stderr)
+        sys.exit(1)
+
+    print("Uninstalling STT packages...")
+    subprocess.run([_VENV_PIP, "uninstall", "-y", "faster-whisper", "webrtcvad-wheels", "sounddevice"], check=False)
+    print("STT disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 
 def _cmd_status(args: argparse.Namespace) -> None:
@@ -600,6 +635,8 @@ _HANDLERS = {
     "toggle-tts": _cmd_toggle_tts,
     "enable-tts": _cmd_enable_tts,
     "disable-tts": _cmd_disable_tts,
+    "enable-stt": _cmd_enable_stt,
+    "disable-stt": _cmd_disable_stt,
     "status": _cmd_status,
     "ls": _cmd_ls,
     "show": _cmd_show,

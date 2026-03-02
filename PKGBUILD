@@ -17,10 +17,8 @@ depends=(
     'gtk4-layer-shell'
     'portaudio'
     'python'
-    'python-numpy'
     'python-gobject'
     'python-cairo'
-    'python-soundfile'
     'gobject-introspection'
 )
 makedepends=(
@@ -36,6 +34,8 @@ makedepends=(
 optdepends=(
     'grim: screenshot plugin'
     'slurp: screenshot region selection'
+    'aside enable-stt: speech-to-text (faster-whisper, ~100MB)'
+    'aside enable-tts: text-to-speech (piper-tts)'
 )
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
@@ -57,8 +57,7 @@ build() {
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
     # Install remaining Python deps (numpy/PyGObject/pycairo come from system)
-    "$_pip" install --no-cache-dir \
-        litellm faster-whisper sounddevice webrtcvad-wheels
+    "$_pip" install --no-cache-dir litellm
 }
 
 package() {
