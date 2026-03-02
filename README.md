@@ -1,6 +1,6 @@
 # aside
 
-A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, and never lose focus on what you're doing.
+A desktop LLM assistant for Wayland that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
@@ -11,17 +11,20 @@ A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, a
 - **input popup** — GTK4 window with conversation history. Continue one or start fresh.
 
 
-Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query. 
+Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query.
 
 ## tools
 
 aside ships with a memory tool built in. Drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically. See `examples/tools/` for reference implementations.
 
-The tool system is flexible enough to do real work — run scripts, search files, open applications, etc, even create new tools.
+The tool system is flexible enough to do real work.
 
+Be a cheater:
+![demo](screenshots/demo5.gif)
+
+launch a [wreccless](https://github.com/scottstav/wreccless) worker:
 ![demo](screenshots/demo3.gif)
 
-the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
 
 ## any LLM
 
