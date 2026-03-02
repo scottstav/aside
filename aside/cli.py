@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import socket
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from aside.config import load_config, load_excluded_models, resolve_conversations_dir, resolve_excluded_models_path, resolve_socket_path, resolve_state_dir
 
@@ -133,6 +135,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # aside toggle-tts
     sub.add_parser("toggle-tts", help="Toggle TTS on/off for next query")
+
+    # aside enable-tts
+    sub.add_parser("enable-tts", help="Install piper-tts and voice model (requires sudo)")
+
+    # aside disable-tts
+    sub.add_parser("disable-tts", help="Uninstall piper-tts (requires sudo)")
 
     # aside status
     sub.add_parser("status", help="Print daemon status as JSON")
@@ -262,6 +270,56 @@ def _cmd_stop_tts(args: argparse.Namespace) -> None:
 def _cmd_toggle_tts(args: argparse.Namespace) -> None:
     """Toggle TTS on/off for next query."""
     _send({"action": "toggle_tts"})
+
+
+_VOICE_MODEL_DIR = Path("/usr/share/piper-voices/en/en_US/lessac/medium")
+_VOICE_MODEL_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
+_VOICE_MODEL_FILES = ("en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json")
+_VENV_PIP = "/opt/aside/bin/pip"
+
+
+def _cmd_enable_tts(args: argparse.Namespace) -> None:
+    """Install piper-tts into the aside venv and download voice model."""
+    if os.geteuid() != 0:
+        print("Error: enable-tts must be run as root (sudo aside enable-tts)", file=sys.stderr)
+        sys.exit(1)
+
+    # Install piper-tts
+    print("Installing piper-tts...")
+    ret = subprocess.run([_VENV_PIP, "install", "piper-tts"], check=False)
+    if ret.returncode != 0:
+        print("Error: pip install piper-tts failed", file=sys.stderr)
+        sys.exit(1)
+
+    # Download voice model
+    _VOICE_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    for filename in _VOICE_MODEL_FILES:
+        dest = _VOICE_MODEL_DIR / filename
+        if dest.exists():
+            print(f"  {filename} already exists, skipping")
+            continue
+        url = f"{_VOICE_MODEL_BASE_URL}/{filename}"
+        print(f"  Downloading {filename}...")
+        ret = subprocess.run(
+            ["curl", "-fSL", "-o", str(dest), url],
+            check=False,
+        )
+        if ret.returncode != 0:
+            print(f"Error: failed to download {filename}", file=sys.stderr)
+            sys.exit(1)
+
+    print("TTS enabled. Restart the daemon: systemctl --user restart aside-daemon")
+
+
+def _cmd_disable_tts(args: argparse.Namespace) -> None:
+    """Uninstall piper-tts from the aside venv."""
+    if os.geteuid() != 0:
+        print("Error: disable-tts must be run as root (sudo aside disable-tts)", file=sys.stderr)
+        sys.exit(1)
+
+    print("Uninstalling piper-tts...")
+    subprocess.run([_VENV_PIP, "uninstall", "-y", "piper-tts"], check=False)
+    print("TTS disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 
 def _cmd_status(args: argparse.Namespace) -> None:
@@ -540,6 +598,8 @@ _HANDLERS = {
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,
     "toggle-tts": _cmd_toggle_tts,
+    "enable-tts": _cmd_enable_tts,
+    "disable-tts": _cmd_disable_tts,
     "status": _cmd_status,
     "ls": _cmd_ls,
     "show": _cmd_show,
