@@ -1,6 +1,6 @@
 pkgbase = aside
 	pkgdesc = Wayland-native LLM desktop assistant
-	pkgver = 0.2.0
+	pkgver = 0.3.0
 	pkgrel = 1
 	url = https://github.com/scottstav/aside
 	arch = x86_64
@@ -25,7 +25,7 @@ pkgbase = aside
 	depends = gobject-introspection
 	optdepends = grim: screenshot plugin
 	optdepends = slurp: screenshot region selection
-	source = aside-0.2.0.tar.gz::https://github.com/scottstav/aside/archive/v0.2.0.tar.gz
-	sha256sums = f2e950fa6c31193575c153168d2731d17a6e38530df4b19a2089b65065617214
+	source = aside-0.3.0.tar.gz::https://github.com/scottstav/aside/archive/v0.3.0.tar.gz
+	sha256sums = b6b42d41161a65eebb53f047663bd7adf88513780db49014fd960c51a7bb6765
 
 pkgname = aside
