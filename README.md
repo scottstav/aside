@@ -4,7 +4,7 @@ a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, a
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
-![demo](demo.gif) ![demo](demo2.gif)
+![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
 
 - **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel.
 - **voice** — STT via faster-whisper, TTS via Piper. talk to it, it talks back.
@@ -20,7 +20,7 @@ aside ships with a memory tool built in. drop a Python file with a `TOOL_SPEC` +
 
 the tool system is flexible enough to do real work — spawn background workers, run scripts, hit APIs, whatever you need.
 
-![demo](demo4.gif)
+![demo](screenshots/demo3.gif)
 
 the demo shows a custom [wreccless](https://github.com/scottstav/wreccless) plugin.
 
@@ -46,7 +46,7 @@ aside set-key openai sk-...
 
 everything goes through the CLI, which makes it easy to script, integrate with pickers, or wire into status bars.
 
-![demo](demo3.gif)
+![demo](screenshots/demo4.gif)
 
 ```bash
 # models — auto-detects what's available based on your API keys
