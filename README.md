@@ -151,16 +151,6 @@ sudo aside enable-stt   # speech-to-text
 sudo aside enable-tts   # text-to-speech
 ```
 
-## docs
-
-| | |
-|---|---|
-| [Installation](docs/install.md) | dependencies, build, AUR |
-| [Usage](docs/usage.md) | CLI reference |
-| [Configuration](docs/configuration.md) | config options |
-| [Plugins](docs/plugins.md) | plugin API |
-| [Architecture](docs/architecture.md) | system design |
-
 ## donate
 
 <a id="donate"></a>
