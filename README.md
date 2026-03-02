@@ -22,7 +22,7 @@ the tool system is flexible enough to do real work — spawn background workers,
 
 ![demo](screenshots/demo3.gif)
 
-the demo shows a custom [wreccless](https://github.com/scottstav/wreccless) plugin.
+the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
 
 ## any LLM
 
@@ -71,22 +71,55 @@ aside stop-tts
 aside cancel
 ```
 
-## theming
+## theming and customization
 
-the overlay is fully customizable via `~/.config/aside/config.toml`:
+Highly configurable via `~/.config/aside/config.toml`:
 
 ```toml
+[model]
+name = "anthropic/claude-haiku-4-5"
+
+[input]
+font = "Iosevka 12"
+
+[storage]
+archive_dir = "~/Dropbox/LLM/Chats"
+
+[tools]
+dirs = ["~/.config/aside/tools"]
+
 [overlay]
-font = "JetBrains Mono 12"
-width = 700
-max_lines = 40
-corner_radius = 12
+font = "Iosevka 12"
+max_lines = 5
+corner_radius = 8
+border_width = 1
+accent_height = 4
+scroll_duration = 200
+fade_duration = 400
+position = "top-center"
+width = 450
+margin_top = 5
+padding_top = 2.5
 
 [overlay.colors]
-background = "#1a1b26e6"    # RGBA hex (last 2 digits = alpha)
-foreground = "#c0caf5ff"
-border = "#414868ff"
-accent = "#7aa2f7ff"
+background = "#1a1c1ee6"
+foreground = "#d4d4d4ff"
+border = "#5a4a3aff"
+accent = "#5b9a6a"
+user_accent = "#a07048"
+
+[voice]
+enabled = false
+stt_model = "base"
+stt_device = "cpu"
+smart_silence = true
+silence_timeout = 2.5
+no_speech_timeout = 3.0
+
+[tts]
+enabled = false
+speed = 1.0
+filter = {skip_code_blocks = true, skip_urls = true}
 ```
 
 voice, TTS, model, plugins, and storage are all configurable too — see [config reference](docs/configuration.md).
