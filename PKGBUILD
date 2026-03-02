@@ -1,6 +1,6 @@
 # Maintainer: Scott Stavropoulos <scottstav@gmail.com>
 pkgname=aside
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
 pkgdesc="Wayland-native LLM desktop assistant"
 arch=('x86_64')
