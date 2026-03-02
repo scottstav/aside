@@ -661,7 +661,7 @@ class TestOpenCommand:
         (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
 
     def test_open_creates_markdown(self, tmp_path):
-        """open should write a markdown file at /tmp/aside-{id[:8]}.md."""
+        """open should write a markdown transcript in the conversations dir."""
         conv_dir = tmp_path / "conversations"
         conv_dir.mkdir()
 
@@ -678,18 +678,15 @@ class TestOpenCommand:
                 with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
                     _cmd_open(args)
 
-        md_path = "/tmp/aside-aaaa-111.md"
-        assert os.path.exists(md_path)
+        md_path = conv_dir / "aaaa-1111.md"
+        assert md_path.exists()
 
-        content = Path(md_path).read_text()
+        content = md_path.read_text()
         assert "# Conversation aaaa-111" in content
         assert "## User" in content
         assert "Hello" in content
         assert "## Assistant" in content
         assert "Hi there!" in content
-
-        # Clean up
-        os.unlink(md_path)
 
     def test_open_calls_xdg_open(self, tmp_path):
         """open should call xdg-open with the markdown file path."""
@@ -708,12 +705,8 @@ class TestOpenCommand:
                 with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
                     _cmd_open(args)
 
-        mock_popen.assert_called_once_with(["xdg-open", "/tmp/aside-bbbb-222.md"])
-
-        # Clean up
-        md_path = "/tmp/aside-bbbb-222.md"
-        if os.path.exists(md_path):
-            os.unlink(md_path)
+        expected_md = str(conv_dir / "bbbb-2222.md")
+        mock_popen.assert_called_once_with(["xdg-open", expected_md])
 
     def test_open_not_found(self, tmp_path, capsys):
         """open should print an error and exit 1 if conversation not found."""
@@ -753,13 +746,10 @@ class TestOpenCommand:
                 with mock.patch("aside.cli.subprocess.Popen"):
                     _cmd_open(args)
 
-        md_path = "/tmp/aside-cccc-333.md"
-        content = Path(md_path).read_text()
+        md_path = conv_dir / "cccc-3333.md"
+        content = md_path.read_text()
         assert "What is in this image?" in content
         assert "I see a cat." in content
-
-        # Clean up
-        os.unlink(md_path)
 
 
 # ---------------------------------------------------------------------------

@@ -54,7 +54,7 @@ def _rgb(color: str) -> str:
 def _build_css(colors: dict) -> str:
     bg = _rgb(colors.get("background", "#1a1b26"))
     fg = _rgb(colors.get("foreground", "#c0caf5"))
-    accent = _rgb(colors.get("accent", "#7aa2f7"))
+    accent = _rgb(colors.get("user_accent", "#a07048"))
     border = _rgb(colors.get("border", "#414868"))
 
     return f"""
@@ -100,7 +100,8 @@ class ReplyWindow(Gtk.Window):
                  position: str = "top-center",
                  margin_left: int = 0,
                  margin_right: int = 0,
-                 colors: dict | None = None) -> None:
+                 colors: dict | None = None,
+                 font: str = "") -> None:
         super().__init__(application=app)
         self._conv_id = conv_id
         self._input_width = width
@@ -140,8 +141,19 @@ class ReplyWindow(Gtk.Window):
         Gtk4LayerShell.set_namespace(self, "aside-reply")
 
         # CSS
+        css_text = _build_css(colors or {})
+        if font:
+            from gi.repository import Pango
+            desc = Pango.FontDescription.from_string(font)
+            family = desc.get_family()
+            parts = [f'font-family: "{family}"']
+            size = desc.get_size()
+            if size:
+                pts = size / Pango.SCALE
+                parts.append(f"font-size: {pts}pt")
+            css_text += "\n* { " + "; ".join(parts) + "; }"
         css_provider = Gtk.CssProvider()
-        css_provider.load_from_string(_build_css(colors or {}))
+        css_provider.load_from_string(css_text)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
@@ -280,6 +292,7 @@ class ReplyApp(Adw.Application):
                  margin_left: int = 0,
                  margin_right: int = 0) -> None:
         super().__init__(application_id="dev.aside.reply")
+        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
         self._conv_id = conv_id
         self._width = width
         self._margin_top = margin_top
@@ -291,14 +304,17 @@ class ReplyApp(Adw.Application):
 
     def do_activate(self) -> None:
         cfg = load_config()
-        colors = cfg.get("overlay", {}).get("colors", {})
+        overlay_cfg = cfg.get("overlay", {})
+        colors = overlay_cfg.get("colors", {})
+        font = overlay_cfg.get("font", "")
         win = ReplyWindow(self, self._conv_id, self._width, self._margin_top,
                           reposition_fd=self._reposition_fd,
                           hold_fd=self._hold_fd,
                           position=self._position,
                           margin_left=self._margin_left,
                           margin_right=self._margin_right,
-                          colors=colors)
+                          colors=colors,
+                          font=font)
         win.present()
 
 

@@ -11,7 +11,7 @@ import time
 log = logging.getLogger(__name__)
 
 
-def capture_one_shot(config: dict, on_interim=None) -> str:
+def capture_one_shot(config: dict, on_interim=None, cancel_event=None) -> str:
     """Record speech from the microphone and return the transcription.
 
     Opens the microphone, records audio frames with VAD-based silence
@@ -28,6 +28,8 @@ def capture_one_shot(config: dict, on_interim=None) -> str:
                 optionally ``max_capture_seconds``.
         on_interim: Optional callback ``(text: str) -> None`` called with
                     each interim transcription (~every 2s).
+        cancel_event: Optional ``threading.Event`` — when set, capture
+                      stops immediately and returns empty string.
 
     Returns:
         Transcribed text string, or empty string if no speech detected.
@@ -51,12 +53,14 @@ def capture_one_shot(config: dict, on_interim=None) -> str:
 
     audio.start()
     try:
-        return _do_capture(audio, detector, whisper_config, config, on_interim)
+        return _do_capture(audio, detector, whisper_config, config, on_interim,
+                           cancel_event)
     finally:
         audio.stop()
 
 
-def _do_capture(audio, detector, whisper_config: dict, config: dict, on_interim=None) -> str:
+def _do_capture(audio, detector, whisper_config: dict, config: dict,
+                on_interim=None, cancel_event=None) -> str:
     """Core capture loop: read frames, detect silence, transcribe.
 
     Separated from ``capture_one_shot`` so that audio.stop() is always
@@ -81,6 +85,11 @@ def _do_capture(audio, detector, whisper_config: dict, config: dict, on_interim=
 
     try:
         while True:
+            if cancel_event is not None and cancel_event.is_set():
+                log.info("Mic capture cancelled")
+                audio.end_capture()
+                return ""
+
             raw, is_speech = audio.read_vad_frame()
             detector.on_voice_activity(is_speech)
 

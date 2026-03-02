@@ -40,50 +40,64 @@ log = logging.getLogger(__name__)
 # CSS
 # ---------------------------------------------------------------------------
 
-CSS = """
-window {
+def _rgb(color: str) -> str:
+    """Return '#RRGGBB' from '#RRGGBB' or '#RRGGBBAA'."""
+    if len(color) == 9:  # #RRGGBBAA
+        return color[:7]
+    return color
+
+
+def _build_css(colors: dict) -> str:
+    bg = _rgb(colors.get("background", "#1a1b26"))
+    fg = _rgb(colors.get("foreground", "#c0caf5"))
+    accent = _rgb(colors.get("user_accent", "#a07048"))
+    border = _rgb(colors.get("border", "#414868"))
+
+    return f"""
+window {{
     background-color: transparent;
-}
-window.background {
+}}
+window.background {{
     background-color: transparent;
-}
-.input-container {
-    background-color: alpha(@window_bg_color, 0.92);
+}}
+.input-container {{
+    background-color: alpha({bg}, 0.92);
     border-radius: 16px;
-    border: 1px solid alpha(@accent_color, 0.25);
+    border: 1px solid alpha({accent}, 0.25);
     padding: 0;
-}
-.input-title {
+}}
+.input-title {{
     font-weight: bold;
     padding: 14px 0 8px 0;
-    color: @window_fg_color;
-}
-.input-listbox {
+    color: {fg};
+}}
+.input-listbox {{
     background: transparent;
     border-radius: 0;
-}
-.input-listbox row {
+}}
+.input-listbox row {{
     border-radius: 8px;
     margin: 2px 8px;
-}
-.input-listbox row:selected {
-    background-color: alpha(@accent_color, 0.15);
-}
-.input-textview {
-    background-color: alpha(@window_fg_color, 0.04);
+}}
+.input-listbox row:selected {{
+    background-color: alpha({accent}, 0.15);
+}}
+.input-textview {{
+    background-color: alpha({fg}, 0.04);
     border-radius: 10px;
-    border: 1px solid alpha(@accent_color, 0.4);
+    border: 1px solid alpha({accent}, 0.4);
     padding: 8px;
-    caret-color: @accent_color;
-}
-.input-textview:focus {
-    border-color: @accent_color;
-    box-shadow: 0 0 0 1px alpha(@accent_color, 0.3);
-}
-.input-hint {
+    caret-color: {accent};
+    color: {fg};
+}}
+.input-textview:focus {{
+    border-color: {accent};
+    box-shadow: 0 0 0 1px alpha({accent}, 0.3);
+}}
+.input-hint {{
     font-size: 0.8em;
-    color: alpha(@window_fg_color, 0.35);
-}
+    color: alpha({fg}, 0.35);
+}}
 """
 
 # ---------------------------------------------------------------------------
@@ -201,9 +215,11 @@ class AsideInputWindow(Gtk.Window):
             self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
         )
 
-        # CSS
-        css_text = CSS
-        font = config.get("input", {}).get("font", "")
+        # CSS — use overlay colors for consistency
+        overlay_cfg = config.get("overlay", {})
+        colors = overlay_cfg.get("colors", {})
+        css_text = _build_css(colors)
+        font = overlay_cfg.get("font", "") or config.get("input", {}).get("font", "")
         if font:
             from gi.repository import Pango
             desc = Pango.FontDescription.from_string(font)
@@ -407,6 +423,7 @@ class AsideInput(Adw.Application):
     def __init__(self) -> None:
         super().__init__(application_id="dev.aside.input")
         self._config = load_config()
+        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
 
     def do_activate(self) -> None:
         """Create and present the input window."""

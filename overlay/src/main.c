@@ -129,15 +129,15 @@ static void spawn_reply_input(const struct overlay_config *cfg,
         close(holdpipe[0]);
         char hold_fd_str[16];
         snprintf(hold_fd_str, sizeof(hold_fd_str), "%d", holdpipe[1]);
-        execl(bin, "aside-reply",
-              "--conv-id", current_conv_id,
-              "--width", width_str,
-              "--margin-top", margin_str,
-              "--position", cfg->position,
-              "--margin-left", margin_left_str,
-              "--margin-right", margin_right_str,
-              "--hold-fd", hold_fd_str,
-              NULL);
+        execlp(bin, "aside-reply",
+               "--conv-id", current_conv_id,
+               "--width", width_str,
+               "--margin-top", margin_str,
+               "--position", cfg->position,
+               "--margin-left", margin_left_str,
+               "--margin-right", margin_right_str,
+               "--hold-fd", hold_fd_str,
+               NULL);
         _exit(1);
     } else if (pid > 0) {
         close(holdpipe[1]);
@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
                                 if (access(aside_bin, X_OK) != 0)
                                     snprintf(aside_bin, sizeof(aside_bin), "aside");
                             }
-                            execl(aside_bin, "aside", "open", current_conv_id, NULL);
+                            execlp(aside_bin, "aside", "open", current_conv_id, NULL);
                             _exit(1);
                         }
                         do_dismiss = true;

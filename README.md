@@ -16,7 +16,7 @@ Bind `aside query --mic` to a hotkey and start talking. Aside detects silence an
 
 ## tools
 
-aside ships with shell, memory, and web search built in. drop a Python file with a `TOOL_SPEC` + `run()` into a plugins directory and the daemon picks it up automatically.
+aside ships with a memory tool built in. drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically. see `examples/tools/` for reference implementations.
 
 the tool system is flexible enough to do real work — spawn background workers, run scripts, hit APIs, whatever you need.
 
@@ -92,6 +92,16 @@ accent = "#7aa2f7ff"
 voice, TTS, model, plugins, and storage are all configurable too — see [config reference](docs/configuration.md).
 
 ## install
+
+### arch linux (AUR)
+
+```bash
+yay -S aside
+aside set-key anthropic sk-ant-...
+systemctl --user enable --now aside-daemon aside-overlay
+```
+
+### manual
 
 ```bash
 git clone https://github.com/scottstav/aside.git

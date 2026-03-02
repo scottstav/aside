@@ -22,21 +22,21 @@ overlay:
 	ninja -C $(BUILDDIR)
 
 # ---------------------------------------------------------------------------
-# Fast dev reinstall — reuses existing venv, restarts services
+# Fast dev reinstall — copies into AUR-installed package, restarts services
 # ---------------------------------------------------------------------------
+SITE := /opt/aside/lib/python3.14/site-packages/aside
+
 dev: overlay
-	$(VENV)/bin/pip install -e .
-	@install -d $(BIN)
-	@for cmd in aside aside-input aside-reply aside-status; do \
-		src="$(VENV)/bin/$$cmd"; \
-		if [ -f "$$src" ]; then \
-			ln -sf "$$src" "$(BIN)/$$cmd"; \
-		fi; \
-	done
-	install -Dm755 $(BUILDDIR)/overlay/aside-overlay $(BIN)/aside-overlay
-	install -Dm644 data/aside-daemon.service $(SYSTEMD)/aside-daemon.service
-	install -Dm644 data/aside-overlay.service $(SYSTEMD)/aside-overlay.service
-	systemctl --user daemon-reload
+	@if [ ! -d /opt/aside ]; then \
+		echo "Error: /opt/aside not found — install the AUR package first"; \
+		exit 1; \
+	fi
+	sudo cp -a aside/*.py $(SITE)/
+	sudo cp -a aside/input/window.py $(SITE)/input/
+	sudo cp -a aside/reply/window.py $(SITE)/reply/
+	sudo cp -a aside/tools/*.py $(SITE)/tools/
+	sudo cp -a aside/voice/*.py $(SITE)/voice/
+	sudo install -m755 $(BUILDDIR)/overlay/aside-overlay /opt/aside/bin/aside-overlay
 	systemctl --user restart aside-daemon aside-overlay
 	@echo "==> Dev reinstall done"
 

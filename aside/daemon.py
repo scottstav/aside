@@ -222,6 +222,8 @@ class Daemon:
         # Query cancel state
         self._cancel_event: threading.Event | None = None
         self._cancel_lock = threading.Lock()
+        # Mic capture cancel state (separate from query cancel)
+        self._mic_cancel: threading.Event | None = None
 
     # ------------------------------------------------------------------
     # Tool loading (lazy)
@@ -258,6 +260,9 @@ class Daemon:
             if self._cancel_event is not None:
                 self._cancel_event.set()
             self._cancel_event = cancel_event
+        # Stop TTS from any previous query immediately
+        if self.tts is not None:
+            self.tts.stop()
 
         def _run():
             try:
@@ -294,13 +299,17 @@ class Daemon:
         log.info("Query thread started (conv=%s)", conv_label)
 
     def cancel_query(self) -> None:
-        """Cancel the currently running query."""
+        """Cancel the currently running query, mic capture, and TTS."""
         with self._cancel_lock:
             if self._cancel_event is not None:
                 self._cancel_event.set()
                 log.info("Query cancelled")
             else:
                 log.info("No query to cancel")
+            if self._mic_cancel is not None:
+                self._mic_cancel.set()
+        if self.tts is not None:
+            self.tts.stop()
 
     # ------------------------------------------------------------------
     # Socket handler
@@ -326,6 +335,14 @@ class Daemon:
 
             if action == "query":
                 if msg.get("mic"):
+                    # Cancel any running query/TTS/mic before starting
+                    self.cancel_query()
+
+                    # Create a cancel event for this mic capture
+                    mic_cancel = threading.Event()
+                    with self._cancel_lock:
+                        self._mic_cancel = mic_cancel
+
                     # One-shot voice capture in a thread (blocking call)
                     raw_conv = msg.get("conversation_id")
                     if raw_conv == "__new__":
@@ -333,7 +350,7 @@ class Daemon:
                     else:
                         conv_id = raw_conv
 
-                    def _mic_capture():
+                    def _mic_capture(cancel=mic_cancel):
                         from aside.query import _connect_overlay, _overlay_send, _overlay_close
 
                         overlay_sock = None
@@ -356,6 +373,7 @@ class Daemon:
                             text = capture_one_shot(
                                 self.config.get("voice", {}),
                                 on_interim=on_interim,
+                                cancel_event=cancel,
                             )
 
                             if text:

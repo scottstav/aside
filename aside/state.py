@@ -97,10 +97,9 @@ class ConversationStore:
             pass
         return None
 
-    @staticmethod
-    def transcript_path(conv_id: str) -> Path:
-        """Return the path to the live markdown transcript for a conversation."""
-        return Path(f"/tmp/aside-{conv_id[:8]}.md")
+    def transcript_path(self, conv_id: str) -> Path:
+        """Return the path to the markdown transcript for a conversation."""
+        return self.directory / f"{conv_id}.md"
 
     @staticmethod
     def _extract_user_text(content) -> str:
