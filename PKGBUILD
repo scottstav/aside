@@ -13,9 +13,14 @@ depends=(
     'json-c'
     'pipewire'
     'gtk4'
+    'libadwaita'
     'gtk4-layer-shell'
     'portaudio'
     'python'
+    'python-numpy'
+    'python-gobject'
+    'python-cairo'
+    'python-soundfile'
     'gobject-introspection'
 )
 makedepends=(
@@ -42,18 +47,18 @@ build() {
     cd "$srcdir/$pkgname-$pkgver"
     python -m build --wheel --no-isolation
 
-    # Create fully isolated venv
-    python -m venv "$srcdir/venv"
+    # Create venv with access to system site-packages so distro-provided
+    # C extensions (numpy, PyGObject, pycairo) are used directly.
+    python -m venv --system-site-packages "$srcdir/venv"
     local _pip="$srcdir/venv/bin/pip"
 
     # Install aside (no-deps: we install deps explicitly below)
     "$_pip" install --no-cache-dir --no-deps \
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
-    # Install all remaining Python deps
+    # Install remaining Python deps (numpy/PyGObject/pycairo come from system)
     "$_pip" install --no-cache-dir \
-        litellm faster-whisper sounddevice soundfile \
-        numpy webrtcvad-wheels PyGObject pycairo
+        litellm faster-whisper sounddevice webrtcvad-wheels
 }
 
 package() {
