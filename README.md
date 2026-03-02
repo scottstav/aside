@@ -6,10 +6,9 @@ a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, a
 
 ![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
 
-- **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel, middle click to mute TTS if applicable
-- **voice** — STT via faster-whisper, TTS via Piper. talk to it, it talks back.
-- **actions bar** — mic, transcript, and reply buttons after every response.
-- **input popup** — GTK4 window with conversation history. continue one or start fresh.
+- **overlay** — C layer-shell surface. Streams tokens in real time. Reply or open full transcript with inline actions. Left click to dismiss, right-click to cancel query, middle click to mute TTS. **Very** customizable.
+- **voice** — STT via faster-whisper, TTS via Piper (optional add-on).
+- **input popup** — GTK4 window with conversation history. Continue one or start fresh.
 
 
 Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query. 
@@ -73,7 +72,7 @@ aside cancel
 
 ## theming and customization
 
-Highly configurable via `~/.config/aside/config.toml`:
+Highly configurable via `~/.config/aside/config.toml`, overlay position, colors, fonts, size.
 
 ```toml
 [model]
@@ -89,6 +88,7 @@ archive_dir = "~/Dropbox/LLM/Chats"
 dirs = ["~/.config/aside/tools"]
 
 [overlay]
+position = "top-center"
 font = "Iosevka 12"
 max_lines = 5
 corner_radius = 8
@@ -96,7 +96,6 @@ border_width = 1
 accent_height = 4
 scroll_duration = 200
 fade_duration = 400
-position = "top-center"
 width = 450
 margin_top = 5
 padding_top = 2.5
