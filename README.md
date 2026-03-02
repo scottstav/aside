@@ -6,7 +6,7 @@ a desktop LLM assistant for Wayland. ask questions, get answers, launch tools, a
 
 ![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
 
-- **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel.
+- **overlay** — C layer-shell surface. streams tokens in real time, auto-dismisses. hover to keep it, right-click to cancel, middle click to mute TTS if applicable
 - **voice** — STT via faster-whisper, TTS via Piper. talk to it, it talks back.
 - **actions bar** — mic, transcript, and reply buttons after every response.
 - **input popup** — GTK4 window with conversation history. continue one or start fresh.
