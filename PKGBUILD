@@ -1,6 +1,6 @@
 # Maintainer: Scott Stavropoulos <scottstav@gmail.com>
 pkgname=aside
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 _piperver=1.4.1
 pkgdesc="Wayland-native LLM desktop assistant"
