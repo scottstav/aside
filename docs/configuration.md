@@ -38,15 +38,15 @@ system_prompt = ""
 ```toml
 [input]
 terminal = "foot -e"
+font = ""
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `terminal` | `foot -e` | Terminal emulator used to launch the input popup. Must accept `-e` to run a command. Works with `foot`, `alacritty`, `kitty`, etc. |
+| `font` | `""` | Font for the input window text area. Empty = inherit from overlay font |
 
 ## Voice
-
-Requires `make install-extras-voice` for STT dependencies.
 
 ```toml
 [voice]
@@ -57,7 +57,6 @@ smart_silence = true
 silence_timeout = 2.5
 no_speech_timeout = 3.0
 force_send_phrases = ["send it", "that's it"]
-max_capture_seconds = 60
 ```
 
 | Option | Default | Description |
@@ -69,31 +68,29 @@ max_capture_seconds = 60
 | `silence_timeout` | `2.5` | Base seconds of silence before auto-sending |
 | `no_speech_timeout` | `3.0` | Seconds without any detected speech before cancelling capture |
 | `force_send_phrases` | `["send it", "that's it"]` | Phrases that trigger an immediate send, bypassing silence detection |
-| `max_capture_seconds` | `60` | Hard maximum recording duration |
 
 ## Text-to-Speech
 
-Requires `piper-tts` (`pip install piper-tts`) and a voice model (`.onnx` file).
-Download voices from [Piper voices](https://huggingface.co/rhasspy/piper-voices).
+TTS is optional. Install it with:
+
+```bash
+sudo aside enable-tts
+```
+
+This installs `piper-tts` into the aside venv and downloads a default English voice model. To remove it later: `sudo aside disable-tts`.
 
 ```toml
 [tts]
 enabled = false
-model = "/path/to/en_US-lessac-medium.onnx"
+model = ""
 speed = 1.0
-
-[tts.filter]
-skip_code_blocks = true
-skip_urls = true
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `false` | Enable TTS output via Piper |
-| `model` | `""` | Path to Piper `.onnx` voice model file |
-| `speed` | `1.0` | Speech playback speed multiplier |
-| `filter.skip_code_blocks` | `true` | Don't read code blocks aloud |
-| `filter.skip_urls` | `true` | Don't read URLs aloud |
+| `model` | `""` | Path to a Piper `.onnx` voice model file. Empty = use the default model installed by `enable-tts`. Download additional voices from [Piper voices](https://huggingface.co/rhasspy/piper-voices) |
+| `speed` | `1.0` | Speech playback speed multiplier (>1 = faster, <1 = slower) |
 
 ## Overlay
 
@@ -103,8 +100,12 @@ Controls the floating overlay that displays responses.
 [overlay]
 font = "Sans 13"
 width = 600
-max_lines = 40
+max_lines = 5
+position = "top-center"
 margin_top = 10
+margin_right = 0
+margin_bottom = 0
+margin_left = 0
 padding_x = 20
 padding_y = 16
 corner_radius = 12
@@ -126,8 +127,12 @@ accent = "#7aa2f7ff"
 |--------|---------|-------------|
 | `font` | `Sans 13` | Pango font description for overlay text |
 | `width` | `600` | Overlay width in pixels |
-| `max_lines` | `40` | Maximum visible lines before the overlay scrolls |
-| `margin_top` | `10` | Distance from the top of the screen in pixels |
+| `max_lines` | `5` | Maximum visible lines before the overlay scrolls |
+| `position` | `top-center` | Overlay position on screen: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
+| `margin_top` | `10` | Top margin in pixels |
+| `margin_right` | `0` | Right margin in pixels |
+| `margin_bottom` | `0` | Bottom margin in pixels |
+| `margin_left` | `0` | Left margin in pixels |
 | `padding_x` | `20` | Horizontal padding inside the overlay |
 | `padding_y` | `16` | Vertical padding inside the overlay |
 | `corner_radius` | `12` | Border corner radius in pixels |
@@ -157,40 +162,25 @@ All colors are RGBA hex strings. The last two hex digits control alpha (transpar
 
 ```toml
 [storage]
-conversations_dir = ""
 archive_dir = ""
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `conversations_dir` | `""` | Custom path for conversation files. Empty = `$XDG_STATE_HOME/aside/conversations` |
-| `archive_dir` | `""` | Custom path for archived conversations. Empty = `$XDG_STATE_HOME/aside/archive` |
+| `archive_dir` | `""` | Custom path for conversation files. Empty = `$XDG_STATE_HOME/aside/conversations` |
 
-## Plugins
+## Tools
 
 ```toml
-[plugins]
+[tools]
 dirs = []
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `dirs` | `[]` | Additional directories to scan for plugin files. See [Plugins](plugins.md) for the plugin API |
+| `dirs` | `[]` | Additional directories to scan for tool plugin files. See [Plugins](plugins.md) for the plugin API |
 
-Built-in tools are always loaded from `aside/tools/` inside the package.
-
-## Notifications
-
-```toml
-[notifications]
-reply_command = ""
-listen_command = ""
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `reply_command` | `""` | Shell command to run when a response arrives (e.g. a notification sound) |
-| `listen_command` | `""` | Shell command to run when voice listening starts |
+Built-in tools are always loaded from `aside/tools/` inside the package. User tools in `~/.config/aside/tools/` are also loaded automatically.
 
 ## Status
 
@@ -287,8 +277,8 @@ Environment=ANTHROPIC_API_KEY=sk-...
 | `~/.config/aside/config.toml` | Main configuration file |
 | `~/.config/aside/env` | API key environment file (loaded by systemd) |
 | `~/.config/aside/overlay.conf` | Generated overlay config (written by daemon on startup) |
+| `~/.config/aside/tools/` | User tool plugins |
 | `~/.local/state/aside/conversations/` | Conversation JSON files |
-| `~/.local/state/aside/archive/` | Archived conversations |
 | `~/.local/state/aside/usage.jsonl` | Token usage log |
 | `~/.local/state/aside/status.json` | Current daemon status (read by waybar module) |
 | `$XDG_RUNTIME_DIR/aside.sock` | Daemon Unix socket |
