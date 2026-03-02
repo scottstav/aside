@@ -317,6 +317,7 @@ def stream_response(
         "max_tokens": MAX_TOKENS,
         "stream": True,
         "stream_options": {"include_usage": True},
+        "timeout": 30,
     }
     if tools:
         api_kwargs["tools"] = tools

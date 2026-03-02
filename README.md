@@ -99,6 +99,9 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 yay -S aside
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
+
+# optional: text-to-speech (downloads ~60MB voice model)
+sudo aside enable-tts
 ```
 
 ### manual
@@ -109,6 +112,9 @@ cd aside
 make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
+
+# optional: text-to-speech
+sudo aside enable-tts
 ```
 
 ## docs
