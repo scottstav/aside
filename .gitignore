@@ -19,3 +19,17 @@ builddir/
 .vscode/
 *.swp
 overlay/.cache/
+
+# makepkg / AUR build artifacts
+*.pkg.tar.zst
+*.tar.gz
+src/
+pkg/
+piper1-gpl/
+
+# ONNX models
+*.onnx
+*.onnx.json
+
+# Misc
+*.log
