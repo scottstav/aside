@@ -1,9 +1,7 @@
 #!/bin/bash
 # Provision a fresh Arch+Sway VM for aside testing.
 # Run once after cloud-init finishes. Assumes arch-sway vmt manifest.
-#
-# Usage (from host):
-#   vmt ssh arch-sway -- "bash /tmp/setup-arch.sh"
+# Expects ~/aside to already contain the source tree (see vm-test.sh).
 set -euo pipefail
 
 echo "=== aside VM setup (Arch + Sway) ==="
@@ -12,14 +10,24 @@ echo "=== aside VM setup (Arch + Sway) ==="
 echo "--- Updating system ---"
 sudo pacman -Syu --noconfirm
 
-# ── Clone and build ───────────────────────────────────────────────────────
-echo "--- Cloning aside ---"
-rm -rf ~/aside
-git clone https://github.com/scottstav/aside.git ~/aside
+# ── Build ─────────────────────────────────────────────────────────────────
 cd ~/aside
 
+# makepkg expects a tarball named $pkgname-$pkgver.tar.gz containing a
+# top-level directory $pkgname-$pkgver/. Create it from the local tree
+# so makepkg uses our code instead of downloading from GitHub.
+_pkgver=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
+echo "--- Creating local source tarball (aside-${_pkgver}) ---"
+mkdir -p src
+ln -sfn "$(pwd)" "src/aside-${_pkgver}"
+tar czf "aside-${_pkgver}.tar.gz" \
+    --exclude=.git --exclude=.venv --exclude=builddir \
+    --exclude=src --exclude='*.pkg.tar.zst' --exclude='*.tar.gz' \
+    --exclude=pkg --exclude=__pycache__ --exclude='*.egg-info' \
+    -C src "aside-${_pkgver}"
+
 echo "--- Building package (makepkg -si) ---"
-makepkg -si --noconfirm
+makepkg -si --noconfirm --skipchecksums
 
 # ── Runtime extras (not in PKGBUILD depends) ──────────────────────────────
 # xdg-utils: aside open uses xdg-open
@@ -34,22 +42,27 @@ xdg-mime default mousepad.desktop text/x-markdown
 xdg-mime default mousepad.desktop text/plain
 
 # ── API key ───────────────────────────────────────────────────────────────
-mkdir -p ~/.config/aside
-cat > ~/.config/aside/env << 'ENV'
-ANTHROPIC_API_KEY=your-key-here
-ENV
+# Injected by vm-test.sh from host env. Skip if already present.
+if [ ! -f ~/.config/aside/env ]; then
+    echo "WARNING: No API key found. Run on host: vmt ssh $VM -- \"mkdir -p ~/.config/aside && echo ANTHROPIC_API_KEY=\$ANTHROPIC_API_KEY > ~/.config/aside/env\""
+fi
 
 # ── Wayland display for SPICE testing ─────────────────────────────────────
-# The vmt cloud-init starts a headless test-compositor (wayland-1) for
-# screenshot testing. The DRM sway session (SPICE viewer) gets a higher
-# number. Point user services at the DRM display so the overlay and GTK
-# windows appear in the SPICE session you're actually looking at.
-_drm_display=$(ls /run/user/$(id -u)/wayland-* 2>/dev/null \
-    | grep -v lock | sort -V | tail -1 | xargs basename)
-if [ -n "$_drm_display" ]; then
-    echo "--- Using Wayland display: $_drm_display ---"
-    systemctl --user set-environment WAYLAND_DISPLAY="$_drm_display"
-fi
+# Cloud-init starts a headless compositor (wayland-1). The DRM sway session
+# (SPICE viewer) creates a higher-numbered socket. Wait for it so the
+# overlay appears in the session you're actually looking at.
+echo "--- Waiting for DRM Wayland display ---"
+for _i in $(seq 1 30); do
+    _drm_display=$(ls /run/user/$(id -u)/wayland-* 2>/dev/null \
+        | grep -v lock | sort -V | tail -1 | xargs basename)
+    # wayland-0 or wayland-1 is the headless compositor; DRM session is higher
+    if [ -n "$_drm_display" ] && [ "$_drm_display" != "wayland-0" ] && [ "$_drm_display" != "wayland-1" ]; then
+        break
+    fi
+    sleep 1
+done
+echo "--- Using Wayland display: ${_drm_display:-wayland-1} ---"
+systemctl --user set-environment WAYLAND_DISPLAY="${_drm_display:-wayland-1}"
 
 # ── Start services ────────────────────────────────────────────────────────
 echo "--- Starting aside services ---"

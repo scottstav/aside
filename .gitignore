@@ -31,5 +31,8 @@ piper1-gpl/
 *.onnx
 *.onnx.json
 
+# Secrets
+.env
+
 # Misc
 *.log

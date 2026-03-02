@@ -19,6 +19,11 @@ depends=(
     'python'
     'python-gobject'
     'python-cairo'
+    'python-tiktoken'
+    'python-openai'
+    'python-pydantic'
+    'python-aiohttp'
+    'python-httpx'
     'gobject-introspection'
 )
 makedepends=(
@@ -32,10 +37,8 @@ makedepends=(
     'wayland-protocols'
 )
 optdepends=(
-    'grim: screenshot plugin'
-    'slurp: screenshot region selection'
-    'aside enable-stt: speech-to-text (faster-whisper, ~100MB)'
-    'aside enable-tts: text-to-speech (piper-tts)'
+    # STT: sudo aside enable-stt (faster-whisper, ~100MB)
+    # TTS: sudo aside enable-tts (piper-tts)
 )
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
@@ -56,7 +59,9 @@ build() {
     "$_pip" install --no-cache-dir --no-deps \
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
-    # Install remaining Python deps (numpy/PyGObject/pycairo come from system)
+    # Install litellm — heavy deps (tiktoken, openai, pydantic, aiohttp, httpx)
+    # come from system packages via --system-site-packages, so pip only pulls
+    # the lightweight remainder.
     "$_pip" install --no-cache-dir litellm
 }
 

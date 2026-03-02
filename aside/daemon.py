@@ -97,8 +97,9 @@ except ImportError:
     TTSPipeline = None  # type: ignore[misc,assignment]
 
 try:
+    from aside.voice.audio import AudioPipeline  # noqa: F401 — forces numpy/sounddevice import
     from aside.voice.listener import capture_one_shot
-except ImportError:
+except (ImportError, RuntimeError):
     capture_one_shot = None  # type: ignore[misc,assignment]
 
 

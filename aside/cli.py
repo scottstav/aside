@@ -290,9 +290,9 @@ def _cmd_enable_tts(args: argparse.Namespace) -> None:
         print("Error: enable-tts must be run as root (sudo aside enable-tts)", file=sys.stderr)
         sys.exit(1)
 
-    # Install piper-tts
+    # Install piper-tts + sounddevice (playback)
     print("Installing piper-tts...")
-    ret = subprocess.run([_VENV_PIP, "install", "piper-tts"], check=False)
+    ret = subprocess.run([_VENV_PIP, "install", "piper-tts", "sounddevice"], check=False)
     if ret.returncode != 0:
         print("Error: pip install piper-tts failed", file=sys.stderr)
         sys.exit(1)
@@ -324,11 +324,12 @@ def _cmd_disable_tts(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     print("Uninstalling piper-tts...")
-    subprocess.run([_VENV_PIP, "uninstall", "-y", "piper-tts"], check=False)
+    subprocess.run([_VENV_PIP, "uninstall", "-y", "piper-tts", "sounddevice"], check=False)
     print("TTS disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 
-_STT_PACKAGES = ["faster-whisper", "webrtcvad-wheels", "sounddevice", "numpy"]
+_STT_PIP_PACKAGES = ["faster-whisper", "webrtcvad-wheels"]
+_STT_SYSTEM_PACKAGES = ["python-numpy"]
 
 
 def _cmd_enable_stt(args: argparse.Namespace) -> None:
@@ -337,8 +338,14 @@ def _cmd_enable_stt(args: argparse.Namespace) -> None:
         print("Error: enable-stt must be run as root (sudo aside enable-stt)", file=sys.stderr)
         sys.exit(1)
 
+    print("Installing system packages...")
+    ret = subprocess.run(["pacman", "-S", "--noconfirm", "--needed"] + _STT_SYSTEM_PACKAGES, check=False)
+    if ret.returncode != 0:
+        print("Error: pacman install failed", file=sys.stderr)
+        sys.exit(1)
+
     print("Installing STT packages...")
-    ret = subprocess.run([_VENV_PIP, "install"] + _STT_PACKAGES, check=False)
+    ret = subprocess.run([_VENV_PIP, "install"] + _STT_PIP_PACKAGES, check=False)
     if ret.returncode != 0:
         print("Error: pip install failed", file=sys.stderr)
         sys.exit(1)
@@ -353,7 +360,7 @@ def _cmd_disable_stt(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     print("Uninstalling STT packages...")
-    subprocess.run([_VENV_PIP, "uninstall", "-y", "faster-whisper", "webrtcvad-wheels", "sounddevice"], check=False)
+    subprocess.run([_VENV_PIP, "uninstall", "-y", "faster-whisper", "webrtcvad-wheels"], check=False)
     print("STT disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 

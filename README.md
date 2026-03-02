@@ -7,7 +7,7 @@ A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, a
 ![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
 
 - **overlay** — C layer-shell surface. Streams tokens in real time. Reply or open full transcript with inline actions. Left click to dismiss, right-click to cancel query, middle click to mute TTS. **Very** customizable.
-- **voice** — STT via faster-whisper, TTS via Piper (optional add-on).
+- **voice** — STT via faster-whisper, TTS via Piper (optional add-ons).
 - **input popup** — GTK4 window with conversation history. Continue one or start fresh.
 
 
@@ -132,8 +132,9 @@ yay -S aside
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
 
-# optional: text-to-speech (downloads ~60MB voice model)
-sudo aside enable-tts
+# optional add-ons
+sudo aside enable-stt   # speech-to-text (faster-whisper, ~100MB)
+sudo aside enable-tts   # text-to-speech (piper-tts, ~60MB voice model)
 ```
 
 ### manual
@@ -145,8 +146,9 @@ make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
 
-# optional: text-to-speech
-sudo aside enable-tts
+# optional add-ons
+sudo aside enable-stt   # speech-to-text
+sudo aside enable-tts   # text-to-speech
 ```
 
 ## docs
