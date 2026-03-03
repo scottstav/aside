@@ -43,7 +43,7 @@ optdepends=(
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
 )
-sha256sums=('SKIP')
+sha256sums=('10f0f07cfe525db848ed0f78aa3e4bdb5983c698f89f60574566647660c006df')
 
 build() {
     # Build aside wheel (C overlay + Python package)
