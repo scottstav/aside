@@ -6,7 +6,7 @@ An annotated example is included at [`data/config.toml.example`](../data/config.
 
 ## `[model]`
 
-LLM model selection. Uses [LiteLLM](https://docs.litellm.ai/) provider/model format.
+LLM model selection. Uses [LiteLLM](https://docs.litellm.ai/) provider/model format. If a model is set through the cli while the daemon is running, it will be changed for that daemon instance without a restart. A restart will revert back to this config setting.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -28,7 +28,7 @@ Speech-to-text capture via faster-whisper.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | `false` | Enable voice input |
+| `enabled` | bool | `false` | Enable voice input, togglable via cli without daemon restart. Reverts to this setting on restart. |
 | `stt_model` | string | `"base"` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large` |
 | `stt_device` | string | `"cpu"` | Inference device: `"cpu"` or `"cuda"` |
 | `smart_silence` | bool | `true` | Automatically end recording after silence (VAD-based) |
