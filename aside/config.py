@@ -18,7 +18,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "system_prompt": "",
     },
     "input": {
-        "terminal": "foot -e",
         "font": "",
     },
     "voice": {

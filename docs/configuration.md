@@ -19,7 +19,6 @@ Input popup window settings.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `terminal` | string | `"foot -e"` | Terminal emulator command. Must accept `-e` to run a command |
 | `font` | string | `""` | Pango font description for the input popup. Falls back to `overlay.font` when empty |
 
 ## `[voice]`
