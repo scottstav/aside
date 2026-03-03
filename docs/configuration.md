@@ -28,8 +28,8 @@ Speech-to-text capture via faster-whisper.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable voice input, togglable via cli without daemon restart. Reverts to this setting on restart. |
-| `stt_model` | string | `"base"` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large` |
-| `stt_device` | string | `"cpu"` | Inference device: `"cpu"` or `"cuda"` |
+| `stt_model` | string | `"base"` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large`. The model is downloaded on first voice capture after a daemon start. Changing this requires a daemon restart. |
+| `stt_device` | string | `"cpu"` | Inference device: `"cpu"` or `"cuda"`. Changing this requires a daemon restart. |
 | `smart_silence` | bool | `true` | Adjust silence timeout based on transcript content. When on, waits less after complete sentences (1.5s) and longer after mid-sentence words like "the" or "and" (3.5s). When off, always waits exactly `silence_timeout`. |
 | `silence_timeout` | float | `2.5` | Seconds of silence before auto-sending the query |
 | `no_speech_timeout` | float | `3.0` | Seconds with no speech detected before cancelling |
