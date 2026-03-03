@@ -1,6 +1,6 @@
 # aside
 
-An LLM assistant for wlroots desktops that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
+An LLM assistant for Wayland desktops that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
@@ -126,6 +126,11 @@ filter = {skip_code_blocks = true, skip_urls = true}
 
 voice, TTS, model, plugins, and storage are all configurable too — see [config reference](docs/configuration.md).
 
+## requirements
+
+- **Wayland compositor with layer-shell support** — Sway, Hyprland, KDE Plasma 6+, or any compositor implementing `zwlr_layer_shell_v1`. GNOME is **not** supported (the overlay won't render; the input popup will fall back to a regular window).
+- **PipeWire** — required for audio (TTS playback and STT mic capture).
+
 ## install
 
 ### arch linux (AUR)
@@ -134,13 +139,63 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 yay -S aside
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
-
-# optional add-ons
-sudo aside enable-stt   # speech-to-text (faster-whisper, ~100MB)
-sudo aside enable-tts   # text-to-speech (piper-tts, ~60MB voice model)
 ```
 
+#### optional add-ons
+
+```bash
+# speech-to-text (faster-whisper, ~100MB model download)
+sudo aside enable-stt
+
+# text-to-speech (piper-tts, ~60MB voice model)
+sudo aside enable-tts
+```
+
+STT requires `pipewire` (provides `pw-record`) and `python-numpy` — both are already pulled in by the AUR package. TTS requires `portaudio` — also included.
+
 ### manual
+
+`make install` builds the C overlay and Python package into a venv at `~/.local/lib/aside/venv/`, then symlinks executables (`aside`, `aside-overlay`, `aside-input`, `aside-reply`) into `~/.local/bin/`. Make sure `~/.local/bin` is in your `PATH`.
+
+First install the build dependencies for your distro:
+
+<details>
+<summary>Fedora / RHEL</summary>
+
+```bash
+sudo dnf install -y gcc make meson ninja-build \
+  cairo-devel pango-devel json-c-devel wayland-devel wayland-protocols-devel \
+  python3-pip python3-devel \
+  gtk4-devel libadwaita-devel gtk4-layer-shell-devel \
+  gobject-introspection-devel python3-gobject python3-cairo
+```
+</details>
+
+<details>
+<summary>Ubuntu / Debian</summary>
+
+```bash
+sudo apt install -y gcc make meson ninja-build \
+  libcairo2-dev libpango1.0-dev libjson-c-dev libwayland-dev wayland-protocols \
+  python3-pip python3-dev python3-venv \
+  libgtk-4-dev libadwaita-1-dev libgtk4-layer-shell-dev \
+  libgirepository1.0-dev python3-gi python3-gi-cairo gir1.2-gtk-4.0
+```
+</details>
+
+<details>
+<summary>Arch (if not using the AUR package)</summary>
+
+```bash
+sudo pacman -S --noconfirm gcc make meson ninja \
+  cairo pango json-c wayland wayland-protocols \
+  python python-pip \
+  gtk4 libadwaita gtk4-layer-shell \
+  gobject-introspection python-gobject python-cairo
+```
+</details>
+
+Then build and install:
 
 ```bash
 git clone https://github.com/scottstav/aside.git
@@ -148,8 +203,23 @@ cd aside
 make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
+```
 
-# optional add-ons
+#### optional add-ons
+
+The enable commands pip-install the Python packages into aside's venv but rely on a few system libraries:
+
+| Add-on | Command | System deps |
+|--------|---------|-------------|
+| STT | `sudo aside enable-stt` | `pipewire-utils` (Fedora) · `pipewire` (Arch, Ubuntu) — for `pw-record` <br> `python3-numpy` (Fedora) · `python-numpy` (Arch) · `python3-numpy` (Ubuntu) |
+| TTS | `sudo aside enable-tts` | `portaudio` (Arch, Fedora) · `libportaudio2` (Ubuntu) |
+
+Install the system deps first, then run the enable command:
+
+```bash
+# example for Fedora:
+sudo dnf install -y pipewire-utils python3-numpy portaudio
+
 sudo aside enable-stt   # speech-to-text
 sudo aside enable-tts   # text-to-speech
 ```
