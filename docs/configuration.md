@@ -45,15 +45,6 @@ Text-to-speech playback via Piper.
 | `model` | string | `""` | Path to a Piper `.onnx` voice model. When empty, uses `/usr/share/piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx` |
 | `speed` | float | `1.0` | Speech rate multiplier. Values above 1 are faster, below 1 slower |
 
-## `[tts.filter]`
-
-Controls which parts of a response are read aloud.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `skip_code_blocks` | bool | `true` | Skip fenced code blocks |
-| `skip_urls` | bool | `true` | Skip URLs |
-
 ## `[overlay]`
 
 Wayland layer-shell overlay appearance and layout. Width is clamped to 200–2000 and max_lines to 1–50.

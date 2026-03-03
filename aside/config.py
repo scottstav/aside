@@ -33,10 +33,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "model": "",
         "speed": 1.0,
-        "filter": {
-            "skip_code_blocks": True,
-            "skip_urls": True,
-        },
     },
     "overlay": {
         "font": "Sans 13",

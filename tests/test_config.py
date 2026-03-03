@@ -46,7 +46,7 @@ class TestDefaultConfig:
         assert m["system_prompt"] == ""
 
     def test_input_defaults(self):
-        assert self.defaults["input"]["terminal"] == "foot -e"
+        assert self.defaults["input"]["font"] == ""
 
     def test_voice_defaults(self):
         v = self.defaults["voice"]
@@ -63,8 +63,6 @@ class TestDefaultConfig:
         assert t["enabled"] is False
         assert t["model"] == ""
         assert t["speed"] == 1.0
-        assert t["filter"]["skip_code_blocks"] is True
-        assert t["filter"]["skip_urls"] is True
 
     def test_overlay_defaults(self):
         o = self.defaults["overlay"]
@@ -119,12 +117,11 @@ class TestDeepMerge:
         assert result == {"a": 1, "b": 99}
 
     def test_nested_dict_merge(self):
-        base = {"tts": {"enabled": False, "filter": {"skip_code_blocks": True, "skip_urls": True}}}
-        override = {"tts": {"filter": {"skip_urls": False}}}
+        base = {"overlay": {"colors": {"background": "#aaa", "foreground": "#bbb"}}}
+        override = {"overlay": {"colors": {"foreground": "#fff"}}}
         result = self.cfg._deep_merge(base, override)
-        assert result["tts"]["enabled"] is False
-        assert result["tts"]["filter"]["skip_code_blocks"] is True
-        assert result["tts"]["filter"]["skip_urls"] is False
+        assert result["overlay"]["colors"]["background"] == "#aaa"
+        assert result["overlay"]["colors"]["foreground"] == "#fff"
 
     def test_non_dict_replaces(self):
         base = {"items": [1, 2, 3]}
@@ -176,17 +173,16 @@ class TestLoadConfig:
         assert result["model"]["system_prompt"] == ""  # preserved default
         assert result["tts"]["speed"] == 1.5
         assert result["tts"]["enabled"] is False  # preserved default
-        assert result["tts"]["filter"]["skip_code_blocks"] is True  # nested default preserved
 
     def test_merges_nested_overrides(self, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text(textwrap.dedent("""\
-            [tts.filter]
-            skip_urls = false
+            [overlay.colors]
+            foreground = "#ffffff"
         """))
         result = self.cfg.load_config(path=config_file)
-        assert result["tts"]["filter"]["skip_urls"] is False
-        assert result["tts"]["filter"]["skip_code_blocks"] is True
+        assert result["overlay"]["colors"]["foreground"] == "#ffffff"
+        assert result["overlay"]["colors"]["background"] == "#1a1b26e6"
 
     def test_xdg_config_home_resolution(self, tmp_path):
         """load_config(path=None) resolves via XDG_CONFIG_HOME."""
