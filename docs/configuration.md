@@ -30,7 +30,7 @@ Speech-to-text capture via faster-whisper.
 | `enabled` | bool | `false` | Enable voice input, togglable via cli without daemon restart. Reverts to this setting on restart. |
 | `stt_model` | string | `"base"` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large` |
 | `stt_device` | string | `"cpu"` | Inference device: `"cpu"` or `"cuda"` |
-| `smart_silence` | bool | `true` | Automatically end recording after silence (VAD-based) |
+| `smart_silence` | bool | `true` | Adjust silence timeout based on transcript content. When on, waits less after complete sentences (1.5s) and longer after mid-sentence words like "the" or "and" (3.5s). When off, always waits exactly `silence_timeout`. |
 | `silence_timeout` | float | `2.5` | Seconds of silence before auto-sending the query |
 | `no_speech_timeout` | float | `3.0` | Seconds with no speech detected before cancelling |
 | `force_send_phrases` | array | `["send it", "that's it"]` | Spoken phrases that trigger an immediate send |
