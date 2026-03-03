@@ -54,7 +54,7 @@ everything goes through the CLI, which makes it easy to script, integrate with p
 # models — auto-detects what's available based on your API keys
 aside models
 aside model set gemini/gemini-2.5-pro
-aside model exclude openai/o1
+aside model exclude openai/o1   # LiteLLM may identify available models that have actually been deprecated or are not "chat" models in which case they will error. Exclude them so they dont show in `aside models` list
 
 # querying — rapid follow-ups auto-attach to the same conversation
 aside query "what time is it in tokyo"
