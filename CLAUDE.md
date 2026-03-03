@@ -65,6 +65,7 @@ When asked to release, do all of these steps:
    cp PKGBUILD .SRCINFO /tmp/aside-aur/
    cd /tmp/aside-aur && git add -A && git commit -m "update to vX.Y.Z" && git push
    ```
+7. Install the new version locally: `yay -Sua --redownload aside`
 
 ## Important Notes
 
