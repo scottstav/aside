@@ -50,6 +50,22 @@ The daemon listens on `$XDG_RUNTIME_DIR/aside.sock`. The CLI sends queries there
 
 **Always run `make dev` after changing any code.** This rebuilds the overlay, reinstalls the Python package, and restarts the systemd services so the fix is live on the user's machine immediately. Never commit a fix without installing it first.
 
+## Releasing
+
+When asked to release, do all of these steps:
+
+1. Bump version in `pyproject.toml` and `PKGBUILD`
+2. Commit, push, tag (`vX.Y.Z`), push tag
+3. Create GitHub release with `gh release create` — put breaking changes and migration notes here
+4. Get the sha256sum of the new tarball: `curl -sL "https://github.com/scottstav/aside/archive/vX.Y.Z.tar.gz" | sha256sum`
+5. Update `PKGBUILD` sha256sum and `.SRCINFO` (version + source + sha256sum), commit, push
+6. Clone AUR repo, copy PKGBUILD and .SRCINFO, commit, push:
+   ```bash
+   git clone ssh://aur@aur.archlinux.org/aside.git /tmp/aside-aur
+   cp PKGBUILD .SRCINFO /tmp/aside-aur/
+   cd /tmp/aside-aur && git add -A && git commit -m "update to vX.Y.Z" && git push
+   ```
+
 ## Important Notes
 
 - The daemon starts via `aside daemon` (CLI subcommand) or `python3 -m aside.daemon`
