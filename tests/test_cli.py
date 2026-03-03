@@ -661,9 +661,11 @@ class TestOpenCommand:
         (conv_dir / f"{conv_id}.json").write_text(json.dumps(data))
 
     def test_open_creates_markdown(self, tmp_path):
-        """open should write a markdown transcript in the conversations dir."""
+        """open should write a markdown transcript in the archive dir."""
         conv_dir = tmp_path / "conversations"
         conv_dir.mkdir()
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
 
         self._make_conv(conv_dir, "aaaa-1111", "2026-02-27T10:00:00+00:00", [
             {"role": "user", "content": "Hello"},
@@ -675,10 +677,11 @@ class TestOpenCommand:
 
         with mock.patch("aside.cli.load_config", return_value={}):
             with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
-                with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
-                    _cmd_open(args)
+                with mock.patch("aside.cli.resolve_archive_dir", return_value=archive_dir):
+                    with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
+                        _cmd_open(args)
 
-        md_path = conv_dir / "aaaa-1111.md"
+        md_path = archive_dir / "aaaa-1111.md"
         assert md_path.exists()
 
         content = md_path.read_text()
@@ -692,6 +695,8 @@ class TestOpenCommand:
         """open should call xdg-open with the markdown file path."""
         conv_dir = tmp_path / "conversations"
         conv_dir.mkdir()
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
 
         self._make_conv(conv_dir, "bbbb-2222", "2026-02-27T10:00:00+00:00", [
             {"role": "user", "content": "Hello"},
@@ -702,24 +707,28 @@ class TestOpenCommand:
 
         with mock.patch("aside.cli.load_config", return_value={}):
             with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
-                with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
-                    _cmd_open(args)
+                with mock.patch("aside.cli.resolve_archive_dir", return_value=archive_dir):
+                    with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
+                        _cmd_open(args)
 
-        expected_md = str(conv_dir / "bbbb-2222.md")
+        expected_md = str(archive_dir / "bbbb-2222.md")
         mock_popen.assert_called_once_with(["xdg-open", expected_md])
 
     def test_open_not_found(self, tmp_path, capsys):
         """open should print an error and exit 1 if conversation not found."""
         conv_dir = tmp_path / "conversations"
         conv_dir.mkdir()
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
 
         args = mock.MagicMock()
         args.conversation_id = "nonexistent-id"
 
         with mock.patch("aside.cli.load_config", return_value={}):
             with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
-                with pytest.raises(SystemExit) as exc_info:
-                    _cmd_open(args)
+                with mock.patch("aside.cli.resolve_archive_dir", return_value=archive_dir):
+                    with pytest.raises(SystemExit) as exc_info:
+                        _cmd_open(args)
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
@@ -729,6 +738,8 @@ class TestOpenCommand:
         """Multimodal user content should extract text parts in the markdown."""
         conv_dir = tmp_path / "conversations"
         conv_dir.mkdir()
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
 
         self._make_conv(conv_dir, "cccc-3333", "2026-02-27T10:00:00+00:00", [
             {"role": "user", "content": [
@@ -743,10 +754,11 @@ class TestOpenCommand:
 
         with mock.patch("aside.cli.load_config", return_value={}):
             with mock.patch("aside.cli.resolve_conversations_dir", return_value=conv_dir):
-                with mock.patch("aside.cli.subprocess.Popen"):
-                    _cmd_open(args)
+                with mock.patch("aside.cli.resolve_archive_dir", return_value=archive_dir):
+                    with mock.patch("aside.cli.subprocess.Popen"):
+                        _cmd_open(args)
 
-        md_path = conv_dir / "cccc-3333.md"
+        md_path = archive_dir / "cccc-3333.md"
         content = md_path.read_text()
         assert "What is in this image?" in content
         assert "I see a cat." in content

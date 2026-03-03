@@ -237,9 +237,19 @@ class TestResolveHelpers:
         assert result == tmp_path / "aside" / "conversations"
 
     def test_resolve_conversations_dir_custom(self):
-        custom = {"storage": {"archive_dir": "/tmp/my-convos"}}
+        custom = {"storage": {"conversations_dir": "/tmp/my-convos"}}
         result = self.cfg.resolve_conversations_dir(custom)
         assert result == Path("/tmp/my-convos")
+
+    def test_resolve_archive_dir_default(self, tmp_path):
+        with mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(tmp_path)}):
+            result = self.cfg.resolve_archive_dir(self.cfg.DEFAULT_CONFIG)
+        assert result == tmp_path / "aside" / "archive"
+
+    def test_resolve_archive_dir_custom(self):
+        custom = {"storage": {"archive_dir": "/tmp/my-archive"}}
+        result = self.cfg.resolve_archive_dir(custom)
+        assert result == Path("/tmp/my-archive")
 
     def test_resolve_socket_path_with_runtime_dir(self, tmp_path):
         with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(tmp_path)}):

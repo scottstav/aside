@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from aside.config import load_config, load_excluded_models, resolve_conversations_dir, resolve_excluded_models_path, resolve_socket_path, resolve_state_dir
+from aside.config import load_config, load_excluded_models, resolve_archive_dir, resolve_conversations_dir, resolve_excluded_models_path, resolve_socket_path, resolve_state_dir
 
 
 # ---------------------------------------------------------------------------
@@ -513,10 +513,11 @@ def _cmd_open(args: argparse.Namespace) -> None:
 
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
+    archive_dir = resolve_archive_dir(cfg)
 
     full_id = _resolve_conv_id(conv_dir, args.conversation_id)
 
-    store = ConversationStore(conv_dir)
+    store = ConversationStore(conv_dir, archive_dir=archive_dir)
     conv = store.get_or_create(full_id)
     store.write_transcript(conv)
 

@@ -27,9 +27,11 @@ class ConversationStore:
     All paths are explicit — no hardcoded defaults.
     """
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, archive_dir: Path | None = None) -> None:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+        self._archive_dir = Path(archive_dir) if archive_dir else self.directory
+        self._archive_dir.mkdir(parents=True, exist_ok=True)
 
     def _path_for(self, conv_id: str) -> Path:
         return self.directory / f"{conv_id}.json"
@@ -99,7 +101,7 @@ class ConversationStore:
 
     def transcript_path(self, conv_id: str) -> Path:
         """Return the path to the markdown transcript for a conversation."""
-        return self.directory / f"{conv_id}.md"
+        return self._archive_dir / f"{conv_id}.md"
 
     @staticmethod
     def _extract_user_text(content) -> str:
