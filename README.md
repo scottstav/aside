@@ -15,7 +15,9 @@ Bind `aside query --mic` to a hotkey and start talking. Aside detects silence an
 
 ## tools
 
-aside ships with a memory tool built in. Drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically. See `examples/tools/` for reference implementations.
+Where the magic happens
+
+aside ships with a memory tool built in. To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
 
 The tool system is flexible enough to do real work.
 
