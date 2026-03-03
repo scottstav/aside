@@ -281,18 +281,24 @@ def _cmd_toggle_tts(args: argparse.Namespace) -> None:
 _VOICE_MODEL_DIR = Path("/usr/share/piper-voices/en/en_US/lessac/medium")
 _VOICE_MODEL_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
 _VOICE_MODEL_FILES = ("en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json")
-_VENV_PIP = "/opt/aside/bin/pip"
+_PIP_CMD = [sys.executable, "-m", "pip"]
+
+
+def _check_venv_writable() -> None:
+    """Exit with a helpful message if the venv isn't writable."""
+    venv_dir = Path(sys.executable).resolve().parents[1]
+    if not os.access(venv_dir, os.W_OK):
+        print(f"Error: {venv_dir} is not writable. Re-run with sudo.", file=sys.stderr)
+        sys.exit(1)
 
 
 def _cmd_enable_tts(args: argparse.Namespace) -> None:
     """Install piper-tts into the aside venv and download voice model."""
-    if os.geteuid() != 0:
-        print("Error: enable-tts must be run as root (sudo aside enable-tts)", file=sys.stderr)
-        sys.exit(1)
+    _check_venv_writable()
 
     # Install piper-tts + sounddevice (playback)
     print("Installing piper-tts...")
-    ret = subprocess.run([_VENV_PIP, "install", "piper-tts", "sounddevice"], check=False)
+    ret = subprocess.run([*_PIP_CMD, "install", "piper-tts", "sounddevice"], check=False)
     if ret.returncode != 0:
         print("Error: pip install piper-tts failed", file=sys.stderr)
         sys.exit(1)
@@ -319,33 +325,34 @@ def _cmd_enable_tts(args: argparse.Namespace) -> None:
 
 def _cmd_disable_tts(args: argparse.Namespace) -> None:
     """Uninstall piper-tts from the aside venv."""
-    if os.geteuid() != 0:
-        print("Error: disable-tts must be run as root (sudo aside disable-tts)", file=sys.stderr)
-        sys.exit(1)
+    _check_venv_writable()
 
     print("Uninstalling piper-tts...")
-    subprocess.run([_VENV_PIP, "uninstall", "-y", "piper-tts", "sounddevice"], check=False)
+    subprocess.run([*_PIP_CMD, "uninstall", "-y", "piper-tts", "sounddevice"], check=False)
     print("TTS disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 
 _STT_PIP_PACKAGES = ["faster-whisper", "webrtcvad-wheels"]
-_STT_SYSTEM_PACKAGES = ["python-numpy"]
 
 
 def _cmd_enable_stt(args: argparse.Namespace) -> None:
     """Install STT packages into the aside venv."""
-    if os.geteuid() != 0:
-        print("Error: enable-stt must be run as root (sudo aside enable-stt)", file=sys.stderr)
-        sys.exit(1)
+    _check_venv_writable()
 
-    print("Installing system packages...")
-    ret = subprocess.run(["pacman", "-S", "--noconfirm", "--needed"] + _STT_SYSTEM_PACKAGES, check=False)
-    if ret.returncode != 0:
-        print("Error: pacman install failed", file=sys.stderr)
+    # Check for numpy — it's needed by faster-whisper but best installed via
+    # the system package manager so it can use optimised BLAS libraries.
+    try:
+        import numpy as _  # noqa: F401
+    except ImportError:
+        print("Error: numpy is required but not installed.", file=sys.stderr)
+        print("Install it with your system package manager:", file=sys.stderr)
+        print("  Arch:   sudo pacman -S python-numpy", file=sys.stderr)
+        print("  Fedora: sudo dnf install python3-numpy", file=sys.stderr)
+        print("  Ubuntu: sudo apt install python3-numpy", file=sys.stderr)
         sys.exit(1)
 
     print("Installing STT packages...")
-    ret = subprocess.run([_VENV_PIP, "install"] + _STT_PIP_PACKAGES, check=False)
+    ret = subprocess.run([*_PIP_CMD, "install", *_STT_PIP_PACKAGES], check=False)
     if ret.returncode != 0:
         print("Error: pip install failed", file=sys.stderr)
         sys.exit(1)
@@ -355,12 +362,10 @@ def _cmd_enable_stt(args: argparse.Namespace) -> None:
 
 def _cmd_disable_stt(args: argparse.Namespace) -> None:
     """Uninstall STT packages from the aside venv."""
-    if os.geteuid() != 0:
-        print("Error: disable-stt must be run as root (sudo aside disable-stt)", file=sys.stderr)
-        sys.exit(1)
+    _check_venv_writable()
 
     print("Uninstalling STT packages...")
-    subprocess.run([_VENV_PIP, "uninstall", "-y", "faster-whisper", "webrtcvad-wheels"], check=False)
+    subprocess.run([*_PIP_CMD, "uninstall", "-y", "faster-whisper", "webrtcvad-wheels"], check=False)
     print("STT disabled. Restart the daemon: systemctl --user restart aside-daemon")
 
 

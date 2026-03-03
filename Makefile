@@ -45,7 +45,7 @@ dev: overlay
 # ---------------------------------------------------------------------------
 install: overlay
 	@echo "==> Creating venv at $(VENV)"
-	$(PYTHON) -m venv $(VENV) --clear
+	$(PYTHON) -m venv $(VENV) --clear --system-site-packages
 	$(VENV)/bin/pip install --upgrade pip
 	$(VENV)/bin/pip install .
 	@echo "==> Installing wrapper symlinks"
