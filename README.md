@@ -1,6 +1,6 @@
 # aside
 
-A desktop LLM assistant for Wayland that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
+An LLM assistant for wlroots desktops that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
