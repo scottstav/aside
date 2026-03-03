@@ -13,11 +13,11 @@ Before starting, verify:
 
 ## VM Targets
 
-| Name | Distro | Compositor | Install Method | SSH User |
-|------|--------|-----------|----------------|----------|
-| `aside-arch-sway` | Arch Linux | Sway | AUR (`yay`) | `arch` |
-| `aside-fedora-kde` | Fedora 43 | KDE Plasma | Manual (`make install`) | `fedora` |
-| `aside-ubuntu-kde` | Ubuntu 24.04 | KDE Plasma | Manual (`make install`) | `ubuntu` |
+| Name | Distro | Compositor | Install Method | SSH User | Overlay Config |
+|------|--------|-----------|----------------|----------|----------------|
+| `aside-arch-sway` | Arch Linux | Sway | AUR (`yay`) | `arch` | Small, bottom-right |
+| `aside-fedora-kde` | Fedora 43 | KDE Plasma | Manual (`make install`) | `fedora` | Large, top-left |
+| `aside-ubuntu-kde` | Ubuntu 24.04 | KDE Plasma | Manual (`make install`) | `ubuntu` | Medium, center |
 
 ## Phase 1: Boot all VMs (parallel)
 
@@ -96,7 +96,54 @@ vmt ssh aside-ubuntu-kde -- "git clone https://github.com/scottstav/aside.git ~/
 
 Check PATH the same way and fix if needed.
 
-## Phase 3: Configure & start services
+## Phase 3: Configure overlay & start services
+
+Each VM gets a different overlay config to test different positions and sizes. The overlay config is at `~/.config/aside/config.toml`.
+
+### Arch — small, bottom-right (width=250, max_lines=3)
+
+```bash
+vmt ssh aside-arch-sway -- "mkdir -p ~/.config/aside && cat > ~/.config/aside/config.toml << 'CONF'
+[overlay]
+position = \"bottom-right\"
+width = 250
+max_lines = 3
+font = \"Sans 11\"
+corner_radius = 4
+margin_bottom = 10
+margin_right = 10
+CONF"
+```
+
+### Fedora — large, top-left (width=800, max_lines=15)
+
+```bash
+vmt ssh aside-fedora-kde -- "mkdir -p ~/.config/aside && cat > ~/.config/aside/config.toml << 'CONF'
+[overlay]
+position = \"top-left\"
+width = 800
+max_lines = 15
+font = \"Sans 14\"
+corner_radius = 16
+margin_top = 20
+margin_left = 20
+CONF"
+```
+
+### Ubuntu — medium, center (width=450, max_lines=5)
+
+```bash
+vmt ssh aside-ubuntu-kde -- "mkdir -p ~/.config/aside && cat > ~/.config/aside/config.toml << 'CONF'
+[overlay]
+position = \"center\"
+width = 450
+max_lines = 5
+font = \"Sans 13\"
+corner_radius = 12
+CONF"
+```
+
+### Set API key and start services
 
 For each VM, set the API key and start services. Use the API key you read from `.env` in the prerequisites step.
 
@@ -219,11 +266,11 @@ Print a summary table:
 ```
 === ASIDE SMOKE TEST RESULTS ===
 
-| VM                  | Query | Overlay | TTS  | STT  |
-|---------------------|-------|---------|------|------|
-| aside-arch-sway     | PASS  | PASS    | PASS | PASS |
-| aside-fedora-kde    | PASS  | PASS    | PASS | PASS |
-| aside-ubuntu-kde    | PASS  | PASS    | PASS | PASS |
+| VM                  | Overlay Config          | Query | Overlay | TTS  | STT  |
+|---------------------|-------------------------|-------|---------|------|------|
+| aside-arch-sway     | 250px, bottom-right     | PASS  | PASS    | PASS | PASS |
+| aside-fedora-kde    | 800px, top-left         | PASS  | PASS    | PASS | PASS |
+| aside-ubuntu-kde    | 450px, center           | PASS  | PASS    | PASS | PASS |
 ```
 
 ### Teardown
