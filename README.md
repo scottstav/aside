@@ -4,7 +4,7 @@ An LLM assistant for Wayland desktops that does what you ask and gets out of the
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
-![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
+https://github.com/scottstav/aside/raw/master/demo.mp4
 
 - **overlay** — C layer-shell surface. Streams tokens in real time. Reply or open full transcript with inline actions. Left click to dismiss, right-click to cancel query, middle click to mute TTS. **Very** customizable.
 - **voice** — STT via faster-whisper, TTS via Piper (optional add-ons).
