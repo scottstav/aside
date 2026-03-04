@@ -79,6 +79,10 @@ aside stop-tts
 aside cancel
 ```
 
+a GUI for continuing conversations is provided if you don't want to script your own:
+
+![aside-input](screenshots/demo2.gif)
+
 ## theming and customization
 
 Highly configurable via `~/.config/aside/config.toml`, overlay position, colors, fonts, size.
