@@ -50,6 +50,7 @@ py.install_sources(
   'aside/overlay/picker.py',
   'aside/overlay/reply_input.py',
   'aside/overlay/window.py',
+  'aside/overlay/app.py',
   preserve_path: true,
 )
 
