@@ -1,19 +1,17 @@
-"""Tests for aside.daemon — socket server, query dispatch, overlay config."""
+"""Tests for aside.daemon — socket server and query dispatch."""
 
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import threading
 import time
-from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from aside.config import DEFAULT_CONFIG
-from aside.daemon import Daemon, _write_overlay_config
+from aside.daemon import Daemon
 
 
 # ---------------------------------------------------------------------------
@@ -32,75 +30,6 @@ def minimal_config(tmp_path):
     cfg["_config_dir_override"] = str(tmp_path / "config")
     return cfg
 
-
-# ---------------------------------------------------------------------------
-# Overlay config generation
-# ---------------------------------------------------------------------------
-
-
-class TestOverlayConfig:
-    def test_write_overlay_config_creates_file(self, tmp_path, minimal_config):
-        """The overlay config file should be written in KEY=VALUE format."""
-        out = tmp_path / "config" / "aside" / "overlay.conf"
-        _write_overlay_config(minimal_config["overlay"], out)
-
-        assert out.exists()
-        content = out.read_text()
-        # Spot-check some expected keys
-        assert "font=Sans 13" in content
-        assert "width=600" in content
-        assert "max_lines=5" in content
-
-    def test_overlay_config_maps_color_keys(self, tmp_path, minimal_config):
-        """Colors should be remapped: foreground->text_color, etc."""
-        out = tmp_path / "overlay.conf"
-        _write_overlay_config(minimal_config["overlay"], out)
-
-        content = out.read_text()
-        assert "text_color=#c0caf5ff" in content
-        assert "border_color=#414868ff" in content
-        assert "accent_color=#7aa2f7ff" in content
-        assert "background=#1a1b26e6" in content
-        # Original nested key names should NOT appear as top-level keys
-        assert "\nforeground=" not in content
-        assert "\nborder=" not in content
-
-    def test_overlay_config_custom_values(self, tmp_path):
-        """Custom overlay values should be written correctly."""
-        overlay_cfg = {
-            "font": "Mono 10",
-            "width": 800,
-            "max_lines": 20,
-            "margin_top": 5,
-            "padding_x": 10,
-            "padding_y": 8,
-            "corner_radius": 0,
-            "border_width": 1,
-            "accent_height": 2,
-            "scroll_duration": 100,
-            "fade_duration": 200,
-            "colors": {
-                "background": "#000000ff",
-                "foreground": "#ffffffff",
-                "border": "#333333ff",
-                "accent": "#ff0000ff",
-            },
-        }
-        out = tmp_path / "overlay.conf"
-        _write_overlay_config(overlay_cfg, out)
-
-        content = out.read_text()
-        assert "font=Mono 10" in content
-        assert "width=800" in content
-        assert "text_color=#ffffffff" in content
-        assert "accent_color=#ff0000ff" in content
-
-    def test_overlay_config_creates_parent_dirs(self, tmp_path):
-        """Parent directories should be created if they don't exist."""
-        overlay_cfg = DEFAULT_CONFIG["overlay"]
-        out = tmp_path / "deep" / "nested" / "overlay.conf"
-        _write_overlay_config(overlay_cfg, out)
-        assert out.exists()
 
 
 # ---------------------------------------------------------------------------
