@@ -15,6 +15,18 @@ try:
 except OSError:
     pass
 
+# gtk4-layer-shell built from source installs typelibs to /usr/local/lib/...
+# which gi doesn't search by default.  Add common paths so require_version works.
+_EXTRA_TYPELIB_DIRS = [
+    "/usr/local/lib/girepository-1.0",
+    "/usr/local/lib/x86_64-linux-gnu/girepository-1.0",
+    "/usr/local/lib/aarch64-linux-gnu/girepository-1.0",
+]
+_gi_path = os.environ.get("GI_TYPELIB_PATH", "")
+_extra = os.pathsep.join(d for d in _EXTRA_TYPELIB_DIRS if os.path.isdir(d))
+if _extra:
+    os.environ["GI_TYPELIB_PATH"] = f"{_gi_path}{os.pathsep}{_extra}" if _gi_path else _extra
+
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
