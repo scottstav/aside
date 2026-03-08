@@ -9,7 +9,12 @@ System deps:
 pacman -S wayland wayland-protocols cairo pango json-c pipewire gtk4 gtk4-layer-shell
 
 # Debian/Ubuntu
-apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev libgtk4-layer-shell-dev
+apt install libwayland-dev wayland-protocols libcairo2-dev libpango1.0-dev libjson-c-dev libpipewire-0.3-dev libgtk-4-dev gobject-introspection libgirepository1.0-dev valac
+
+# gtk4-layer-shell (not yet packaged in Ubuntu — build from source)
+git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
+cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install
+sudo ldconfig
 ```
 
 Then:

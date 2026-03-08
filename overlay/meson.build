@@ -7,6 +7,7 @@ dep_cairo = dependency('cairo')
 dep_pangocairo = dependency('pangocairo')
 dep_json_c = dependency('json-c')
 dep_rt = cc.find_library('rt')
+dep_m = cc.find_library('m', required: false)
 
 # Wayland scanner for protocol code generation
 wayland_scanner = find_program('wayland-scanner', native: true)
@@ -51,6 +52,7 @@ executable('aside-overlay',
     dep_pangocairo,
     dep_json_c,
     dep_rt,
+    dep_m,
   ],
   install: true,
 )
