@@ -97,6 +97,7 @@ class ConversationPicker(Gtk.Box):
         # Conversation list
         list_scroll = Gtk.ScrolledWindow()
         list_scroll.set_vexpand(True)
+        list_scroll.set_min_content_height(200)
         list_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.append(list_scroll)
 

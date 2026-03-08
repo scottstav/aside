@@ -51,6 +51,7 @@ class OverlayWindow(Gtk.Window):
         self.set_decorated(False)
         self.set_resizable(False)
         width = overlay_cfg.get("width", 600)
+        self._default_width = width
         self.set_default_size(width, -1)
 
         # Layer-shell setup
@@ -197,6 +198,7 @@ class OverlayWindow(Gtk.Window):
         self._cancel_dismiss_timer()
         self.set_visible(False)
         self._accent_bar.set_state(BarState.IDLE)
+        self.set_default_size(self._default_width, -1)
         self._set_state(OverlayState.HIDDEN)
 
     def handle_replace(self, data: str) -> None:
@@ -228,6 +230,7 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
+        self.set_default_size(max(self._default_width, 500), 420)
         self.set_visible(True)
         self._picker.focus_input()
 
@@ -313,6 +316,7 @@ class OverlayWindow(Gtk.Window):
         """Send query from picker."""
         if not text.strip():
             return
+        self.set_default_size(self._default_width, -1)
         msg = {
             "action": "query",
             "text": text.strip(),
