@@ -18,7 +18,7 @@ class TestCommandDispatch:
         ('{"cmd":"thinking"}', "handle_thinking"),
         ('{"cmd":"listening"}', "handle_listening"),
         ('{"cmd":"input"}', "handle_input"),
-        ('{"cmd":"reply","conversation_id":"abc"}', "handle_reply"),
+        ('{"cmd":"reply","conversation_id":"abc"}', "handle_convo"),
         ('{"cmd":"convo","conversation_id":"abc"}', "handle_convo"),
     ]
 
