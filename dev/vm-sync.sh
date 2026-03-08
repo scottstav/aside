@@ -113,6 +113,13 @@ do_rebuild() {
         ssh_run "cd $REMOTE_DIR && \
             ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
     fi
+    # Always sync data files (desktop entry, systemd units, etc.)
+    echo "=> sync data files"
+    ssh_run "cd $REMOTE_DIR && \
+        cp -f data/aside.desktop ~/.local/share/applications/aside.desktop && \
+        cp -f data/aside-daemon.service ~/.config/systemd/user/aside-daemon.service && \
+        cp -f data/aside-overlay.service ~/.config/systemd/user/aside-overlay.service && \
+        systemctl --user daemon-reload" 2>&1
 }
 
 do_restart() {
