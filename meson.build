@@ -42,6 +42,7 @@ py.install_sources(
 
 py.install_sources(
   'aside/overlay/__init__.py',
+  'aside/overlay/accent_bar.py',
   'aside/overlay/css.py',
   'aside/overlay/markdown.py',
   preserve_path: true,
