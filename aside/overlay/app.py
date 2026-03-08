@@ -15,8 +15,11 @@ try:
 except OSError:
     pass
 
-# gtk4-layer-shell built from source installs typelibs to /usr/local/lib/...
-# which gi doesn't search by default.  Add common paths so require_version works.
+# Workaround: distros that don't package gtk4-layer-shell (Ubuntu/Debian as of
+# 24.04) require building it from source, which installs typelibs to
+# /usr/local/lib/... — a path gi doesn't search by default.  Distros with a
+# native package (Arch, Fedora 40+, openSUSE TW) don't need this.
+# Remove once gtk4-layer-shell lands in Ubuntu's repos.
 _EXTRA_TYPELIB_DIRS = [
     "/usr/local/lib/girepository-1.0",
     "/usr/local/lib/x86_64-linux-gnu/girepository-1.0",
