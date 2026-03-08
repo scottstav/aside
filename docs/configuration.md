@@ -276,7 +276,6 @@ Environment=ANTHROPIC_API_KEY=sk-...
 |------|---------|
 | `~/.config/aside/config.toml` | Main configuration file |
 | `~/.config/aside/env` | API key environment file (loaded by systemd) |
-| `~/.config/aside/overlay.conf` | Generated overlay config (written by daemon on startup) |
 | `~/.config/aside/tools/` | User tool plugins |
 | `~/.local/state/aside/conversations/` | Conversation JSON files |
 | `~/.local/state/aside/usage.jsonl` | Token usage log |

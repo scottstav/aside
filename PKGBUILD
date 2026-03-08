@@ -77,7 +77,7 @@ package() {
 
     # ── wrapper scripts ──────────────────────────────────────────────────
     install -d "$pkgdir/usr/bin"
-    for cmd in aside aside-input aside-reply aside-overlay aside-status; do
+    for cmd in aside aside-overlay aside-status; do
         [ -f "$pkgdir/opt/aside/bin/$cmd" ] || continue
         cat > "$pkgdir/usr/bin/$cmd" <<EOF
 #!/bin/sh
