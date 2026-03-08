@@ -24,6 +24,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
         # Expand to fill available space
         self.set_vexpand(True)
         self.set_hexpand(True)
+        self.set_propagate_natural_height(True)
 
     def add_message(self, role: str, text: str) -> MessageView:
         """Create a MessageView, append it, and scroll to bottom."""

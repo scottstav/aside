@@ -31,11 +31,22 @@ def _parse_hex_color(hex_color: str) -> tuple[float, float, float]:
 
 
 class AccentBar(Gtk.DrawingArea):
-    """Thin animated bar that communicates overlay state via color/motion."""
+    """Thin animated bar that communicates overlay state via color/motion.
 
-    def __init__(self, accent_color: str, height: int = 3, corner_radius: int = 12) -> None:
+    Uses *accent_color* for LLM states (thinking, streaming) and
+    *user_accent_color* for user states (listening).
+    """
+
+    def __init__(
+        self,
+        accent_color: str,
+        user_accent_color: str | None = None,
+        height: int = 3,
+        corner_radius: int = 12,
+    ) -> None:
         super().__init__()
-        self._color = _parse_hex_color(accent_color)
+        self._accent = _parse_hex_color(accent_color)
+        self._user_accent = _parse_hex_color(user_accent_color or accent_color)
         self._corner_radius = corner_radius
         self._state = BarState.IDLE
         self._progress: float = 0.0
@@ -71,25 +82,21 @@ class AccentBar(Gtk.DrawingArea):
             self._last_frame_time = None
 
     def _on_tick(self, widget: Gtk.Widget, frame_clock) -> bool:
-        frame_time = frame_clock.get_frame_time()  # microseconds
+        frame_time = frame_clock.get_frame_time()
 
         if self._last_frame_time is not None:
-            dt = (frame_time - self._last_frame_time) / 1_000_000.0  # seconds
+            dt = (frame_time - self._last_frame_time) / 1_000_000.0
         else:
             dt = 0.0
         self._last_frame_time = frame_time
 
         if self._state == BarState.THINKING:
-            # Sweep cycle: ~2 seconds full cycle
             self._progress = (self._progress + dt / 2.0) % 1.0
         elif self._state == BarState.LISTENING:
-            # Breathing cycle: ~3 seconds
             self._progress = (self._progress + dt / 3.0) % 1.0
         elif self._state == BarState.STREAMING:
-            # Shimmer: ~1.5 seconds
             self._progress = (self._progress + dt / 1.5) % 1.0
         elif self._state == BarState.DONE:
-            # Fade out over ~0.5 seconds
             self._progress = min(self._progress + dt / 0.5, 1.0)
             if self._progress >= 1.0:
                 self._stop_ticking()
@@ -112,11 +119,17 @@ class AccentBar(Gtk.DrawingArea):
         cr.close_path()
         cr.clip()
 
+    def _active_color(self) -> tuple[float, float, float]:
+        """Return the color for the current state."""
+        if self._state == BarState.LISTENING:
+            return self._user_accent
+        return self._accent
+
     def _draw(self, area: Gtk.DrawingArea, cr, width: int, height: int) -> None:
         if self._corner_radius > 0:
             self._rounded_top_clip(cr, width, height, self._corner_radius)
 
-        r, g, b = self._color
+        r, g, b = self._active_color()
 
         if self._state == BarState.IDLE:
             cr.set_source_rgb(r, g, b)
@@ -124,12 +137,10 @@ class AccentBar(Gtk.DrawingArea):
             cr.fill()
 
         elif self._state == BarState.THINKING:
-            # Solid bar + bright sweep spot
             cr.set_source_rgb(r, g, b)
             cr.rectangle(0, 0, width, height)
             cr.fill()
 
-            # Ping-pong: progress 0→0.5 goes left-to-right, 0.5→1 right-to-left
             t = self._progress * 2.0
             if t > 1.0:
                 t = 2.0 - t
@@ -147,14 +158,12 @@ class AccentBar(Gtk.DrawingArea):
             cr.fill()
 
         elif self._state == BarState.LISTENING:
-            # Breathing: opacity oscillates sinusoidally between 0.4 and 1.0
             alpha = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(self._progress * 2.0 * math.pi))
             cr.set_source_rgba(r, g, b, alpha)
             cr.rectangle(0, 0, width, height)
             cr.fill()
 
         elif self._state == BarState.STREAMING:
-            # Solid bar + thin bright line sweeping across
             cr.set_source_rgb(r, g, b)
             cr.rectangle(0, 0, width, height)
             cr.fill()
@@ -173,7 +182,6 @@ class AccentBar(Gtk.DrawingArea):
             cr.fill()
 
         elif self._state == BarState.DONE:
-            # Fade out
             alpha = 1.0 - self._progress
             cr.set_source_rgba(r, g, b, alpha)
             cr.rectangle(0, 0, width, height)

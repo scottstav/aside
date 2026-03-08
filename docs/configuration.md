@@ -99,26 +99,19 @@ Controls the floating overlay that displays responses.
 ```toml
 [overlay]
 font = "Sans 13"
-width = 250
-max_lines = 5
+width = 400
+max_height = 500
 position = "top-center"
 margin_top = 10
-margin_right = 0
-margin_bottom = 0
-margin_left = 0
-padding_x = 20
-padding_y = 16
-corner_radius = 12
-border_width = 2
-accent_height = 3
-scroll_duration = 200
-fade_duration = 400
+opacity = 0.95
+dismiss_timeout = 5.0
 
 [overlay.colors]
-background = "#1a1b26e6"
-foreground = "#c0caf5ff"
-border = "#414868ff"
-accent = "#7aa2f7ff"
+background = "#0f0f14"
+foreground = "#e2e8f0"
+border = "#2a2a3a"
+accent = "#8b5cf6"
+user_accent = "#22d3ee"
 ```
 
 ### Layout
@@ -126,8 +119,8 @@ accent = "#7aa2f7ff"
 | Option | Default | Description |
 |--------|---------|-------------|
 | `font` | `Sans 13` | Pango font description for overlay text |
-| `width` | `250` | Overlay width in pixels |
-| `max_lines` | `5` | Maximum visible lines before the overlay scrolls |
+| `width` | `400` | Overlay width in pixels |
+| `max_height` | `500` | Maximum overlay height in pixels. Applies to streaming, convo view, and picker |
 | `position` | `top-center` | Overlay position on screen: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
 | `margin_top` | `10` | Top margin in pixels |
 | `margin_right` | `0` | Right margin in pixels |
@@ -143,7 +136,7 @@ accent = "#7aa2f7ff"
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `opacity` | `0.96` | Background opacity (0.0 = fully transparent, 1.0 = fully opaque) |
+| `opacity` | `0.95` | Background opacity (0.0 = fully transparent, 1.0 = fully opaque) |
 | `dismiss_timeout` | `5.0` | Seconds before the overlay auto-dismisses after a response completes. Set to `0` to disable auto-dismiss |
 
 ### Animation
@@ -159,11 +152,11 @@ All colors are RGBA hex strings. The last two hex digits control alpha (transpar
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `background` | `#1a1b26e6` | Overlay background (default is dark with ~90% opacity) |
-| `foreground` | `#c0caf5ff` | Text color |
-| `border` | `#414868ff` | Border color |
-| `accent` | `#7aa2f7ff` | Top accent line color (shown during agent responses) |
-| `user_accent` | *(unset)* | Alternate accent color shown during voice capture. Falls back to `accent` if not set |
+| `background` | `#0f0f14` | Overlay background |
+| `foreground` | `#e2e8f0` | Text color |
+| `border` | `#2a2a3a` | Border color |
+| `accent` | `#8b5cf6` | LLM accent — accent bar during thinking/streaming, LLM message border, buttons |
+| `user_accent` | `#22d3ee` | User accent — accent bar during listening, user message color, reply input border |
 
 ## Storage
 

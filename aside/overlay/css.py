@@ -8,17 +8,18 @@ def rgb_strip_alpha(color: str) -> str:
     return color
 
 
-def build_css(colors: dict, font: str = "", opacity: float = 0.96) -> str:
+def build_css(colors: dict, font: str = "", opacity: float = 0.95) -> str:
     """Generate CSS string for all overlay components.
 
-    *colors* dict may contain: background, foreground, border, accent.
+    *colors* dict may contain: background, foreground, border, accent, user_accent.
     *opacity* controls background transparency (0.0–1.0).
-    Missing keys fall back to Tokyo Night defaults.
+    Missing keys fall back to defaults.
     """
-    bg = rgb_strip_alpha(colors.get("background", "#1a1b26"))
-    fg = rgb_strip_alpha(colors.get("foreground", "#c0caf5"))
-    border = rgb_strip_alpha(colors.get("border", "#414868"))
-    accent = rgb_strip_alpha(colors.get("accent", "#7aa2f7"))
+    bg = rgb_strip_alpha(colors.get("background", "#0f0f14"))
+    fg = rgb_strip_alpha(colors.get("foreground", "#e2e8f0"))
+    border = rgb_strip_alpha(colors.get("border", "#2a2a3a"))
+    accent = rgb_strip_alpha(colors.get("accent", "#8b5cf6"))
+    user_accent = rgb_strip_alpha(colors.get("user_accent", "#22d3ee"))
     bg_opacity = max(0.0, min(1.0, opacity))
 
     font_rule = f'font-family: "{font}";' if font else ""
@@ -33,7 +34,7 @@ window.background {{
 .overlay-container {{
     background-color: alpha({bg}, {bg_opacity});
     border-radius: 12px;
-    border: 1px solid alpha({border}, 0.6);
+    border: 1px solid alpha({border}, 0.5);
     padding: 0;
     {font_rule}
 }}
@@ -49,23 +50,32 @@ textview text {{
 }}
 .message-view {{
     background: transparent;
+    padding: 6px 0;
 }}
 .message-user {{
-    color: alpha({accent}, 0.9);
+    border-left: 3px solid alpha({user_accent}, 0.6);
+    margin-left: 8px;
 }}
 .message-llm {{
+    border-left: 3px solid alpha({accent}, 0.4);
+    margin-left: 8px;
+}}
+.message-user textview text {{
+    color: {user_accent};
+}}
+.message-llm textview text {{
     color: {fg};
 }}
 .reply-input {{
-    background-color: alpha({fg}, 0.06);
+    background-color: alpha({user_accent}, 0.04);
     border-radius: 8px;
-    border: 1px solid alpha({border}, 0.5);
+    border: 1px solid alpha({user_accent}, 0.3);
     margin: 8px 12px;
     padding: 0;
-    caret-color: {accent};
+    caret-color: {user_accent};
 }}
 .reply-input:focus-within {{
-    border-color: alpha({accent}, 0.7);
+    border-color: alpha({user_accent}, 0.6);
 }}
 .reply-input textview {{
     background: transparent;
@@ -93,16 +103,16 @@ textview text {{
     color: {fg};
 }}
 .picker-row:selected {{
-    background-color: alpha({accent}, 0.2);
+    background-color: alpha({accent}, 0.15);
 }}
 .picker-input {{
-    background-color: alpha({fg}, 0.06);
+    background-color: alpha({user_accent}, 0.04);
     border-radius: 8px;
-    border: 1px solid alpha({border}, 0.5);
+    border: 1px solid alpha({user_accent}, 0.3);
     margin: 4px 12px;
 }}
 .picker-input:focus-within {{
-    border-color: alpha({accent}, 0.7);
+    border-color: alpha({user_accent}, 0.6);
 }}
 .picker-input textview {{
     background: transparent;
@@ -113,27 +123,27 @@ textview text {{
 }}
 .input-hint {{
     font-size: 0.8em;
-    color: alpha({fg}, 0.4);
+    color: alpha({fg}, 0.35);
     margin: 2px 16px 8px 16px;
 }}
 .action-bar {{
     padding: 4px 16px 8px 16px;
 }}
 .action-bar button {{
-    background: alpha({fg}, 0.08);
-    border: 1px solid alpha({border}, 0.4);
+    background: alpha({accent}, 0.1);
+    border: 1px solid alpha({accent}, 0.3);
     border-radius: 6px;
-    color: alpha({fg}, 0.8);
+    color: alpha({fg}, 0.85);
     padding: 4px 12px;
     font-size: 0.85em;
 }}
 .action-bar button:hover {{
-    background: alpha({accent}, 0.15);
+    background: alpha({accent}, 0.2);
     color: {fg};
-    border-color: alpha({accent}, 0.4);
+    border-color: alpha({accent}, 0.5);
 }}
 .dim-label {{
-    color: alpha({fg}, 0.45);
+    color: alpha({fg}, 0.4);
     font-size: 0.85em;
 }}
 """

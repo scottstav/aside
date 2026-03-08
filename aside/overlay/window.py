@@ -47,12 +47,13 @@ class OverlayWindow(Gtk.Window):
         colors = overlay_cfg.get("colors", {})
         self._markdown_enabled = overlay_cfg.get("markdown", True)
 
-        # Window setup
+        # Dimensions
+        width = overlay_cfg.get("width", 400)
+        self._default_width = width
+        self._max_height = overlay_cfg.get("max_height", 500)
         self.set_title("aside")
         self.set_decorated(False)
         self.set_resizable(False)
-        width = overlay_cfg.get("width", 250)
-        self._default_width = width
         self.set_default_size(width, -1)
 
         # Layer-shell setup
@@ -82,9 +83,10 @@ class OverlayWindow(Gtk.Window):
             Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
 
         # CSS
-        accent_color = colors.get("accent", "#7aa2f7ff")
+        accent_color = colors.get("accent", "#8b5cf6")
+        user_accent_color = colors.get("user_accent", "#22d3ee")
         font = overlay_cfg.get("font", "")
-        opacity = overlay_cfg.get("opacity", 0.96)
+        opacity = overlay_cfg.get("opacity", 0.95)
         css_text = build_css(colors, font=font, opacity=opacity)
         provider = Gtk.CssProvider()
         provider.load_from_string(css_text)
@@ -99,7 +101,11 @@ class OverlayWindow(Gtk.Window):
         self.set_child(self._main_box)
 
         # Accent bar (always visible, outside stack)
-        self._accent_bar = AccentBar(accent_color=accent_color, corner_radius=12)
+        self._accent_bar = AccentBar(
+            accent_color=accent_color,
+            user_accent_color=user_accent_color,
+            corner_radius=12,
+        )
         self._main_box.append(self._accent_bar)
 
         # Stack for view switching
@@ -112,6 +118,7 @@ class OverlayWindow(Gtk.Window):
         stream_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._stream_history = ConversationHistory(markdown=self._markdown_enabled)
         self._stream_history.set_vexpand(True)
+        self._stream_history.set_max_content_height(self._max_height)
         stream_box.append(self._stream_history)
         # Action buttons
         self._action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -138,6 +145,7 @@ class OverlayWindow(Gtk.Window):
         convo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._convo_history = ConversationHistory(markdown=self._markdown_enabled)
         self._convo_history.set_vexpand(True)
+        self._convo_history.set_max_content_height(self._max_height)
         convo_box.append(self._convo_history)
         self._convo_reply = ReplyInput()
         self._convo_reply.connect_submit(self._on_submit)
@@ -189,6 +197,7 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("stream")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
+        self.set_default_size(self._default_width, -1)
         self.set_visible(True)
 
     def handle_text(self, data: str) -> None:
@@ -241,11 +250,10 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
-        # Size picker based on number of conversations: ~40px per row + 160px
-        # for title, input area, and padding.  Cap at 600px.
-        n_rows = max(len(entries) + 1, 2)  # +1 for "New conversation" row
-        picker_height = min(n_rows * 40 + 160, 600)
-        self.set_default_size(max(self._default_width, 500), picker_height)
+        # Size picker dynamically: ~40px per row + 160px for chrome, capped
+        n_rows = max(len(entries) + 1, 2)
+        picker_height = min(n_rows * 40 + 160, self._max_height)
+        self.set_default_size(max(self._default_width, 400), picker_height)
         self.set_visible(True)
         self._picker.focus_input()
 
@@ -266,6 +274,10 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("convo")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.CONVO)
+        # Size based on message count, capped at max_height
+        n_msgs = len(conv.get("messages", []))
+        convo_height = min(max(n_msgs * 60 + 120, 200), self._max_height)
+        self.set_default_size(self._default_width, convo_height)
         self.set_visible(True)
 
     # --- Dismiss timer ---
@@ -296,11 +308,10 @@ class OverlayWindow(Gtk.Window):
         # Don't dismiss if clicking an interactive widget (e.g. Reply button)
         target = self.pick(x, y, Gtk.PickFlags.DEFAULT)
         if target is not None and target is not self._main_box and target is not self:
-            # Check if click landed on a Button or its label child
             widget = target
             while widget is not None:
                 if isinstance(widget, Gtk.Button):
-                    return  # let the button handle it
+                    return
                 widget = widget.get_parent()
         button = gesture.get_current_button()
         if button == 1:  # left click
@@ -325,7 +336,7 @@ class OverlayWindow(Gtk.Window):
         self._stream_reply.clear()
         self._stream_reply.set_visible(True)
         self._stream_reply.grab_focus()
-        self._set_state(OverlayState.CONVO)  # reuse CONVO for keyboard mode
+        self._set_state(OverlayState.CONVO)
 
     def _on_expand_convo(self) -> None:
         """Shift+Tab: expand to full conversation view."""
@@ -390,16 +401,13 @@ class OverlayWindow(Gtk.Window):
 
         if self._state == OverlayState.DISPLAY:
             if keyval == Gdk.KEY_Tab and not shift:
-                # Cycle focus through action bar buttons
                 self._action_bar.child_focus(Gtk.DirectionType.TAB_FORWARD)
                 return True
             if keyval == Gdk.KEY_Tab and shift:
-                # Shift+Tab: expand to full conversation view
                 if self._conv_id:
                     self._load_convo(self._conv_id)
                 return True
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-                # Enter: activate focused button, or show inline reply
                 focused = self.get_focus()
                 if isinstance(focused, Gtk.Button):
                     focused.activate()
@@ -409,7 +417,6 @@ class OverlayWindow(Gtk.Window):
 
         if self._state == OverlayState.CONVO:
             if keyval == Gdk.KEY_Tab and shift:
-                # Shift+Tab from reply: expand to full conversation view
                 if self._conv_id:
                     self._load_convo(self._conv_id)
                 return True
