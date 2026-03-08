@@ -72,16 +72,25 @@ do_setup() {
     echo "=> [README step 2] git clone + make install"
     ssh_run "rm -rf ~/aside && git clone https://github.com/scottstav/aside.git ~/aside && cd ~/aside && make install"
 
+    do_sync_env
+
     echo ""
-    echo "=> Setup complete! Remaining README steps to run manually:"
-    echo "   aside set-key anthropic sk-ant-..."
+    echo "=> Setup complete! Remaining README steps:"
     echo "   systemctl --user enable --now aside-daemon aside-overlay"
     echo ""
-    echo "   Or via this script:"
-    echo "   dev/vm-sync.sh --ssh \"aside set-key anthropic sk-ant-YOUR_KEY\""
-    echo "   dev/vm-sync.sh --ssh \"systemctl --user enable --now aside-daemon aside-overlay\""
+    echo "   Or: dev/vm-sync.sh --ssh \"systemctl --user enable --now aside-daemon aside-overlay\""
     echo ""
-    echo "=> To iterate after setup, just run: dev/vm-sync.sh"
+    echo "=> API keys were copied from .env (if present). To iterate: dev/vm-sync.sh"
+}
+
+do_sync_env() {
+    local env_file="$PROJECT_DIR/.env"
+    if [ -f "$env_file" ]; then
+        echo "=> syncing .env to VM"
+        ssh_run "mkdir -p ~/.config/aside"
+        scp -q $SSH_OPTS "$env_file" "ubuntu@$VM_IP:~/.config/aside/env"
+        ssh_run "chmod 600 ~/.config/aside/env"
+    fi
 }
 
 do_rsync() {
@@ -100,14 +109,20 @@ do_rsync() {
         "$PROJECT_DIR/" "ubuntu@$VM_IP:$REMOTE_DIR/"
 }
 
-do_make_install() {
-    echo "=> make install"
-    ssh_run "cd $REMOTE_DIR && make install" 2>&1
+do_rebuild() {
+    echo "=> rebuild overlay + reinstall python"
+    ssh_run "cd $REMOTE_DIR && \
+        ([ -d builddir ] || meson setup builddir --prefix=\$HOME/.local) && \
+        ninja -C builddir && \
+        install -m755 builddir/overlay/aside-overlay ~/.local/bin/aside-overlay && \
+        ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
 }
 
 do_build_overlay() {
     echo "=> build overlay only"
-    ssh_run "cd $REMOTE_DIR && make overlay && \
+    ssh_run "cd $REMOTE_DIR && \
+        ([ -d builddir ] || meson setup builddir --prefix=\$HOME/.local) && \
+        ninja -C builddir && \
         install -m755 builddir/overlay/aside-overlay ~/.local/bin/aside-overlay" 2>&1
 }
 
@@ -119,14 +134,22 @@ do_install_python() {
 
 do_restart() {
     echo "=> restart services"
-    ssh_run "systemctl --user restart aside-daemon aside-overlay" 2>&1
+    ssh_run "systemctl --user restart aside-daemon aside-overlay && sleep 3" 2>&1
     echo "=> services restarted"
 }
 
 do_query() {
     local query="$1"
     echo "=> testing query: $query"
-    ssh_run "aside query '$query'" 2>&1
+    ssh_run "\$HOME/.local/bin/aside query '$query'" 2>&1
+    # Wait for response, then show it
+    sleep 3
+    local last_id
+    last_id=$(ssh_run "\$HOME/.local/bin/aside ls 2>/dev/null | head -1 | awk '{print \$1}'")
+    if [ -n "$last_id" ]; then
+        echo "=> response:"
+        ssh_run "\$HOME/.local/bin/aside show $last_id" 2>&1
+    fi
 }
 
 do_ssh() {
@@ -219,7 +242,8 @@ case "$ACTION" in
         ;;
     full)
         do_rsync
-        do_make_install
+        do_sync_env
+        do_rebuild
         do_restart
         ;;
 esac

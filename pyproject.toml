@@ -18,6 +18,9 @@ dependencies = [
 stt = ["faster-whisper==1.2.1", "webrtcvad-wheels>=2.0.10", "numpy>=2.0"]
 tts = ["piper-tts", "sounddevice"]
 
+[tool.setuptools.packages.find]
+include = ["aside*"]
+
 [project.scripts]
 aside = "aside.cli:main"
 aside-overlay = "aside.overlay.app:main"
