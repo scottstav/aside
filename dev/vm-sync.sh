@@ -9,7 +9,6 @@
 #
 # After setup, iterate with rsync (no git commit/push needed):
 #   dev/vm-sync.sh                    # rsync + make install + restart
-#   dev/vm-sync.sh --overlay-only     # only rebuild C overlay
 #   dev/vm-sync.sh --python-only      # only reinstall Python package
 #   dev/vm-sync.sh --query "hello"    # sync + rebuild + restart + test query
 #
@@ -54,16 +53,14 @@ do_setup() {
     # If these fail, the README is wrong and needs updating.
     # -------------------------------------------------------------------------
 
-    echo "=> [README step 1] Installing system dependencies (docs/install.md)"
+    echo "=> [README step 1] Installing system dependencies"
     ssh_run "sudo apt-get update -qq && sudo apt-get install -y -qq \
-        meson ninja-build pkg-config gcc python3-venv python3-pip python3-dev \
-        libwayland-dev wayland-protocols \
-        libcairo2-dev libpango1.0-dev libjson-c-dev \
-        libpipewire-0.3-dev \
-        libgtk-4-dev gobject-introspection libgirepository1.0-dev valac \
+        python3-venv python3-pip python3-dev \
+        meson ninja-build valac \
+        libgtk-4-dev gobject-introspection libgirepository1.0-dev \
         python3-gi python3-gi-cairo gir1.2-gtk-4.0 git"
 
-    echo "=> [README step 1b] Building gtk4-layer-shell from source (docs/install.md)"
+    echo "=> [README step 1b] Building gtk4-layer-shell from source"
     ssh_run "rm -rf /tmp/gtk4-layer-shell && \
         git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell && \
         cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && \
@@ -101,7 +98,6 @@ do_rsync() {
         --exclude='__pycache__' \
         --exclude='*.pyc' \
         --exclude='builddir' \
-        --exclude='overlay/build' \
         --exclude='.mypy_cache' \
         --exclude='.pytest_cache' \
         --exclude='*.egg-info' \
@@ -110,24 +106,7 @@ do_rsync() {
 }
 
 do_rebuild() {
-    echo "=> rebuild overlay + reinstall python"
-    ssh_run "cd $REMOTE_DIR && \
-        ([ -d builddir ] || meson setup builddir --prefix=\$HOME/.local) && \
-        ninja -C builddir && \
-        install -m755 builddir/overlay/aside-overlay ~/.local/bin/aside-overlay && \
-        ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
-}
-
-do_build_overlay() {
-    echo "=> build overlay only"
-    ssh_run "cd $REMOTE_DIR && \
-        ([ -d builddir ] || meson setup builddir --prefix=\$HOME/.local) && \
-        ninja -C builddir && \
-        install -m755 builddir/overlay/aside-overlay ~/.local/bin/aside-overlay" 2>&1
-}
-
-do_install_python() {
-    echo "=> reinstall python package only"
+    echo "=> reinstall python package"
     ssh_run "cd $REMOTE_DIR && \
         ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
 }
@@ -178,7 +157,6 @@ SSH_ARGS=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --setup)        ACTION="setup"; shift ;;
-        --overlay-only) ACTION="overlay"; shift ;;
         --python-only)  ACTION="python"; shift ;;
         --restart-only) ACTION="restart"; shift ;;
         --query)        QUERY="$2"; shift 2 ;;
@@ -194,7 +172,6 @@ First-time:
 
 Iteration (rsync-based, no git needed):
   (no flags)       rsync + make install + restart services
-  --overlay-only   rsync + rebuild C overlay only + restart
   --python-only    rsync + reinstall Python package only + restart
   --restart-only   Just restart services
 
@@ -218,14 +195,9 @@ case "$ACTION" in
     setup)
         do_setup
         ;;
-    overlay)
-        do_rsync
-        do_build_overlay
-        do_restart
-        ;;
     python)
         do_rsync
-        do_install_python
+        do_rebuild
         do_restart
         ;;
     restart)
