@@ -53,8 +53,7 @@ class OverlayWindow(Gtk.Window):
         self._max_height = overlay_cfg.get("max_height", 500)
         self.set_title("aside")
         self.set_decorated(False)
-        self.set_resizable(False)
-        self.set_default_size(width, -1)
+        self.set_size_request(width, -1)
 
         # Layer-shell setup
         Gtk4LayerShell.init_for_window(self)
@@ -110,6 +109,7 @@ class OverlayWindow(Gtk.Window):
 
         # Stack for view switching
         self._stack = Gtk.Stack()
+        self._stack.set_vhomogeneous(False)
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.set_transition_duration(150)
         self._main_box.append(self._stack)
@@ -117,7 +117,6 @@ class OverlayWindow(Gtk.Window):
         # --- Stream view ---
         stream_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._stream_history = ConversationHistory(markdown=self._markdown_enabled)
-        self._stream_history.set_vexpand(True)
         self._stream_history.set_max_content_height(self._max_height)
         stream_box.append(self._stream_history)
         # Action buttons
@@ -144,7 +143,6 @@ class OverlayWindow(Gtk.Window):
         # --- Convo view ---
         convo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._convo_history = ConversationHistory(markdown=self._markdown_enabled)
-        self._convo_history.set_vexpand(True)
         self._convo_history.set_max_content_height(self._max_height)
         convo_box.append(self._convo_history)
         self._convo_reply = ReplyInput()
@@ -169,6 +167,12 @@ class OverlayWindow(Gtk.Window):
         click.connect("pressed", self._on_click)
         self.add_controller(click)
 
+        # Hover pauses auto-dismiss (without stealing focus)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("enter", self._on_hover_enter)
+        motion.connect("leave", self._on_hover_leave)
+        self.add_controller(motion)
+
         # Start hidden
         self.set_visible(False)
 
@@ -178,8 +182,8 @@ class OverlayWindow(Gtk.Window):
 
     def _set_state(self, state: OverlayState) -> None:
         self._state = state
-        # Update keyboard mode based on state
-        if state in (OverlayState.DISPLAY, OverlayState.CONVO, OverlayState.PICKER):
+        # Only grab keyboard when user explicitly interacts (picker, convo, reply)
+        if state in (OverlayState.CONVO, OverlayState.PICKER):
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         else:
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
@@ -197,8 +201,7 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("stream")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
-        self.set_default_size(self._default_width, -1)
-        self.set_visible(True)
+        self._resize_to_content()
 
     def handle_text(self, data: str) -> None:
         """Append streamed text to current message."""
@@ -217,7 +220,6 @@ class OverlayWindow(Gtk.Window):
         self._cancel_dismiss_timer()
         self.set_visible(False)
         self._accent_bar.set_state(BarState.IDLE)
-        self.set_default_size(self._default_width, -1)
         self._set_state(OverlayState.HIDDEN)
 
     def handle_replace(self, data: str) -> None:
@@ -250,11 +252,7 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
-        # Size picker dynamically: ~40px per row + 160px for chrome, capped
-        n_rows = max(len(entries) + 1, 2)
-        picker_height = min(n_rows * 40 + 160, self._max_height)
-        self.set_default_size(max(self._default_width, 400), picker_height)
-        self.set_visible(True)
+        self._resize_to_content()
         self._picker.focus_input()
 
     def handle_convo(self, conv_id: str) -> None:
@@ -274,11 +272,16 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("convo")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.CONVO)
-        # Size based on message count, capped at max_height
-        n_msgs = len(conv.get("messages", []))
-        convo_height = min(max(n_msgs * 60 + 120, 200), self._max_height)
-        self.set_default_size(self._default_width, convo_height)
+        self._resize_to_content()
+
+    def _resize_to_content(self) -> None:
+        """Force window to re-fit content by hiding and re-showing."""
+        self.set_visible(False)
+        GLib.idle_add(self._show_after_resize)
+
+    def _show_after_resize(self) -> bool:
         self.set_visible(True)
+        return False  # run once
 
     # --- Dismiss timer ---
 
@@ -300,6 +303,15 @@ class OverlayWindow(Gtk.Window):
         if self._state == OverlayState.DISPLAY:
             self.handle_clear()
         return False  # don't repeat
+
+    def _on_hover_enter(self, *_args) -> None:
+        """Pause auto-dismiss while cursor is over the overlay."""
+        self._cancel_dismiss_timer()
+
+    def _on_hover_leave(self, *_args) -> None:
+        """Restart auto-dismiss when cursor leaves the overlay."""
+        if self._state == OverlayState.DISPLAY:
+            self._start_dismiss_timer(self._dismiss_timeout)
 
     # --- User action handlers ---
 
@@ -335,8 +347,8 @@ class OverlayWindow(Gtk.Window):
         self._action_bar.set_visible(False)
         self._stream_reply.clear()
         self._stream_reply.set_visible(True)
-        self._stream_reply.grab_focus()
         self._set_state(OverlayState.CONVO)
+        self._stream_reply.focus_input()
 
     def _on_expand_convo(self) -> None:
         """Shift+Tab: expand to full conversation view."""
@@ -370,7 +382,6 @@ class OverlayWindow(Gtk.Window):
         """Send query from picker."""
         if not text.strip():
             return
-        self.set_default_size(self._default_width, -1)
         msg = {
             "action": "query",
             "text": text.strip(),

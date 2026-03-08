@@ -32,6 +32,7 @@ def _make_conversation_row(
     """Build a ListBoxRow for a single conversation."""
     row = Gtk.ListBoxRow()
     row._conversation_id = conv_id  # type: ignore[attr-defined]
+    row.add_css_class("picker-row")
 
     hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     hbox.set_margin_start(12)
@@ -60,6 +61,7 @@ def _make_new_conversation_row() -> Gtk.ListBoxRow:
     """Build the 'New conversation' row."""
     row = Gtk.ListBoxRow()
     row._conversation_id = _NEW_CONVERSATION_ID  # type: ignore[attr-defined]
+    row.add_css_class("picker-row")
 
     hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     hbox.set_margin_start(12)
@@ -94,10 +96,10 @@ class ConversationPicker(Gtk.Box):
         title.add_css_class("picker-title")
         self.append(title)
 
-        # Conversation list
+        # Conversation list — grows to content, scrolls at max
         list_scroll = Gtk.ScrolledWindow()
-        list_scroll.set_vexpand(True)
-        list_scroll.set_min_content_height(200)
+        list_scroll.set_propagate_natural_height(True)
+        list_scroll.set_max_content_height(400)
         list_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.append(list_scroll)
 
@@ -108,7 +110,7 @@ class ConversationPicker(Gtk.Box):
 
         # Text input
         input_scroll = Gtk.ScrolledWindow()
-        input_scroll.set_min_content_height(80)
+        input_scroll.set_propagate_natural_height(True)
         input_scroll.set_max_content_height(160)
         input_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         input_scroll.set_margin_start(12)

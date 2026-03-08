@@ -13,18 +13,29 @@ def build_css(colors: dict, font: str = "", opacity: float = 0.95) -> str:
 
     *colors* dict may contain: background, foreground, border, accent, user_accent.
     *opacity* controls background transparency (0.0–1.0).
-    Missing keys fall back to defaults.
+
+    When no colors are configured, uses GTK named theme colors (@theme_bg_color,
+    @theme_fg_color, etc.) so the overlay looks native on any theme.
     """
-    bg = rgb_strip_alpha(colors.get("background", "#0f0f14"))
-    fg = rgb_strip_alpha(colors.get("foreground", "#e2e8f0"))
-    border = rgb_strip_alpha(colors.get("border", "#2a2a3a"))
-    accent = rgb_strip_alpha(colors.get("accent", "#8b5cf6"))
-    user_accent = rgb_strip_alpha(colors.get("user_accent", "#22d3ee"))
+    bg = rgb_strip_alpha(colors["background"]) if "background" in colors else None
+    fg = rgb_strip_alpha(colors["foreground"]) if "foreground" in colors else None
+    border = rgb_strip_alpha(colors["border"]) if "border" in colors else None
+    accent = rgb_strip_alpha(colors["accent"]) if "accent" in colors else None
+    user_accent = rgb_strip_alpha(colors["user_accent"]) if "user_accent" in colors else None
     bg_opacity = max(0.0, min(1.0, opacity))
 
     font_rule = f'font-family: "{font}";' if font else ""
 
-    return f"""
+    # Use configured colors or fall back to GTK theme named colors.
+    bg_val = f"alpha({bg}, {bg_opacity})" if bg else "@theme_bg_color"
+    fg_val = fg or "@theme_fg_color"
+    border_val = f"alpha({border}, 0.5)" if border else "alpha(@borders, 0.5)"
+    accent_val = accent or "@theme_selected_bg_color"
+    user_accent_val = user_accent or "@theme_selected_bg_color"
+
+    # Window must be transparent for layer-shell (rounded corners).
+    # The overlay-container restores an opaque background from the theme.
+    css = f"""
 window {{
     background-color: transparent;
 }}
@@ -32,57 +43,54 @@ window.background {{
     background-color: transparent;
 }}
 .overlay-container {{
-    background-color: alpha({bg}, {bg_opacity});
+    background-color: {bg_val};
     border-radius: 12px;
-    border: 1px solid alpha({border}, 0.5);
+    border: 1px solid {border_val};
     padding: 0;
     {font_rule}
 }}
-textview {{
+.overlay-container textview {{
     background: transparent;
+    color: {fg_val};
 }}
-textview text {{
+.overlay-container textview text {{
     background: transparent;
-    color: {fg};
+    color: {fg_val};
 }}
 .accent-bar {{
-    min-height: 3px;
+    min-height: 4px;
 }}
 .message-view {{
-    background: transparent;
     padding: 6px 0;
 }}
 .message-user {{
-    border-left: 3px solid alpha({user_accent}, 0.6);
     margin-left: 8px;
+    border-left: 3px solid alpha({user_accent_val}, 0.6);
 }}
 .message-llm {{
-    border-left: 3px solid alpha({accent}, 0.4);
     margin-left: 8px;
+    border-left: 3px solid alpha({accent_val}, 0.4);
 }}
 .message-user textview text {{
-    color: {user_accent};
-}}
-.message-llm textview text {{
-    color: {fg};
+    color: {user_accent_val};
 }}
 .reply-input {{
-    background-color: alpha({user_accent}, 0.04);
     border-radius: 8px;
-    border: 1px solid alpha({user_accent}, 0.3);
+    border: 1px solid alpha({user_accent_val}, 0.3);
     margin: 8px 12px;
     padding: 0;
-    caret-color: {user_accent};
+    caret-color: {user_accent_val};
+    background-color: alpha({user_accent_val}, 0.04);
 }}
 .reply-input:focus-within {{
-    border-color: alpha({user_accent}, 0.6);
+    border-color: alpha({user_accent_val}, 0.6);
 }}
 .reply-input textview {{
     background: transparent;
 }}
 .reply-input textview text {{
     background: transparent;
-    color: {fg};
+    color: {fg_val};
 }}
 .picker {{
     background: transparent;
@@ -90,7 +98,7 @@ textview text {{
 .picker-title {{
     font-size: 1.1em;
     font-weight: bold;
-    color: {accent};
+    color: {accent_val};
     margin: 12px 16px 4px 16px;
 }}
 .picker-listbox {{
@@ -100,50 +108,51 @@ textview text {{
     border-radius: 6px;
     margin: 2px 8px;
     padding: 8px 12px;
-    color: {fg};
+    color: {fg_val};
 }}
 .picker-row:selected {{
-    background-color: alpha({accent}, 0.15);
+    background-color: alpha({accent_val}, 0.15);
 }}
 .picker-input {{
-    background-color: alpha({user_accent}, 0.04);
     border-radius: 8px;
-    border: 1px solid alpha({user_accent}, 0.3);
+    border: 1px solid alpha({user_accent_val}, 0.3);
     margin: 4px 12px;
+    background-color: alpha({user_accent_val}, 0.04);
 }}
 .picker-input:focus-within {{
-    border-color: alpha({user_accent}, 0.6);
+    border-color: alpha({user_accent_val}, 0.6);
 }}
 .picker-input textview {{
     background: transparent;
 }}
 .picker-input textview text {{
     background: transparent;
-    color: {fg};
+    color: {fg_val};
 }}
 .input-hint {{
     font-size: 0.8em;
-    color: alpha({fg}, 0.35);
+    color: alpha({fg_val}, 0.35);
     margin: 2px 16px 8px 16px;
 }}
 .action-bar {{
     padding: 4px 16px 8px 16px;
 }}
 .action-bar button {{
-    background: alpha({accent}, 0.1);
-    border: 1px solid alpha({accent}, 0.3);
+    background: alpha({accent_val}, 0.1);
+    border: 1px solid alpha({accent_val}, 0.3);
     border-radius: 6px;
-    color: alpha({fg}, 0.85);
+    color: alpha({fg_val}, 0.85);
     padding: 4px 12px;
     font-size: 0.85em;
 }}
 .action-bar button:hover {{
-    background: alpha({accent}, 0.2);
-    color: {fg};
-    border-color: alpha({accent}, 0.5);
+    background: alpha({accent_val}, 0.2);
+    color: {fg_val};
+    border-color: alpha({accent_val}, 0.5);
 }}
 .dim-label {{
-    color: alpha({fg}, 0.4);
+    color: alpha({fg_val}, 0.4);
     font-size: 0.85em;
 }}
 """
+    return css

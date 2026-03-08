@@ -21,8 +21,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.set_child(self._box)
 
-        # Expand to fill available space
-        self.set_vexpand(True)
+        # Size to content, don't grab extra space
         self.set_hexpand(True)
         self.set_propagate_natural_height(True)
 
