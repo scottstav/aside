@@ -46,6 +46,7 @@ py.install_sources(
   'aside/overlay/css.py',
   'aside/overlay/markdown.py',
   'aside/overlay/message_view.py',
+  'aside/overlay/conversation.py',
   'aside/overlay/reply_input.py',
   preserve_path: true,
 )
