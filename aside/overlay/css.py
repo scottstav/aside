@@ -8,16 +8,18 @@ def rgb_strip_alpha(color: str) -> str:
     return color
 
 
-def build_css(colors: dict, font: str = "") -> str:
+def build_css(colors: dict, font: str = "", opacity: float = 0.96) -> str:
     """Generate CSS string for all overlay components.
 
     *colors* dict may contain: background, foreground, border, accent.
+    *opacity* controls background transparency (0.0–1.0).
     Missing keys fall back to Tokyo Night defaults.
     """
     bg = rgb_strip_alpha(colors.get("background", "#1a1b26"))
     fg = rgb_strip_alpha(colors.get("foreground", "#c0caf5"))
     border = rgb_strip_alpha(colors.get("border", "#414868"))
     accent = rgb_strip_alpha(colors.get("accent", "#7aa2f7"))
+    bg_opacity = max(0.0, min(1.0, opacity))
 
     font_rule = f'font-family: "{font}";' if font else ""
 
@@ -29,7 +31,7 @@ window.background {{
     background-color: transparent;
 }}
 .overlay-container {{
-    background-color: alpha({bg}, 0.96);
+    background-color: alpha({bg}, {bg_opacity});
     border-radius: 12px;
     border: 1px solid alpha({border}, 0.6);
     padding: 0;

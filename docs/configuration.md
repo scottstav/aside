@@ -143,6 +143,7 @@ accent = "#7aa2f7ff"
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `opacity` | `0.96` | Background opacity (0.0 = fully transparent, 1.0 = fully opaque) |
 | `dismiss_timeout` | `5.0` | Seconds before the overlay auto-dismisses after a response completes. Set to `0` to disable auto-dismiss |
 
 ### Animation

@@ -84,7 +84,8 @@ class OverlayWindow(Gtk.Window):
         # CSS
         accent_color = colors.get("accent", "#7aa2f7ff")
         font = overlay_cfg.get("font", "")
-        css_text = build_css(colors, font=font)
+        opacity = overlay_cfg.get("opacity", 0.96)
+        css_text = build_css(colors, font=font, opacity=opacity)
         provider = Gtk.CssProvider()
         provider.load_from_string(css_text)
         Gtk.StyleContext.add_provider_for_display(
@@ -163,7 +164,7 @@ class OverlayWindow(Gtk.Window):
     def _set_state(self, state: OverlayState) -> None:
         self._state = state
         # Update keyboard mode based on state
-        if state in (OverlayState.CONVO, OverlayState.PICKER):
+        if state in (OverlayState.DISPLAY, OverlayState.CONVO, OverlayState.PICKER):
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         else:
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
@@ -283,6 +284,15 @@ class OverlayWindow(Gtk.Window):
 
     def _on_click(self, gesture, n_press, x, y) -> None:
         """Handle mouse clicks: left=dismiss, middle=stop TTS, right=cancel."""
+        # Don't dismiss if clicking an interactive widget (e.g. Reply button)
+        target = self.pick(x, y, Gtk.PickFlags.DEFAULT)
+        if target is not None and target is not self._main_box and target is not self:
+            # Check if click landed on a Button or its label child
+            widget = target
+            while widget is not None:
+                if isinstance(widget, Gtk.Button):
+                    return  # let the button handle it
+                widget = widget.get_parent()
         button = gesture.get_current_button()
         if button == 1:  # left click
             if self._state == OverlayState.DISPLAY:
@@ -349,4 +359,25 @@ class OverlayWindow(Gtk.Window):
         if keyval == Gdk.KEY_Escape:
             self.handle_clear()
             return True
+
+        if self._state == OverlayState.DISPLAY:
+            shift = state & Gdk.ModifierType.SHIFT_MASK
+            if keyval == Gdk.KEY_Tab and not shift:
+                # Cycle focus through action bar buttons
+                self._action_bar.child_focus(Gtk.DirectionType.TAB_FORWARD)
+                return True
+            if keyval == Gdk.KEY_Tab and shift:
+                # Shift+Tab: expand to full conversation view
+                if self._conv_id:
+                    self._load_convo(self._conv_id)
+                return True
+            if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+                # Enter: activate focused button, or go to reply
+                focused = self.get_focus()
+                if isinstance(focused, Gtk.Button):
+                    focused.activate()
+                elif self._conv_id:
+                    self._load_convo(self._conv_id)
+                return True
+
         return False
