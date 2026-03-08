@@ -33,7 +33,7 @@ class ReplyInput(Gtk.Box):
         self._scroll.set_child(self._textview)
 
         # Hint label
-        self._hint = Gtk.Label(label="Enter to send \u2022 Shift+Enter for newline \u2022 Esc to close")
+        self._hint = Gtk.Label(label="Enter to send \u2022 Shift+Tab to expand \u2022 Esc to close")
         self._hint.add_css_class("input-hint")
 
         self.append(self._scroll)
@@ -53,6 +53,8 @@ class ReplyInput(Gtk.Box):
 
     def connect_submit(self, callback: Callable[[str], None]) -> None:
         """Register a callback for Enter key (not Shift+Enter)."""
+        self._submit_callback = callback
+        self._expand_callback: Callable[[], None] | None = None
         controller = Gtk.EventControllerKey()
 
         def on_key_pressed(
@@ -61,15 +63,24 @@ class ReplyInput(Gtk.Box):
             _keycode: int,
             state: Gdk.ModifierType,
         ) -> bool:
-            if keyval == Gdk.KEY_Return and not (state & Gdk.ModifierType.SHIFT_MASK):
+            shift = state & Gdk.ModifierType.SHIFT_MASK
+            if keyval == Gdk.KEY_Return and not shift:
                 text = self.get_text()
                 if text:
-                    callback(text)
+                    self._submit_callback(text)
+                return True
+            if keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab) and shift:
+                if self._expand_callback:
+                    self._expand_callback()
                 return True
             return False
 
         controller.connect("key-pressed", on_key_pressed)
         self._textview.add_controller(controller)
+
+    def connect_expand(self, callback: Callable[[], None]) -> None:
+        """Register a callback for Shift+Tab (expand to full conversation)."""
+        self._expand_callback = callback
 
     def focus_input(self) -> None:
         """Grab focus on the text view."""

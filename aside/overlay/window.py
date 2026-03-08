@@ -51,7 +51,7 @@ class OverlayWindow(Gtk.Window):
         self.set_title("aside")
         self.set_decorated(False)
         self.set_resizable(False)
-        width = overlay_cfg.get("width", 420)
+        width = overlay_cfg.get("width", 250)
         self._default_width = width
         self.set_default_size(width, -1)
 
@@ -129,6 +129,7 @@ class OverlayWindow(Gtk.Window):
         # Inline reply input (hidden until Reply is clicked)
         self._stream_reply = ReplyInput()
         self._stream_reply.connect_submit(self._on_stream_reply_submit)
+        self._stream_reply.connect_expand(self._on_expand_convo)
         self._stream_reply.set_visible(False)
         stream_box.append(self._stream_reply)
         self._stack.add_named(stream_box, "stream")
@@ -140,6 +141,7 @@ class OverlayWindow(Gtk.Window):
         convo_box.append(self._convo_history)
         self._convo_reply = ReplyInput()
         self._convo_reply.connect_submit(self._on_submit)
+        self._convo_reply.connect_expand(self._on_expand_convo)
         convo_box.append(self._convo_reply)
         self._stack.add_named(convo_box, "convo")
 
@@ -324,6 +326,11 @@ class OverlayWindow(Gtk.Window):
         self._stream_reply.set_visible(True)
         self._stream_reply.grab_focus()
         self._set_state(OverlayState.CONVO)  # reuse CONVO for keyboard mode
+
+    def _on_expand_convo(self) -> None:
+        """Shift+Tab: expand to full conversation view."""
+        if self._conv_id:
+            self._load_convo(self._conv_id)
 
     def _on_submit(self, text: str) -> None:
         """Send query to daemon when user submits from convo reply input."""
