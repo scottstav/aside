@@ -319,7 +319,7 @@ def _cmd_toggle_tts(args: argparse.Namespace) -> None:
 _VOICE_MODEL_DIR = Path("/usr/share/piper-voices/en/en_US/lessac/medium")
 _VOICE_MODEL_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
 _VOICE_MODEL_FILES = ("en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json")
-_VENV_PIP = "/opt/aside/bin/pip"
+_VENV_PIP = str(Path(sys.executable).parent / "pip")
 
 
 def _cmd_enable_tts(args: argparse.Namespace) -> None:
@@ -367,19 +367,12 @@ def _cmd_disable_tts(args: argparse.Namespace) -> None:
 
 
 _STT_PIP_PACKAGES = ["faster-whisper", "webrtcvad-wheels"]
-_STT_SYSTEM_PACKAGES = ["python-numpy"]
 
 
 def _cmd_enable_stt(args: argparse.Namespace) -> None:
     """Install STT packages into the aside venv."""
     if os.geteuid() != 0:
         print("Error: enable-stt must be run as root (sudo aside enable-stt)", file=sys.stderr)
-        sys.exit(1)
-
-    print("Installing system packages...")
-    ret = subprocess.run(["pacman", "-S", "--noconfirm", "--needed"] + _STT_SYSTEM_PACKAGES, check=False)
-    if ret.returncode != 0:
-        print("Error: pacman install failed", file=sys.stderr)
         sys.exit(1)
 
     print("Installing STT packages...")
