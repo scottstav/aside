@@ -304,6 +304,7 @@ class OverlayWindow(Gtk.Window):
             "text": text.strip(),
             "conversation_id": self._conv_id,
         }
+        self._convo_reply.clear()
         threading.Thread(
             target=self._send_to_daemon, args=(msg,), daemon=True
         ).start()
