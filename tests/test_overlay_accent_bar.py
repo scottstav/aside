@@ -44,3 +44,11 @@ class TestAccentBar:
         bar = AccentBar(accent_color="#7aa2f7", height=4)
         min_h = bar.get_size_request()[1]
         assert min_h == 4
+
+    def test_corner_radius_default(self):
+        bar = AccentBar(accent_color="#7aa2f7")
+        assert bar._corner_radius == 12
+
+    def test_corner_radius_custom(self):
+        bar = AccentBar(accent_color="#7aa2f7", corner_radius=8)
+        assert bar._corner_radius == 8

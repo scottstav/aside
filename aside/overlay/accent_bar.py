@@ -33,9 +33,10 @@ def _parse_hex_color(hex_color: str) -> tuple[float, float, float]:
 class AccentBar(Gtk.DrawingArea):
     """Thin animated bar that communicates overlay state via color/motion."""
 
-    def __init__(self, accent_color: str, height: int = 3) -> None:
+    def __init__(self, accent_color: str, height: int = 3, corner_radius: int = 12) -> None:
         super().__init__()
         self._color = _parse_hex_color(accent_color)
+        self._corner_radius = corner_radius
         self._state = BarState.IDLE
         self._progress: float = 0.0
         self._tick_id: int | None = None
@@ -98,7 +99,23 @@ class AccentBar(Gtk.DrawingArea):
         self.queue_draw()
         return True
 
+    @staticmethod
+    def _rounded_top_clip(cr, width, height, radius):
+        """Set a clip path with rounded top corners, flat bottom."""
+        cr.new_path()
+        cr.move_to(0, height)
+        cr.line_to(0, radius)
+        cr.arc(radius, radius, radius, math.pi, 1.5 * math.pi)
+        cr.line_to(width - radius, 0)
+        cr.arc(width - radius, radius, radius, 1.5 * math.pi, 2 * math.pi)
+        cr.line_to(width, height)
+        cr.close_path()
+        cr.clip()
+
     def _draw(self, area: Gtk.DrawingArea, cr, width: int, height: int) -> None:
+        if self._corner_radius > 0:
+            self._rounded_top_clip(cr, width, height, self._corner_radius)
+
         r, g, b = self._color
 
         if self._state == BarState.IDLE:

@@ -96,7 +96,7 @@ class OverlayWindow(Gtk.Window):
         self.set_child(self._main_box)
 
         # Accent bar (always visible, outside stack)
-        self._accent_bar = AccentBar(accent_color=accent_color)
+        self._accent_bar = AccentBar(accent_color=accent_color, corner_radius=12)
         self._main_box.append(self._accent_bar)
 
         # Stack for view switching
