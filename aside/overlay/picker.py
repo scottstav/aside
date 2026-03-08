@@ -136,6 +136,47 @@ class ConversationPicker(Gtk.Box):
         hint.set_margin_bottom(10)
         self.append(hint)
 
+        # Keyboard navigation
+        key_ctl = Gtk.EventControllerKey()
+        key_ctl.connect("key-pressed", self._on_key)
+        self.add_controller(key_ctl)
+
+    def _on_key(self, ctl, keyval, keycode, state) -> bool:
+        ctrl = state & Gdk.ModifierType.CONTROL_MASK
+
+        if keyval == Gdk.KEY_Tab:
+            self._textview.grab_focus()
+            return True
+
+        if ctrl and keyval in (Gdk.KEY_n, Gdk.KEY_N):
+            self._select_adjacent(1)
+            return True
+
+        if ctrl and keyval in (Gdk.KEY_p, Gdk.KEY_P):
+            self._select_adjacent(-1)
+            return True
+
+        if keyval in (Gdk.KEY_Down,):
+            self._select_adjacent(1)
+            return True
+
+        if keyval in (Gdk.KEY_Up,):
+            self._select_adjacent(-1)
+            return True
+
+        return False
+
+    def _select_adjacent(self, delta: int) -> None:
+        """Select the row delta positions from current selection."""
+        current = self._listbox.get_selected_row()
+        if current is None:
+            idx = 0
+        else:
+            idx = current.get_index() + delta
+        target = self._listbox.get_row_at_index(idx)
+        if target is not None:
+            self._listbox.select_row(target)
+
     def populate(self, entries: list[tuple[str, str, str]]) -> None:
         """Clear listbox and populate with new-conversation row + entries."""
         # Remove all existing rows
