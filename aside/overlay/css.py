@@ -30,25 +30,26 @@ window.background {{
 }}
 .overlay-container {{
     background-color: alpha({bg}, 0.92);
-    border-radius: 16px;
+    border-radius: 12px;
     border: 1px solid alpha({border}, 0.4);
     padding: 0;
     {font_rule}
 }}
+textview {{
+    background: transparent;
+}}
+textview text {{
+    background: transparent;
+    color: {fg};
+}}
 .accent-bar {{
-    background-color: {accent};
-    border-radius: 16px 16px 0 0;
     min-height: 3px;
 }}
 .message-view {{
     background: transparent;
-    padding: 12px 16px;
-    color: {fg};
 }}
 .message-user {{
-    color: {accent};
-    font-weight: bold;
-    margin-bottom: 4px;
+    color: alpha({accent}, 0.85);
 }}
 .message-llm {{
     color: {fg};
@@ -57,34 +58,78 @@ window.background {{
     background-color: alpha({fg}, 0.04);
     border-radius: 8px;
     border: 1px solid alpha({border}, 0.5);
-    padding: 8px 12px;
+    margin: 8px 12px;
+    padding: 0;
     caret-color: {accent};
-    color: {fg};
 }}
-.reply-input:focus {{
-    border-color: {accent};
-    box-shadow: 0 0 0 1px alpha({accent}, 0.3);
+.reply-input:focus-within {{
+    border-color: alpha({accent}, 0.6);
+}}
+.reply-input textview {{
+    background: transparent;
+}}
+.reply-input textview text {{
+    background: transparent;
+    color: {fg};
 }}
 .picker {{
     background: transparent;
-    border-radius: 0;
+}}
+.picker-title {{
+    font-size: 1.1em;
+    font-weight: bold;
+    color: {accent};
+    margin: 12px 16px 4px 16px;
+}}
+.picker-listbox {{
+    background: transparent;
 }}
 .picker-row {{
-    border-radius: 8px;
-    margin: 2px 8px;
+    border-radius: 6px;
+    margin: 1px 8px;
     padding: 6px 12px;
     color: {fg};
 }}
 .picker-row:selected {{
     background-color: alpha({accent}, 0.15);
 }}
+.picker-input {{
+    background-color: alpha({fg}, 0.04);
+    border-radius: 8px;
+    border: 1px solid alpha({border}, 0.5);
+}}
+.picker-input:focus-within {{
+    border-color: alpha({accent}, 0.6);
+}}
+.picker-input textview {{
+    background: transparent;
+}}
+.picker-input textview text {{
+    background: transparent;
+    color: {fg};
+}}
 .input-hint {{
     font-size: 0.8em;
     color: alpha({fg}, 0.35);
-    margin-top: 2px;
+    margin: 2px 16px 8px 16px;
 }}
 .action-bar {{
+    padding: 4px 16px 8px 16px;
+}}
+.action-bar button {{
+    background: alpha({fg}, 0.06);
+    border: 1px solid alpha({border}, 0.3);
+    border-radius: 6px;
+    color: alpha({fg}, 0.7);
     padding: 4px 12px;
-    border-top: 1px solid alpha({border}, 0.3);
+    font-size: 0.85em;
+}}
+.action-bar button:hover {{
+    background: alpha({fg}, 0.1);
+    color: {fg};
+}}
+.dim-label {{
+    color: alpha({fg}, 0.4);
+    font-size: 0.85em;
 }}
 """

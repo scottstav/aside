@@ -31,10 +31,10 @@ class MessageView(Gtk.Box):
         self._textview.set_editable(False)
         self._textview.set_cursor_visible(False)
         self._textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self._textview.set_top_margin(8)
-        self._textview.set_bottom_margin(8)
-        self._textview.set_left_margin(12)
-        self._textview.set_right_margin(12)
+        self._textview.set_top_margin(4)
+        self._textview.set_bottom_margin(4)
+        self._textview.set_left_margin(16)
+        self._textview.set_right_margin(16)
         self.append(self._textview)
 
         # Initial render

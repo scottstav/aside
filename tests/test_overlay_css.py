@@ -35,10 +35,12 @@ class TestBuildCss:
             "accent": "#7aa2f7ff",
         })
         for cls in [
+            "textview", "textview text",
             ".overlay-container", ".accent-bar", ".message-view",
             ".message-user", ".message-llm", ".reply-input",
-            ".reply-input:focus", ".picker", ".picker-row",
-            ".picker-row:selected", ".input-hint", ".action-bar",
+            ".reply-input:focus-within", ".picker", ".picker-title",
+            ".picker-listbox", ".picker-row", ".picker-row:selected",
+            ".picker-input", ".input-hint", ".action-bar", ".dim-label",
         ]:
             assert cls in css, f"Missing CSS class: {cls}"
 
