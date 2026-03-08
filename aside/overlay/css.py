@@ -29,9 +29,9 @@ window.background {{
     background-color: transparent;
 }}
 .overlay-container {{
-    background-color: alpha({bg}, 0.92);
+    background-color: alpha({bg}, 0.96);
     border-radius: 12px;
-    border: 1px solid alpha({border}, 0.4);
+    border: 1px solid alpha({border}, 0.6);
     padding: 0;
     {font_rule}
 }}
@@ -49,13 +49,13 @@ textview text {{
     background: transparent;
 }}
 .message-user {{
-    color: alpha({accent}, 0.85);
+    color: alpha({accent}, 0.9);
 }}
 .message-llm {{
     color: {fg};
 }}
 .reply-input {{
-    background-color: alpha({fg}, 0.04);
+    background-color: alpha({fg}, 0.06);
     border-radius: 8px;
     border: 1px solid alpha({border}, 0.5);
     margin: 8px 12px;
@@ -63,7 +63,7 @@ textview text {{
     caret-color: {accent};
 }}
 .reply-input:focus-within {{
-    border-color: alpha({accent}, 0.6);
+    border-color: alpha({accent}, 0.7);
 }}
 .reply-input textview {{
     background: transparent;
@@ -86,20 +86,21 @@ textview text {{
 }}
 .picker-row {{
     border-radius: 6px;
-    margin: 1px 8px;
-    padding: 6px 12px;
+    margin: 2px 8px;
+    padding: 8px 12px;
     color: {fg};
 }}
 .picker-row:selected {{
-    background-color: alpha({accent}, 0.15);
+    background-color: alpha({accent}, 0.2);
 }}
 .picker-input {{
-    background-color: alpha({fg}, 0.04);
+    background-color: alpha({fg}, 0.06);
     border-radius: 8px;
     border: 1px solid alpha({border}, 0.5);
+    margin: 4px 12px;
 }}
 .picker-input:focus-within {{
-    border-color: alpha({accent}, 0.6);
+    border-color: alpha({accent}, 0.7);
 }}
 .picker-input textview {{
     background: transparent;
@@ -110,26 +111,27 @@ textview text {{
 }}
 .input-hint {{
     font-size: 0.8em;
-    color: alpha({fg}, 0.35);
+    color: alpha({fg}, 0.4);
     margin: 2px 16px 8px 16px;
 }}
 .action-bar {{
     padding: 4px 16px 8px 16px;
 }}
 .action-bar button {{
-    background: alpha({fg}, 0.06);
-    border: 1px solid alpha({border}, 0.3);
+    background: alpha({fg}, 0.08);
+    border: 1px solid alpha({border}, 0.4);
     border-radius: 6px;
-    color: alpha({fg}, 0.7);
+    color: alpha({fg}, 0.8);
     padding: 4px 12px;
     font-size: 0.85em;
 }}
 .action-bar button:hover {{
-    background: alpha({fg}, 0.1);
+    background: alpha({accent}, 0.15);
     color: {fg};
+    border-color: alpha({accent}, 0.4);
 }}
 .dim-label {{
-    color: alpha({fg}, 0.4);
+    color: alpha({fg}, 0.45);
     font-size: 0.85em;
 }}
 """

@@ -58,7 +58,7 @@ class OverlayWindow(Gtk.Window):
         # Layer-shell setup
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+        Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         Gtk4LayerShell.set_namespace(self, "aside")
 
         # Anchoring from config
@@ -164,7 +164,7 @@ class OverlayWindow(Gtk.Window):
         self._state = state
         # Update keyboard mode based on state
         if state in (OverlayState.CONVO, OverlayState.PICKER):
-            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         else:
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
 
