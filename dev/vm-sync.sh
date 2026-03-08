@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 # Fast dev loop for aside on a vmt VM.
 #
-# --setup runs the EXACT commands from the README (manual install section):
-#   1. apt install <deps from docs/install.md>
-#   2. git clone https://github.com/scottstav/aside.git && cd aside && make install
-#   3. aside set-key ...
-#   4. systemctl --user enable --now aside-daemon aside-overlay
+# --setup installs system deps, rsyncs your LOCAL working tree, and runs
+# make install + enables services.  No git clone — you always test what's
+# on disk, not what's on master.
 #
 # After setup, iterate with rsync (no git commit/push needed):
-#   dev/vm-sync.sh                    # rsync + make install + restart
-#   dev/vm-sync.sh --python-only      # only reinstall Python package
+#   dev/vm-sync.sh                    # rsync + pip install + restart
+#   dev/vm-sync.sh --python-only      # same (alias)
 #   dev/vm-sync.sh --query "hello"    # sync + rebuild + restart + test query
 #
 # Requires: VM already booted with `vmt up aside-ubuntu-kde`
@@ -21,7 +19,6 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SSH_KEY="$HOME/.local/share/vmt/id_ed25519"
 VMT_DIR="$HOME/projects/vmt"
 
-# The setup clones to ~/aside, so iteration syncs there too
 REMOTE_DIR="/home/ubuntu/aside"
 
 # --- resolve VM IP -----------------------------------------------------------
@@ -48,36 +45,37 @@ ssh_run() { $SSH_CMD "$@"; }
 # --- actions ------------------------------------------------------------------
 
 do_setup() {
-    # -------------------------------------------------------------------------
-    # This runs the EXACT commands from README.md and docs/install.md.
-    # If these fail, the README is wrong and needs updating.
-    # -------------------------------------------------------------------------
+    echo "=> [1/6] Fixing KDE autologin"
+    ssh_run "sudo systemctl restart getty@tty1" 2>/dev/null || true
 
-    echo "=> [README step 1] Installing system dependencies"
+    echo "=> [2/6] Installing system dependencies"
     ssh_run "sudo apt-get update -qq && sudo apt-get install -y -qq \
         python3-venv python3-pip python3-dev \
         meson ninja-build valac \
         libgtk-4-dev gobject-introspection libgirepository1.0-dev \
         python3-gi python3-gi-cairo gir1.2-gtk-4.0 git"
 
-    echo "=> [README step 1b] Building gtk4-layer-shell from source"
-    ssh_run "rm -rf /tmp/gtk4-layer-shell && \
+    echo "=> [3/6] Building gtk4-layer-shell from source"
+    ssh_run "if [ ! -f /usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so ]; then \
+        rm -rf /tmp/gtk4-layer-shell && \
         git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell && \
         cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && \
-        sudo ldconfig"
+        sudo ldconfig; \
+    else echo '   already installed, skipping'; fi"
 
-    echo "=> [README step 2] git clone + make install"
-    ssh_run "rm -rf ~/aside && git clone https://github.com/scottstav/aside.git ~/aside && cd ~/aside && make install"
-
+    echo "=> [4/6] Syncing local working tree to VM"
+    do_rsync
     do_sync_env
 
+    echo "=> [5/6] make install"
+    ssh_run "cd $REMOTE_DIR && make install"
+
+    echo "=> [6/6] Enabling and starting services"
+    ssh_run "systemctl --user enable --now aside-daemon aside-overlay" 2>&1 || true
+    sleep 3
+
     echo ""
-    echo "=> Setup complete! Remaining README steps:"
-    echo "   systemctl --user enable --now aside-daemon aside-overlay"
-    echo ""
-    echo "   Or: dev/vm-sync.sh --ssh \"systemctl --user enable --now aside-daemon aside-overlay\""
-    echo ""
-    echo "=> API keys were copied from .env (if present). To iterate: dev/vm-sync.sh"
+    echo "=> Setup complete. Services running. To iterate: dev/vm-sync.sh"
 }
 
 do_sync_env() {
@@ -106,9 +104,15 @@ do_rsync() {
 }
 
 do_rebuild() {
-    echo "=> reinstall python package"
-    ssh_run "cd $REMOTE_DIR && \
-        ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
+    # If venv doesn't exist yet, run full make install instead of just pip
+    if ! ssh_run "test -f ~/.local/lib/aside/venv/bin/pip" 2>/dev/null; then
+        echo "=> venv missing — running make install"
+        ssh_run "cd $REMOTE_DIR && make install" 2>&1
+    else
+        echo "=> reinstall python package"
+        ssh_run "cd $REMOTE_DIR && \
+            ~/.local/lib/aside/venv/bin/pip install . -q" 2>&1
+    fi
 }
 
 do_restart() {
@@ -168,11 +172,11 @@ while [[ $# -gt 0 ]]; do
 Usage: dev/vm-sync.sh [OPTIONS]
 
 First-time:
-  --setup          Run exact README install commands (apt + clone + make install)
+  --setup          Install deps, rsync local code, make install, start services
 
 Iteration (rsync-based, no git needed):
-  (no flags)       rsync + make install + restart services
-  --python-only    rsync + reinstall Python package only + restart
+  (no flags)       rsync + pip install + restart services
+  --python-only    same as above (alias)
   --restart-only   Just restart services
 
 Testing:
