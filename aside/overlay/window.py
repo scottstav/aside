@@ -325,10 +325,9 @@ class OverlayWindow(Gtk.Window):
         """Send JSON message to the daemon socket."""
         sock_path = resolve_socket_path()
         try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.connect(str(sock_path))
-            s.sendall((json.dumps(msg) + "\n").encode())
-            s.close()
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.connect(str(sock_path))
+                s.sendall((json.dumps(msg) + "\n").encode())
         except OSError:
             log.exception("Failed to send to daemon at %s", sock_path)
 
