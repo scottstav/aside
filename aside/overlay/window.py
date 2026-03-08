@@ -43,6 +43,7 @@ class OverlayWindow(Gtk.Window):
         self._dismiss_timer_id: int | None = None
 
         overlay_cfg = config.get("overlay", {})
+        self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
         colors = overlay_cfg.get("colors", {})
         self._markdown_enabled = overlay_cfg.get("markdown", True)
 
@@ -191,7 +192,7 @@ class OverlayWindow(Gtk.Window):
         self._accent_bar.set_state(BarState.IDLE)
         self._action_bar.set_visible(True)
         self._set_state(OverlayState.DISPLAY)
-        self._start_dismiss_timer()
+        self._start_dismiss_timer(self._dismiss_timeout)
 
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
@@ -230,7 +231,11 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
-        self.set_default_size(max(self._default_width, 500), 420)
+        # Size picker based on number of conversations: ~40px per row + 160px
+        # for title, input area, and padding.  Cap at 600px.
+        n_rows = max(len(entries) + 1, 2)  # +1 for "New conversation" row
+        picker_height = min(n_rows * 40 + 160, 600)
+        self.set_default_size(max(self._default_width, 500), picker_height)
         self.set_visible(True)
         self._picker.focus_input()
 
@@ -257,6 +262,8 @@ class OverlayWindow(Gtk.Window):
 
     def _start_dismiss_timer(self, seconds: float = 5.0) -> None:
         self._cancel_dismiss_timer()
+        if seconds <= 0:
+            return
         self._dismiss_timer_id = GLib.timeout_add(
             int(seconds * 1000), self._on_dismiss_timeout
         )

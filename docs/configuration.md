@@ -139,6 +139,12 @@ accent = "#7aa2f7ff"
 | `border_width` | `2` | Border thickness in pixels |
 | `accent_height` | `3` | Height of the colored accent line at the top. Set to `0` to disable |
 
+### Behavior
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `dismiss_timeout` | `5.0` | Seconds before the overlay auto-dismisses after a response completes. Set to `0` to disable auto-dismiss |
+
 ### Animation
 
 | Option | Default | Description |
