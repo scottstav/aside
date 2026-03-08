@@ -41,6 +41,12 @@ py.install_sources(
 )
 
 py.install_sources(
+  'aside/overlay/__init__.py',
+  'aside/overlay/css.py',
+  preserve_path: true,
+)
+
+py.install_sources(
   'aside/voice/__init__.py',
   'aside/voice/audio.py',
   'aside/voice/listener.py',
