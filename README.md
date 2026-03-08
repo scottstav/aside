@@ -6,9 +6,9 @@ A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, a
 
 ![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
 
-- **overlay** — C layer-shell surface. Streams tokens in real time. Reply or open full transcript with inline actions. Left click to dismiss, right-click to cancel query, middle click to mute TTS. **Very** customizable.
+- **overlay** — GTK4 layer-shell overlay. Streams tokens in real time with markdown rendering. Reply inline, view full conversation history, or open transcript. **Very** customizable.
 - **voice** — STT via faster-whisper, TTS via Piper (optional add-ons).
-- **input popup** — GTK4 window with conversation history. Continue one or start fresh.
+- **input picker** — integrated conversation picker. Continue one or start fresh.
 
 
 Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query. 
@@ -58,6 +58,11 @@ aside query "what time is it in tokyo"
 aside query --mic
 aside reply abc123 "tell me more"
 
+# overlay — open picker, view a conversation, reply inline
+aside input                     # open conversation picker
+aside view <id>                 # view conversation in overlay
+aside reply <id>                # open reply input for conversation
+
 # state
 aside status                    # JSON, great for status bars
 aside ls                        # recent conversations
@@ -90,6 +95,7 @@ dirs = ["~/.config/aside/tools"]
 [overlay]
 position = "top-center"
 font = "Iosevka 12"
+markdown = true
 max_lines = 5
 corner_radius = 8
 border_width = 1
@@ -98,14 +104,14 @@ scroll_duration = 200
 fade_duration = 400
 width = 450
 margin_top = 5
-padding_top = 2.5
+padding_x = 20
+padding_y = 16
 
 [overlay.colors]
 background = "#1a1c1ee6"
 foreground = "#d4d4d4ff"
 border = "#5a4a3aff"
 accent = "#5b9a6a"
-user_accent = "#a07048"
 
 [voice]
 enabled = false
@@ -139,7 +145,20 @@ sudo aside enable-tts   # text-to-speech (piper-tts, ~60MB voice model)
 
 ### manual
 
+Requires Python 3.11+, GTK4, and gtk4-layer-shell.
+
 ```bash
+# system deps (Arch)
+pacman -S gtk4 gtk4-layer-shell python-gobject
+
+# system deps (Ubuntu/Debian — gtk4-layer-shell must be built from source)
+apt install python3-venv python3-dev libgtk-4-dev gobject-introspection \
+    libgirepository1.0-dev python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
+    meson ninja-build valac
+git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
+cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && sudo ldconfig
+
+# install aside
 git clone https://github.com/scottstav/aside.git
 cd aside
 make install
