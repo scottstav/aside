@@ -40,6 +40,7 @@ class OverlayWindow(Gtk.Window):
         self._state = OverlayState.HIDDEN
         self._conv_id: str | None = None
         self._accumulated_text = ""
+        self._dismiss_timer_id: int | None = None
 
         overlay_cfg = config.get("overlay", {})
         colors = overlay_cfg.get("colors", {})
@@ -121,10 +122,6 @@ class OverlayWindow(Gtk.Window):
         reply_btn.connect("clicked", self._on_reply_clicked)
         self._action_bar.append(reply_btn)
 
-        dismiss_btn = Gtk.Button(label="Dismiss")
-        dismiss_btn.connect("clicked", lambda _: self.handle_clear())
-        self._action_bar.append(dismiss_btn)
-
         stream_box.append(self._action_bar)
         self._stack.add_named(stream_box, "stream")
 
@@ -147,6 +144,12 @@ class OverlayWindow(Gtk.Window):
         key_ctl = Gtk.EventControllerKey()
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
+
+        # Mouse click controller
+        click = Gtk.GestureClick()
+        click.set_button(0)  # all buttons
+        click.connect("pressed", self._on_click)
+        self.add_controller(click)
 
         # Start hidden
         self.set_visible(False)
@@ -183,13 +186,15 @@ class OverlayWindow(Gtk.Window):
         self._stream_history.update_last_message(self._accumulated_text)
 
     def handle_done(self) -> None:
-        """STREAMING->DISPLAY: show action buttons."""
+        """STREAMING->DISPLAY: show action buttons, start dismiss timer."""
         self._accent_bar.set_state(BarState.IDLE)
         self._action_bar.set_visible(True)
         self._set_state(OverlayState.DISPLAY)
+        self._start_dismiss_timer()
 
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
+        self._cancel_dismiss_timer()
         self.set_visible(False)
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.HIDDEN)
@@ -209,6 +214,7 @@ class OverlayWindow(Gtk.Window):
 
     def handle_input(self) -> None:
         """Any->PICKER: show conversation picker."""
+        self._cancel_dismiss_timer()
         from aside.state import ConversationStore
         conv_dir = resolve_conversations_dir(self._config)
         entries = []
@@ -231,6 +237,7 @@ class OverlayWindow(Gtk.Window):
 
     def _load_convo(self, conv_id: str) -> None:
         """Load conversation history into convo view."""
+        self._cancel_dismiss_timer()
         from aside.state import ConversationStore
         conv_dir = resolve_conversations_dir(self._config)
         store = ConversationStore(conv_dir)
@@ -243,10 +250,48 @@ class OverlayWindow(Gtk.Window):
         self._set_state(OverlayState.CONVO)
         self.set_visible(True)
 
+    # --- Dismiss timer ---
+
+    def _start_dismiss_timer(self, seconds: float = 5.0) -> None:
+        self._cancel_dismiss_timer()
+        self._dismiss_timer_id = GLib.timeout_add(
+            int(seconds * 1000), self._on_dismiss_timeout
+        )
+
+    def _cancel_dismiss_timer(self) -> None:
+        if self._dismiss_timer_id is not None:
+            GLib.source_remove(self._dismiss_timer_id)
+            self._dismiss_timer_id = None
+
+    def _on_dismiss_timeout(self) -> bool:
+        self._dismiss_timer_id = None
+        if self._state == OverlayState.DISPLAY:
+            self.handle_clear()
+        return False  # don't repeat
+
     # --- User action handlers ---
+
+    def _on_click(self, gesture, n_press, x, y) -> None:
+        """Handle mouse clicks: left=dismiss, middle=stop TTS, right=cancel."""
+        button = gesture.get_current_button()
+        if button == 1:  # left click
+            if self._state == OverlayState.DISPLAY:
+                self.handle_clear()
+        elif button == 2:  # middle click — stop TTS
+            msg = {"action": "stop_tts"}
+            threading.Thread(
+                target=self._send_to_daemon, args=(msg,), daemon=True
+            ).start()
+        elif button == 3:  # right click — cancel query + TTS
+            msg = {"action": "cancel"}
+            threading.Thread(
+                target=self._send_to_daemon, args=(msg,), daemon=True
+            ).start()
+            self.handle_clear()
 
     def _on_reply_clicked(self, button) -> None:
         """DISPLAY->CONVO: load full conversation view."""
+        self._cancel_dismiss_timer()
         if self._conv_id:
             self._load_convo(self._conv_id)
 
@@ -289,6 +334,7 @@ class OverlayWindow(Gtk.Window):
 
     def _on_key(self, ctl, keyval, keycode, state) -> bool:
         """Window-level keyboard handler."""
+        self._cancel_dismiss_timer()
         if keyval == Gdk.KEY_Escape:
             self.handle_clear()
             return True
