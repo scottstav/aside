@@ -416,7 +416,7 @@ def send_query(
     text:
         The user's message.
     conversation_id:
-        - ``None`` -> auto-detect (most recent within threshold)
+        - ``None`` -> continue last conversation (or start new)
         - ``NEW_CONVERSATION`` -> explicit fresh conversation
         - ``"uuid-string"`` -> continue that specific conversation
     config:
@@ -454,7 +454,7 @@ def send_query(
     elif conversation_id is not None:
         conv = store.get_or_create(conversation_id)
     else:
-        resolved = store.auto_resolve()
+        resolved = store.resolve_last()
         conv = store.get_or_create(resolved) if resolved else store.get_or_create()
 
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")

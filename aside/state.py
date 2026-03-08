@@ -79,23 +79,17 @@ class ConversationStore:
         except OSError:
             log.exception("Failed to write last.json")
 
-    def auto_resolve(self, max_age_seconds: int = 60) -> str | None:
-        """Return the last conversation id if it was saved recently.
+    def resolve_last(self) -> str | None:
+        """Return the last conversation id, or None if unknown.
 
-        Reads ``last.json`` from the parent directory.  If the file exists and
-        its timestamp is within *max_age_seconds* of now, return the
-        conversation id.  Otherwise return ``None``.
+        Reads ``last.json`` from the parent directory.
         """
         last_file = self.directory.parent / "last.json"
         try:
             data = json.loads(last_file.read_text())
-            conv_id = data.get("conversation_id")
-            ts = data.get("timestamp", 0)
-            if conv_id and (time.time() - ts) < max_age_seconds:
-                return conv_id
+            return data.get("conversation_id")
         except (FileNotFoundError, json.JSONDecodeError, OSError):
-            pass
-        return None
+            return None
 
     def transcript_path(self, conv_id: str) -> Path:
         """Return the path to the markdown transcript for a conversation."""

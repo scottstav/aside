@@ -158,6 +158,9 @@ class Daemon:
             log.info("TTS not available — piper-tts not installed")
             self.tts = None
 
+        # Last conversation ID (in-memory, authoritative)
+        self.last_conv_id: str | None = self.store.resolve_last()
+
         # Query cancel state
         self._cancel_event: threading.Event | None = None
         self._cancel_lock = threading.Lock()
@@ -173,6 +176,19 @@ class Daemon:
         if self._tools is None:
             self._tools = load_tools(self.tools_dirs)
         return self._tools
+
+    def _resolve_conv(self, raw: str | None):
+        """Resolve a conversation_id from a socket message.
+
+        - ``"__new__"`` → NEW_CONVERSATION (force new)
+        - ``"uuid-string"`` → that specific id
+        - ``None`` → last_conv_id from memory (continues last convo)
+        """
+        if raw == "__new__":
+            return NEW_CONVERSATION
+        if raw:
+            return raw
+        return self.last_conv_id
 
     # ------------------------------------------------------------------
     # Query dispatch
@@ -205,7 +221,7 @@ class Daemon:
 
         def _run():
             try:
-                send_query(
+                result_id = send_query(
                     text=text,
                     conversation_id=conversation_id,
                     config=self.config,
@@ -220,6 +236,8 @@ class Daemon:
                     tools=self._get_tools(),
                     from_mic=from_mic,
                 )
+                if result_id:
+                    self.last_conv_id = result_id
             except Exception:
                 log.exception("Query thread error")
             finally:
@@ -294,11 +312,7 @@ class Daemon:
                         self._mic_cancel = mic_cancel
 
                     # One-shot voice capture in a thread (blocking call)
-                    raw_conv = msg.get("conversation_id")
-                    if raw_conv == "__new__":
-                        conv_id = NEW_CONVERSATION
-                    else:
-                        conv_id = raw_conv
+                    conv_id = self._resolve_conv(msg.get("conversation_id"))
 
                     def _mic_capture(cancel=mic_cancel):
                         from aside.query import _connect_overlay, _overlay_send, _overlay_close
@@ -361,11 +375,7 @@ class Daemon:
                     if not text:
                         log.warning("Socket: empty query text")
                     else:
-                        raw_conv = msg.get("conversation_id")
-                        if raw_conv == "__new__":
-                            conv_id = NEW_CONVERSATION
-                        else:
-                            conv_id = raw_conv
+                        conv_id = self._resolve_conv(msg.get("conversation_id"))
                         self.start_query(
                             text,
                             conversation_id=conv_id,

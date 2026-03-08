@@ -264,10 +264,9 @@ class OverlayWindow(Gtk.Window):
                 from aside.state import ConversationStore
                 conv_dir = resolve_conversations_dir(self._config)
                 store = ConversationStore(conv_dir)
-                entries = store.list_recent(limit=1)
-                if not entries:
+                conv_id = store.resolve_last()
+                if not conv_id:
                     return
-                conv_id = entries[0][0]
         self._load_convo(conv_id)
 
     def _load_convo(self, conv_id: str) -> None:

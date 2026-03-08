@@ -87,27 +87,15 @@ class TestConversationStore:
         assert data["conversation_id"] == "abc-123"
         assert "timestamp" in data
 
-    def test_auto_resolve_recent(self, tmp_path):
-        """auto_resolve returns conv_id when last.json is recent."""
+    def test_resolve_last(self, tmp_path):
+        """resolve_last returns conv_id from last.json."""
         self.store.save_last("recent-conv")
-        result = self.store.auto_resolve(max_age_seconds=60)
+        result = self.store.resolve_last()
         assert result == "recent-conv"
 
-    def test_auto_resolve_stale(self, tmp_path):
-        """auto_resolve returns None when last.json is old."""
-        # Write a last.json with old timestamp
-        last_file = self.conv_dir.parent / "last.json"
-        last_file.parent.mkdir(parents=True, exist_ok=True)
-        last_file.write_text(json.dumps({
-            "conversation_id": "old-conv",
-            "timestamp": time.time() - 120,
-        }))
-        result = self.store.auto_resolve(max_age_seconds=60)
-        assert result is None
-
-    def test_auto_resolve_no_file(self):
-        """auto_resolve returns None when last.json doesn't exist."""
-        result = self.store.auto_resolve()
+    def test_resolve_last_no_file(self):
+        """resolve_last returns None when last.json doesn't exist."""
+        result = self.store.resolve_last()
         assert result is None
 
     def test_list_recent_empty(self):
