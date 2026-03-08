@@ -1002,7 +1002,7 @@ class TestReplyCommand:
         }
 
     def test_reply_bare_sends_to_overlay(self, monkeypatch, tmp_path):
-        """Bare 'aside reply ID' should send reply command to overlay."""
+        """Bare 'aside reply ID' should send convo command to overlay."""
         overlay_sent = []
         monkeypatch.setattr("aside.cli._send_overlay", lambda msg: overlay_sent.append(msg))
         (tmp_path / "conv-42.json").write_text("{}")
@@ -1017,7 +1017,7 @@ class TestReplyCommand:
 
         assert len(overlay_sent) == 1
         assert overlay_sent[0] == {
-            "cmd": "reply",
+            "cmd": "convo",
             "conversation_id": "conv-42",
         }
 

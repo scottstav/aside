@@ -29,7 +29,6 @@ class OverlayState(enum.Enum):
     HIDDEN = "hidden"
     STREAMING = "streaming"
     DISPLAY = "display"
-    REPLY = "reply"
     CONVO = "convo"
     PICKER = "picker"
 
@@ -144,12 +143,6 @@ class OverlayWindow(Gtk.Window):
         self._picker.connect_submit(self._on_picker_submit)
         self._stack.add_named(self._picker, "picker")
 
-        # --- Stream reply input (shown in REPLY state, appended to stream view) ---
-        self._stream_reply = ReplyInput()
-        self._stream_reply.connect_submit(self._on_submit)
-        self._stream_reply.set_visible(False)
-        stream_box.append(self._stream_reply)
-
         # Keyboard controller
         key_ctl = Gtk.EventControllerKey()
         key_ctl.connect("key-pressed", self._on_key)
@@ -165,7 +158,7 @@ class OverlayWindow(Gtk.Window):
     def _set_state(self, state: OverlayState) -> None:
         self._state = state
         # Update keyboard mode based on state
-        if state in (OverlayState.REPLY, OverlayState.CONVO, OverlayState.PICKER):
+        if state in (OverlayState.CONVO, OverlayState.PICKER):
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
         else:
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
@@ -179,7 +172,6 @@ class OverlayWindow(Gtk.Window):
         self._stream_history.clear()
         self._stream_history.add_message("assistant", "")
         self._action_bar.set_visible(False)
-        self._stream_reply.set_visible(False)
         self._stack.set_visible_child_name("stream")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
@@ -233,11 +225,6 @@ class OverlayWindow(Gtk.Window):
         self.set_visible(True)
         self._picker.focus_input()
 
-    def handle_reply(self, conv_id: str) -> None:
-        """Any->CONVO: open conversation with reply input focused."""
-        self._load_convo(conv_id)
-        self._convo_reply.focus_input()
-
     def handle_convo(self, conv_id: str) -> None:
         """Any->CONVO: view a conversation."""
         self._load_convo(conv_id)
@@ -259,11 +246,9 @@ class OverlayWindow(Gtk.Window):
     # --- User action handlers ---
 
     def _on_reply_clicked(self, button) -> None:
-        """DISPLAY->REPLY: show reply input below stream."""
-        self._stream_reply.set_visible(True)
-        self._action_bar.set_visible(False)
-        self._stream_reply.focus_input()
-        self._set_state(OverlayState.REPLY)
+        """DISPLAY->CONVO: load full conversation view."""
+        if self._conv_id:
+            self._load_convo(self._conv_id)
 
     def _on_submit(self, text: str) -> None:
         """Send query to daemon when user submits from reply input."""
@@ -306,12 +291,5 @@ class OverlayWindow(Gtk.Window):
         """Window-level keyboard handler."""
         if keyval == Gdk.KEY_Escape:
             self.handle_clear()
-            return True
-        # Shift+Tab in REPLY state -> expand to CONVO
-        if (keyval == Gdk.KEY_ISO_Left_Tab and
-                self._state == OverlayState.REPLY and
-                self._conv_id):
-            self._stream_reply.set_visible(False)
-            self.handle_reply(self._conv_id)
             return True
         return False

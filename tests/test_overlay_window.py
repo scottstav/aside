@@ -21,6 +21,8 @@ class TestOverlayState:
         assert OverlayState.HIDDEN is not None
         assert OverlayState.STREAMING is not None
         assert OverlayState.DISPLAY is not None
-        assert OverlayState.REPLY is not None
         assert OverlayState.CONVO is not None
         assert OverlayState.PICKER is not None
+
+    def test_state_count(self):
+        assert len(OverlayState) == 5

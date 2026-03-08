@@ -132,7 +132,7 @@ class OverlayApp(Adw.Application):
         elif name == "input":
             self._window.handle_input()
         elif name == "reply":
-            self._window.handle_reply(cmd.get("conversation_id", ""))
+            self._window.handle_convo(cmd.get("conversation_id", ""))
         elif name == "convo":
             self._window.handle_convo(cmd.get("conversation_id", ""))
         return False  # remove from idle queue

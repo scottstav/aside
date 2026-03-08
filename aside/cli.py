@@ -294,7 +294,7 @@ def _cmd_reply(args: argparse.Namespace) -> None:
     elif args.text:
         _send({"action": "query", "text": args.text, "conversation_id": full_id})
     else:
-        _send_overlay({"cmd": "reply", "conversation_id": full_id})
+        _send_overlay({"cmd": "convo", "conversation_id": full_id})
 
 
 def _cmd_cancel(args: argparse.Namespace) -> None:
