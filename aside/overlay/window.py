@@ -51,7 +51,7 @@ class OverlayWindow(Gtk.Window):
         self.set_title("aside")
         self.set_decorated(False)
         self.set_resizable(False)
-        width = overlay_cfg.get("width", 600)
+        width = overlay_cfg.get("width", 420)
         self._default_width = width
         self.set_default_size(width, -1)
 
@@ -126,6 +126,11 @@ class OverlayWindow(Gtk.Window):
         self._action_bar.append(reply_btn)
 
         stream_box.append(self._action_bar)
+        # Inline reply input (hidden until Reply is clicked)
+        self._stream_reply = ReplyInput()
+        self._stream_reply.connect_submit(self._on_stream_reply_submit)
+        self._stream_reply.set_visible(False)
+        stream_box.append(self._stream_reply)
         self._stack.add_named(stream_box, "stream")
 
         # --- Convo view ---
@@ -178,6 +183,7 @@ class OverlayWindow(Gtk.Window):
         self._stream_history.clear()
         self._stream_history.add_message("assistant", "")
         self._action_bar.set_visible(False)
+        self._stream_reply.set_visible(False)
         self._stack.set_visible_child_name("stream")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
@@ -229,6 +235,7 @@ class OverlayWindow(Gtk.Window):
         except Exception:
             log.exception("Failed to load conversations")
         self._picker.populate(entries)
+        self._picker.clear_input()
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
@@ -310,13 +317,24 @@ class OverlayWindow(Gtk.Window):
             self.handle_clear()
 
     def _on_reply_clicked(self, button) -> None:
-        """DISPLAY->CONVO: load full conversation view."""
+        """Show inline reply input below the streamed response."""
         self._cancel_dismiss_timer()
-        if self._conv_id:
-            self._load_convo(self._conv_id)
+        self._action_bar.set_visible(False)
+        self._stream_reply.clear()
+        self._stream_reply.set_visible(True)
+        self._stream_reply.grab_focus()
+        self._set_state(OverlayState.CONVO)  # reuse CONVO for keyboard mode
 
     def _on_submit(self, text: str) -> None:
-        """Send query to daemon when user submits from reply input."""
+        """Send query to daemon when user submits from convo reply input."""
+        self._send_reply(text)
+
+    def _on_stream_reply_submit(self, text: str) -> None:
+        """Send query to daemon when user submits from inline stream reply."""
+        self._send_reply(text)
+
+    def _send_reply(self, text: str) -> None:
+        """Common handler for reply submissions."""
         if not text.strip():
             return
         msg = {
@@ -325,6 +343,7 @@ class OverlayWindow(Gtk.Window):
             "conversation_id": self._conv_id,
         }
         self._convo_reply.clear()
+        self._stream_reply.clear()
         threading.Thread(
             target=self._send_to_daemon, args=(msg,), daemon=True
         ).start()
@@ -360,8 +379,9 @@ class OverlayWindow(Gtk.Window):
             self.handle_clear()
             return True
 
+        shift = state & Gdk.ModifierType.SHIFT_MASK
+
         if self._state == OverlayState.DISPLAY:
-            shift = state & Gdk.ModifierType.SHIFT_MASK
             if keyval == Gdk.KEY_Tab and not shift:
                 # Cycle focus through action bar buttons
                 self._action_bar.child_focus(Gtk.DirectionType.TAB_FORWARD)
@@ -372,11 +392,18 @@ class OverlayWindow(Gtk.Window):
                     self._load_convo(self._conv_id)
                 return True
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-                # Enter: activate focused button, or go to reply
+                # Enter: activate focused button, or show inline reply
                 focused = self.get_focus()
                 if isinstance(focused, Gtk.Button):
                     focused.activate()
-                elif self._conv_id:
+                else:
+                    self._on_reply_clicked(None)
+                return True
+
+        if self._state == OverlayState.CONVO:
+            if keyval == Gdk.KEY_Tab and shift:
+                # Shift+Tab from reply: expand to full conversation view
+                if self._conv_id:
                     self._load_convo(self._conv_id)
                 return True
 

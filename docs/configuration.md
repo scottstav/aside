@@ -99,7 +99,7 @@ Controls the floating overlay that displays responses.
 ```toml
 [overlay]
 font = "Sans 13"
-width = 600
+width = 420
 max_lines = 5
 position = "top-center"
 margin_top = 10
@@ -126,7 +126,7 @@ accent = "#7aa2f7ff"
 | Option | Default | Description |
 |--------|---------|-------------|
 | `font` | `Sans 13` | Pango font description for overlay text |
-| `width` | `600` | Overlay width in pixels |
+| `width` | `420` | Overlay width in pixels |
 | `max_lines` | `5` | Maximum visible lines before the overlay scrolls |
 | `position` | `top-center` | Overlay position on screen: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
 | `margin_top` | `10` | Top margin in pixels |

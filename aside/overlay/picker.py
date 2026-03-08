@@ -242,6 +242,10 @@ class ConversationPicker(Gtk.Box):
         controller.connect("key-pressed", on_key_pressed)
         self._textview.add_controller(controller)
 
+    def clear_input(self) -> None:
+        """Clear the text input buffer."""
+        self._textview.get_buffer().set_text("")
+
     def focus_input(self) -> None:
         """Grab focus on the text view."""
         self._textview.grab_focus()
