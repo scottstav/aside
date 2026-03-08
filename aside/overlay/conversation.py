@@ -17,6 +17,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
         super().__init__()
         self._markdown = markdown
         self._messages: list[MessageView] = []
+        self._want_scroll = False
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.set_child(self._box)
@@ -25,19 +26,28 @@ class ConversationHistory(Gtk.ScrolledWindow):
         self.set_hexpand(True)
         self.set_propagate_natural_height(True)
 
+        # Scroll to bottom when layout changes (vadjustment upper updates)
+        vadj = self.get_vadjustment()
+        if vadj is not None:
+            vadj.connect("changed", self._on_vadj_changed)
+
+    def _on_vadj_changed(self, vadj) -> None:
+        if self._want_scroll:
+            vadj.set_value(vadj.get_upper())
+
     def add_message(self, role: str, text: str) -> MessageView:
         """Create a MessageView, append it, and scroll to bottom."""
         mv = MessageView(role=role, text=text, markdown=self._markdown)
         self._messages.append(mv)
         self._box.append(mv)
-        self._scroll_to_bottom()
+        self._want_scroll = True
         return mv
 
     def update_last_message(self, text: str) -> None:
         """Update the last message's text (used during streaming)."""
         if self._messages:
             self._messages[-1].set_text(text)
-            self._scroll_to_bottom()
+            self._want_scroll = True
 
     def get_last_message(self) -> MessageView | None:
         """Return the last message, or None if empty."""
@@ -52,6 +62,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
         for mv in self._messages:
             self._box.remove(mv)
         self._messages.clear()
+        self._want_scroll = False
 
     def load_conversation(self, conv: dict) -> None:
         """Clear and populate from a conversation dict.
@@ -75,9 +86,3 @@ class ConversationHistory(Gtk.ScrolledWindow):
             else:
                 text = str(content)
             self.add_message(role, text)
-
-    def _scroll_to_bottom(self) -> None:
-        """Scroll the vadjustment to its upper bound."""
-        vadj = self.get_vadjustment()
-        if vadj is not None:
-            vadj.set_value(vadj.get_upper())

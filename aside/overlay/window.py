@@ -255,24 +255,48 @@ class OverlayWindow(Gtk.Window):
         self._resize_to_content()
         self._picker.focus_input()
 
-    def handle_convo(self, conv_id: str) -> None:
-        """Any->CONVO: view a conversation."""
+    def handle_convo(self, conv_id: str | None = None) -> None:
+        """Any->CONVO: view a conversation. None = current or most recent."""
+        if not conv_id:
+            if self._conv_id:
+                conv_id = self._conv_id
+            else:
+                from aside.state import ConversationStore
+                conv_dir = resolve_conversations_dir(self._config)
+                store = ConversationStore(conv_dir)
+                entries = store.list_recent(limit=1)
+                if not entries:
+                    return
+                conv_id = entries[0][0]
         self._load_convo(conv_id)
 
     def _load_convo(self, conv_id: str) -> None:
         """Load conversation history into convo view."""
         self._cancel_dismiss_timer()
-        from aside.state import ConversationStore
-        conv_dir = resolve_conversations_dir(self._config)
-        store = ConversationStore(conv_dir)
-        conv = store.get_or_create(conv_id)
+        # If we're already showing this conversation, load from disk
+        # but skip reload if we have in-memory state (avoids stale-file race)
+        already_showing = (
+            self._conv_id == conv_id
+            and self._state in (OverlayState.STREAMING, OverlayState.DISPLAY)
+        )
+        if not already_showing:
+            from aside.state import ConversationStore
+            conv_dir = resolve_conversations_dir(self._config)
+            store = ConversationStore(conv_dir)
+            conv = store.get_or_create(conv_id)
+            self._convo_history.load_conversation(conv)
+        else:
+            # Copy messages from stream view into convo view
+            self._convo_history.clear()
+            for mv in self._stream_history._messages:
+                self._convo_history.add_message(mv.role, mv.get_raw_text())
         self._conv_id = conv_id
-        self._convo_history.load_conversation(conv)
         self._convo_reply.clear()
         self._stack.set_visible_child_name("convo")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.CONVO)
         self._resize_to_content()
+        self._convo_reply.focus_input()
 
     def _resize_to_content(self) -> None:
         """Force window to re-fit content by hiding and re-showing."""

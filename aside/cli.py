@@ -190,9 +190,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside input
     sub.add_parser("input", help="Open the conversation picker overlay")
 
-    # aside view CONVERSATION_ID
+    # aside view [CONVERSATION_ID]
     view_cmd = sub.add_parser("view", help="View a conversation in the overlay")
-    view_cmd.add_argument("conversation_id", help="Conversation ID to view")
+    view_cmd.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
 
     # aside reply CONVERSATION_ID [TEXT] [--mic]
     reply = sub.add_parser("reply", help="Continue a conversation by ID")
@@ -271,10 +271,14 @@ def _cmd_input(args: argparse.Namespace) -> None:
 
 def _cmd_view(args: argparse.Namespace) -> None:
     """View a conversation in the overlay."""
-    cfg = load_config()
-    conv_dir = resolve_conversations_dir(cfg)
-    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
-    _send_overlay({"cmd": "convo", "conversation_id": full_id})
+    if args.conversation_id:
+        cfg = load_config()
+        conv_dir = resolve_conversations_dir(cfg)
+        full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+        _send_overlay({"cmd": "convo", "conversation_id": full_id})
+    else:
+        # Let the overlay decide — it knows the in-memory conversation
+        _send_overlay({"cmd": "convo"})
 
 
 def _cmd_reply(args: argparse.Namespace) -> None:
