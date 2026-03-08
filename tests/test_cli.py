@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_query, _cmd_set_key, _cmd_get_key, _cmd_models, _cmd_model
+from aside.cli import main, _send, _send_overlay, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_input, _cmd_view, _cmd_query, _cmd_set_key, _cmd_get_key, _cmd_models, _cmd_model
 
 
 # ---------------------------------------------------------------------------
@@ -103,12 +103,20 @@ class TestArgumentParsing:
         assert args.command == "rm"
         assert args.conversation_id == "abc-123"
 
+    def test_input_basic(self):
+        args = self.parser.parse_args(["input"])
+        assert args.command == "input"
+
+    def test_view_basic(self):
+        args = self.parser.parse_args(["view", "conv-42"])
+        assert args.command == "view"
+        assert args.conversation_id == "conv-42"
+
     def test_reply_basic(self):
         args = self.parser.parse_args(["reply", "conv-42"])
         assert args.command == "reply"
         assert args.conversation_id == "conv-42"
         assert args.text is None
-        assert args.gui is False
         assert args.mic is False
 
     def test_reply_with_text(self):
@@ -116,13 +124,6 @@ class TestArgumentParsing:
         assert args.command == "reply"
         assert args.conversation_id == "conv-42"
         assert args.text == "follow up question"
-
-    def test_reply_with_gui(self):
-        args = self.parser.parse_args(["reply", "conv-42", "--gui"])
-        assert args.command == "reply"
-        assert args.conversation_id == "conv-42"
-        assert args.gui is True
-        assert args.text is None
 
     def test_reply_with_mic(self):
         args = self.parser.parse_args(["reply", "conv-42", "--mic"])
@@ -968,7 +969,6 @@ class TestReplyCommand:
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
         args.text = "follow up question"
-        args.gui = False
         args.mic = False
 
         _cmd_reply(args)
@@ -990,7 +990,6 @@ class TestReplyCommand:
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
         args.text = None
-        args.gui = False
         args.mic = True
 
         _cmd_reply(args)
@@ -1002,45 +1001,23 @@ class TestReplyCommand:
             "mic": True,
         }
 
-    def test_reply_gui_launches_subprocess(self, monkeypatch, tmp_path):
-        """reply ID --gui should launch aside-input subprocess."""
-        sent = []
-        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
+    def test_reply_bare_sends_to_overlay(self, monkeypatch, tmp_path):
+        """Bare 'aside reply ID' should send reply command to overlay."""
+        overlay_sent = []
+        monkeypatch.setattr("aside.cli._send_overlay", lambda msg: overlay_sent.append(msg))
         (tmp_path / "conv-42.json").write_text("{}")
         monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
 
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
         args.text = None
-        args.gui = True
-        args.mic = False
-
-        with mock.patch("aside.cli.subprocess.Popen") as mock_popen:
-            _cmd_reply(args)
-
-        mock_popen.assert_called_once_with(["aside-input", "-c", "conv-42"])
-        assert len(sent) == 0  # no socket message sent
-
-    def test_reply_bare_prompts_for_input(self, monkeypatch, tmp_path):
-        """Bare 'aside reply ID' should prompt for text, then send it."""
-        sent = []
-        monkeypatch.setattr("aside.cli._send", lambda msg: sent.append(msg))
-        monkeypatch.setattr("builtins.input", lambda prompt: "typed reply")
-        (tmp_path / "conv-42.json").write_text("{}")
-        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
-
-        args = mock.MagicMock()
-        args.conversation_id = "conv-42"
-        args.text = None
-        args.gui = False
         args.mic = False
 
         _cmd_reply(args)
 
-        assert len(sent) == 1
-        assert sent[0] == {
-            "action": "query",
-            "text": "typed reply",
+        assert len(overlay_sent) == 1
+        assert overlay_sent[0] == {
+            "cmd": "reply",
             "conversation_id": "conv-42",
         }
 
@@ -1049,22 +1026,6 @@ class TestReplyCommand:
         args = mock.MagicMock()
         args.conversation_id = "conv-42"
         args.text = "some text"
-        args.gui = False
-        args.mic = True
-
-        with pytest.raises(SystemExit) as exc_info:
-            _cmd_reply(args)
-
-        assert exc_info.value.code == 1
-        captured = capsys.readouterr()
-        assert "mutually exclusive" in captured.err.lower() or "--mic" in captured.err
-
-    def test_reply_gui_and_mic_errors(self, capsys):
-        """Providing both --gui and --mic should print error and exit 1."""
-        args = mock.MagicMock()
-        args.conversation_id = "conv-42"
-        args.text = None
-        args.gui = True
         args.mic = True
 
         with pytest.raises(SystemExit) as exc_info:
@@ -1088,6 +1049,55 @@ class TestReplyCommand:
         assert sent[0]["action"] == "query"
         assert sent[0]["text"] == "hello again"
         assert sent[0]["conversation_id"] == "conv-42"
+
+
+# ---------------------------------------------------------------------------
+# _send_overlay helper
+# ---------------------------------------------------------------------------
+
+
+class TestSendOverlay:
+    def test_send_overlay_connects_to_overlay_socket(self):
+        with mock.patch("aside.cli.socket.socket") as mock_socket:
+            mock_conn = mock.Mock()
+            mock_socket.return_value = mock_conn
+            with mock.patch("aside.cli.resolve_socket_path") as mock_path:
+                mock_path.return_value = "/tmp/test-overlay.sock"
+                _send_overlay({"cmd": "input"})
+                mock_path.assert_called_with("aside-overlay.sock")
+
+
+# ---------------------------------------------------------------------------
+# input command
+# ---------------------------------------------------------------------------
+
+
+class TestInputCommand:
+    def test_input_sends_to_overlay(self):
+        with mock.patch("aside.cli._send_overlay") as mock_send:
+            args = mock.MagicMock()
+            _cmd_input(args)
+            mock_send.assert_called_once_with({"cmd": "input"})
+
+
+# ---------------------------------------------------------------------------
+# view command
+# ---------------------------------------------------------------------------
+
+
+class TestViewCommand:
+    def test_view_sends_convo_to_overlay(self, monkeypatch, tmp_path):
+        overlay_sent = []
+        monkeypatch.setattr("aside.cli._send_overlay", lambda msg: overlay_sent.append(msg))
+        (tmp_path / "full-uuid-here.json").write_text("{}")
+        monkeypatch.setattr("aside.cli.resolve_conversations_dir", lambda cfg: tmp_path)
+
+        args = mock.MagicMock()
+        args.conversation_id = "full-uuid-here"
+        _cmd_view(args)
+
+        assert len(overlay_sent) == 1
+        assert overlay_sent[0] == {"cmd": "convo", "conversation_id": "full-uuid-here"}
 
 
 # ---------------------------------------------------------------------------
