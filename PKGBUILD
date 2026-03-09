@@ -1,21 +1,15 @@
 # Maintainer: Scott Stavinoha <scottstavinoha@gmail.com>
 pkgname=aside
-pkgver=0.3.1
+pkgver=0.4.0
 pkgrel=1
 pkgdesc="Wayland-native LLM desktop assistant"
 arch=('x86_64')
 url="https://github.com/scottstav/aside"
 license=('MIT')
 depends=(
-    'wayland'
-    'cairo'
-    'pango'
-    'json-c'
-    'pipewire'
     'gtk4'
     'libadwaita'
     'gtk4-layer-shell'
-    'portaudio'
     'python'
     'python-gobject'
     'python-cairo'
@@ -27,41 +21,29 @@ depends=(
     'gobject-introspection'
 )
 makedepends=(
-    'meson'
-    'ninja'
     'python-build'
     'python-wheel'
-    'meson-python'
-    'python-pip'
     'python-setuptools'
-    'wayland-protocols'
 )
 optdepends=(
-    # STT: sudo aside enable-stt (faster-whisper, ~100MB)
-    # TTS: sudo aside enable-tts (piper-tts)
+    'portaudio: voice input (aside enable-stt)'
+    'pipewire: voice input via pw-record'
 )
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
 )
-sha256sums=('aa2da2eb850bf19203de403cb04cc97bc7e30e5b3b53c512d49a09ed0ae9aa37')
+sha256sums=('SKIP')
 
 build() {
-    # Build aside wheel (C overlay + Python package)
     cd "$srcdir/$pkgname-$pkgver"
     python -m build --wheel --no-isolation
 
-    # Create venv with access to system site-packages so distro-provided
-    # C extensions (numpy, PyGObject, pycairo) are used directly.
     python -m venv --system-site-packages "$srcdir/venv"
     local _pip="$srcdir/venv/bin/pip"
 
-    # Install aside (no-deps: we install deps explicitly below)
     "$_pip" install --no-cache-dir --no-deps \
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
-    # Install litellm — heavy deps (tiktoken, openai, pydantic, aiohttp, httpx)
-    # come from system packages via --system-site-packages, so pip only pulls
-    # the lightweight remainder.
     "$_pip" install --no-cache-dir litellm
 }
 
@@ -70,7 +52,6 @@ package() {
     install -d "$pkgdir/opt"
     cp -a "$srcdir/venv" "$pkgdir/opt/aside"
 
-    # Fix hardcoded $srcdir/venv paths → /opt/aside
     find "$pkgdir/opt/aside/bin" -type f -exec \
         sed -i "s|$srcdir/venv|/opt/aside|g" {} +
     sed -i "s|$srcdir/venv|/opt/aside|g" "$pkgdir/opt/aside/pyvenv.cfg"
