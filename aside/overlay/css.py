@@ -137,18 +137,18 @@ window.background {{
 .action-bar {{
     padding: 4px 16px 8px 16px;
 }}
-.action-bar button {{
-    background: alpha({accent_val}, 0.1);
-    border: 1px solid alpha({accent_val}, 0.3);
-    border-radius: 6px;
-    color: alpha({fg_val}, 0.85);
-    padding: 4px 12px;
-    font-size: 0.85em;
+.action-icon {{
+    background: alpha({fg_val}, 0.08);
+    border: none;
+    border-radius: 50%;
+    color: alpha({fg_val}, 0.6);
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
 }}
-.action-bar button:hover {{
-    background: alpha({accent_val}, 0.2);
-    color: {fg_val};
-    border-color: alpha({accent_val}, 0.5);
+.action-icon:hover {{
+    background: alpha({fg_val}, 0.15);
+    color: alpha({fg_val}, 0.9);
 }}
 .dim-label {{
     color: alpha({fg_val}, 0.4);

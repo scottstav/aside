@@ -121,15 +121,29 @@ class OverlayWindow(Gtk.Window):
         self._stream_history = ConversationHistory(markdown=self._markdown_enabled)
         self._stream_history.set_max_content_height(self._max_height)
         stream_box.append(self._stream_history)
-        # Action buttons
-        self._action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        # Action buttons (icon-only: mic, copy, reply)
+        self._action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._action_bar.add_css_class("action-bar")
         self._action_bar.set_halign(Gtk.Align.CENTER)
         self._action_bar.set_margin_top(8)
         self._action_bar.set_margin_bottom(8)
         self._action_bar.set_visible(False)
 
-        reply_btn = Gtk.Button(label="Reply")
+        mic_btn = Gtk.Button.new_from_icon_name("audio-input-microphone-symbolic")
+        mic_btn.set_tooltip_text("Voice reply")
+        mic_btn.add_css_class("action-icon")
+        mic_btn.connect("clicked", self._on_mic_reply_clicked)
+        self._action_bar.append(mic_btn)
+
+        open_btn = Gtk.Button.new_from_icon_name("document-open-symbolic")
+        open_btn.set_tooltip_text("Open transcript")
+        open_btn.add_css_class("action-icon")
+        open_btn.connect("clicked", self._on_open_clicked)
+        self._action_bar.append(open_btn)
+
+        reply_btn = Gtk.Button.new_from_icon_name("mail-reply-sender-symbolic")
+        reply_btn.set_tooltip_text("Reply")
+        reply_btn.add_css_class("action-icon")
         reply_btn.connect("clicked", self._on_reply_clicked)
         self._action_bar.append(reply_btn)
 
@@ -388,6 +402,26 @@ class OverlayWindow(Gtk.Window):
                 target=self._send_to_daemon, args=(msg,), daemon=True
             ).start()
             self.handle_clear()
+
+    def _on_mic_reply_clicked(self, button) -> None:
+        """Start a voice reply for the current conversation."""
+        conv_id = self._conv_id or ""
+        msg = {"action": "query", "mic": True, "conversation_id": conv_id}
+        threading.Thread(
+            target=self._send_to_daemon, args=(msg,), daemon=True
+        ).start()
+
+    def _on_open_clicked(self, button) -> None:
+        """Open the conversation transcript .md file in default editor."""
+        if not self._conv_id:
+            return
+        from aside.config import resolve_conversations_dir
+        from aside.state import ConversationStore
+        store = ConversationStore(resolve_conversations_dir(self._config))
+        path = store.transcript_path(self._conv_id)
+        if path.exists():
+            import subprocess
+            subprocess.Popen(["xdg-open", str(path)])
 
     def _on_reply_clicked(self, button) -> None:
         """Show inline reply input below the streamed response."""
