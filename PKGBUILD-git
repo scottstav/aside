@@ -2,7 +2,7 @@
 pkgname=aside-git
 pkgver=r0
 pkgrel=1
-pkgdesc="Wayland-native LLM desktop assistant (dev branch)"
+pkgdesc="Wayland-native LLM desktop assistant (git)"
 arch=('x86_64')
 url="https://github.com/scottstav/aside"
 license=('MIT')
@@ -32,7 +32,7 @@ optdepends=(
 )
 provides=('aside')
 conflicts=('aside')
-source=("$pkgname::git+$url.git#branch=dev")
+source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
 pkgver() {

@@ -154,9 +154,10 @@ apt install python3-venv python3-dev libgtk-4-dev gobject-introspection \
 git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
 cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && sudo ldconfig
 
-# install aside
+# install aside (use a tagged release for stability)
 git clone https://github.com/scottstav/aside.git
 cd aside
+git checkout $(git describe --tags --abbrev=0)
 make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
