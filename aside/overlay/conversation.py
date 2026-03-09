@@ -5,7 +5,7 @@ from __future__ import annotations
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import GLib, Gtk  # noqa: E402
 
 from aside.overlay.message_view import MessageView  # noqa: E402
 
@@ -17,6 +17,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
         super().__init__()
         self._markdown = markdown
         self._messages: list[MessageView] = []
+        self._scroll_idle_id: int | None = None
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self._box.set_margin_bottom(16)
@@ -25,13 +26,35 @@ class ConversationHistory(Gtk.ScrolledWindow):
         self.set_hexpand(True)
         self.set_vexpand(True)
 
-        # Auto-scroll to bottom on content changes
+        # Auto-scroll to bottom on content changes.
+        # "changed" fires during layout — we defer the actual scroll
+        # to an idle handler that runs AFTER layout/draw completes.
         vadj = self.get_vadjustment()
         if vadj is not None:
             vadj.connect("changed", self._on_vadj_changed)
 
     def _on_vadj_changed(self, vadj) -> None:
-        vadj.set_value(vadj.get_upper() - vadj.get_page_size())
+        self._schedule_scroll()
+
+    def _schedule_scroll(self) -> None:
+        """Debounced scroll-to-bottom that runs after the layout pass."""
+        if self._scroll_idle_id is None:
+            # DEFAULT_IDLE (200) runs after GTK layout/draw (HIGH_IDLE = 100)
+            self._scroll_idle_id = GLib.idle_add(
+                self._do_scroll_to_bottom,
+                priority=GLib.PRIORITY_DEFAULT_IDLE,
+            )
+
+    def _do_scroll_to_bottom(self) -> bool:
+        self._scroll_idle_id = None
+        vadj = self.get_vadjustment()
+        if vadj:
+            vadj.set_value(vadj.get_upper() - vadj.get_page_size())
+        return False
+
+    def scroll_to_bottom(self) -> None:
+        """Explicitly request scroll-to-bottom after next layout pass."""
+        self._schedule_scroll()
 
     def content_height(self) -> float:
         """Return the actual content height (vadjustment upper)."""
@@ -55,6 +78,9 @@ class ConversationHistory(Gtk.ScrolledWindow):
         return len(self._messages)
 
     def clear(self) -> None:
+        if self._scroll_idle_id is not None:
+            GLib.source_remove(self._scroll_idle_id)
+            self._scroll_idle_id = None
         for mv in self._messages:
             self._box.remove(mv)
         self._messages.clear()
@@ -76,3 +102,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
             else:
                 text = str(content)
             self.add_message(role, text)
+        # Scroll twice: once via idle (catches most cases), once via
+        # timeout (catches lazy text layout across multiple frames).
+        self.scroll_to_bottom()
+        GLib.timeout_add(150, self._do_scroll_to_bottom)

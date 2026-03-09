@@ -78,7 +78,7 @@ window.background {{
     border-radius: 8px;
     border: 1px solid alpha({user_accent_val}, 0.3);
     margin: 8px 12px;
-    padding: 0;
+    padding: 8px 10px;
     caret-color: {user_accent_val};
     background-color: alpha({user_accent_val}, 0.04);
 }}

@@ -45,6 +45,8 @@ class OverlayWindow(Gtk.Window):
         self._thinking_tick_id: int | None = None
         self._thinking_dots: int = 0
         self._thinking_base_text: str = ""
+        self._convo_msgs_ready: bool = False  # _on_submit pre-added messages
+        self._convo_can_dismiss: bool = False
 
         overlay_cfg = config.get("overlay", {})
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
@@ -217,11 +219,31 @@ class OverlayWindow(Gtk.Window):
         else:
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 
+    def _in_convo_view(self) -> bool:
+        return self.get_visible() and self._stack.get_visible_child_name() == "convo"
+
+    def _active_history(self) -> ConversationHistory:
+        """Return the history widget for the currently visible view."""
+        if self._in_convo_view():
+            return self._convo_history
+        return self._stream_history
+
     # --- Socket command handlers ---
 
     def handle_open(self, mode: str = "user", conv_id: str = "") -> None:
         """HIDDEN->STREAMING: show overlay, start streaming."""
         self._stop_thinking_dots()
+        # If convo view is showing, stream into it instead of switching
+        if self._in_convo_view():
+            if not self._convo_msgs_ready:
+                self._convo_history.add_message(mode, "")
+            self._convo_msgs_ready = False
+            self._accumulated_text = ""
+            self._convo_can_dismiss = False
+            if conv_id:
+                self._conv_id = conv_id
+            self._accent_bar.set_state(BarState.STREAMING)
+            return
         self._conv_id = conv_id or None
         self._accumulated_text = ""
         self._stream_history.clear()
@@ -240,29 +262,38 @@ class OverlayWindow(Gtk.Window):
         and adds a new assistant message for the LLM response.
         """
         self._stop_thinking_dots()
+        history = self._active_history()
         if self._accumulated_text:
-            self._stream_history.update_last_message(self._accumulated_text)
+            history.update_last_message(self._accumulated_text)
         self._accumulated_text = ""
-        self._stream_history.add_message("assistant", "")
+        if not self._in_convo_view():
+            self._stream_history.add_message("assistant", "")
+            self._set_state(OverlayState.STREAMING)
         self._accent_bar.set_state(BarState.STREAMING)
-        self._set_state(OverlayState.STREAMING)
 
     def handle_text(self, data: str) -> None:
         """Append streamed text to current message."""
         self._stop_thinking_dots()
         self._accumulated_text += data
-        self._stream_history.update_last_message(self._accumulated_text)
+        self._active_history().update_last_message(self._accumulated_text)
 
     def handle_done(self) -> None:
         """STREAMING->DISPLAY: start dismiss timer."""
         self._accent_bar.set_state(BarState.IDLE)
-        self._set_state(OverlayState.DISPLAY)
+        if self._in_convo_view():
+            self._convo_can_dismiss = True
+            self._convo_reply.clear()
+            self._convo_reply.focus_input()
+        else:
+            self._set_state(OverlayState.DISPLAY)
         self._start_dismiss_timer(self._dismiss_timeout)
 
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
         self._cancel_dismiss_timer()
         self._stop_thinking_dots()
+        self._convo_msgs_ready = False
+        self._convo_can_dismiss = False
         self.set_visible(False)
         self._current_window_h = 0
         self.set_size_request(self._default_width, -1)
@@ -273,7 +304,7 @@ class OverlayWindow(Gtk.Window):
         """Replace all text in current message."""
         self._stop_thinking_dots()
         self._accumulated_text = data
-        self._stream_history.update_last_message(data)
+        self._active_history().update_last_message(data)
 
     def handle_thinking(self) -> None:
         """Set accent bar to thinking animation and show animated dots."""
@@ -287,7 +318,7 @@ class OverlayWindow(Gtk.Window):
         """Cycle dots appended to current text."""
         self._thinking_dots = (self._thinking_dots % 3) + 1
         dots = " " + "." * self._thinking_dots if self._thinking_base_text else "." * self._thinking_dots
-        self._stream_history.update_last_message(self._thinking_base_text + dots)
+        self._active_history().update_last_message(self._thinking_base_text + dots)
         return True  # keep repeating
 
     def _stop_thinking_dots(self) -> None:
@@ -340,6 +371,8 @@ class OverlayWindow(Gtk.Window):
     def _load_convo(self, conv_id: str) -> None:
         """Load conversation history into convo view."""
         self._cancel_dismiss_timer()
+        self._convo_msgs_ready = False
+        self._convo_can_dismiss = False
         # If we're already showing this conversation, load from disk
         # but skip reload if we have in-memory state (avoids stale-file race)
         already_showing = (
@@ -357,9 +390,12 @@ class OverlayWindow(Gtk.Window):
             self._convo_history.clear()
             for mv in self._stream_history._messages:
                 self._convo_history.add_message(mv.role, mv.get_raw_text())
+            self._convo_history.scroll_to_bottom()
         self._conv_id = conv_id
         self._convo_reply.clear()
         self._stack.set_visible_child_name("convo")
+        self.set_size_request(self._default_width, self._max_height)
+        self._current_window_h = self._max_height
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.CONVO)
         self.set_visible(True)
@@ -398,7 +434,7 @@ class OverlayWindow(Gtk.Window):
 
     def _on_dismiss_timeout(self) -> bool:
         self._dismiss_timer_id = None
-        if self._state == OverlayState.DISPLAY:
+        if self._state in (OverlayState.DISPLAY, OverlayState.CONVO):
             self.handle_clear()
         return False  # don't repeat
 
@@ -409,6 +445,8 @@ class OverlayWindow(Gtk.Window):
     def _on_hover_leave(self, *_args) -> None:
         """Restart auto-dismiss when cursor leaves the overlay."""
         if self._state == OverlayState.DISPLAY:
+            self._start_dismiss_timer(self._dismiss_timeout)
+        elif self._state == OverlayState.CONVO and self._convo_can_dismiss:
             self._start_dismiss_timer(self._dismiss_timeout)
 
     # --- User action handlers ---
@@ -475,8 +513,26 @@ class OverlayWindow(Gtk.Window):
             self._load_convo(self._conv_id)
 
     def _on_submit(self, text: str) -> None:
-        """Send query to daemon when user submits from convo reply input."""
-        self._send_reply(text)
+        """Send query from convo view — stream response into the same view."""
+        text = text.strip()
+        if not text:
+            return
+        self._cancel_dismiss_timer()
+        self._convo_can_dismiss = False
+        self._convo_history.add_message("user", text)
+        self._convo_history.add_message("assistant", "")
+        self._accumulated_text = ""
+        self._convo_msgs_ready = True
+        self._accent_bar.set_state(BarState.STREAMING)
+        self._convo_reply.clear()
+        msg = {
+            "action": "query",
+            "text": text,
+            "conversation_id": self._conv_id,
+        }
+        threading.Thread(
+            target=self._send_to_daemon, args=(msg,), daemon=True
+        ).start()
 
     def _on_stream_reply_submit(self, text: str) -> None:
         """Send query to daemon when user submits from inline stream reply."""
