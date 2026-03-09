@@ -238,7 +238,7 @@ class TestResolveHelpers:
         assert result == tmp_path / "aside" / "conversations"
 
     def test_resolve_conversations_dir_custom(self):
-        custom = {"storage": {"conversations_dir": "/tmp/my-convos"}}
+        custom = {"storage": {"archive_dir": "/tmp/my-convos"}}
         result = self.cfg.resolve_conversations_dir(custom)
         assert result == Path("/tmp/my-convos")
 
