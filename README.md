@@ -4,8 +4,6 @@ A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, a
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
-![demo](screenshots/demo1.gif) ![demo](screenshots/demo2.gif)
-
 - **overlay** — GTK4 layer-shell overlay. Streams tokens in real time with markdown rendering. Reply inline, view full conversation history, or open transcript. **Very** customizable.
 - **voice** — STT via faster-whisper, TTS via Piper (optional add-ons).
 - **input picker** — integrated conversation picker. Continue one or start fresh.
@@ -18,8 +16,6 @@ Bind `aside query --mic` to a hotkey and start talking. Aside detects silence an
 aside ships with a memory tool built in. Drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically. See `examples/tools/` for reference implementations.
 
 The tool system is flexible enough to do real work — run scripts, search files, open applications, etc, even create new tools.
-
-![demo](screenshots/demo3.gif)
 
 the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
 
