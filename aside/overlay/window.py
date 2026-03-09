@@ -16,7 +16,7 @@ gi.require_version("Gtk4LayerShell", "1.0")
 
 from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
 
-from aside.config import load_config, resolve_conversations_dir, resolve_socket_path
+from aside.config import resolve_conversations_dir, resolve_socket_path
 from aside.overlay.accent_bar import AccentBar, BarState
 from aside.overlay.conversation import ConversationHistory
 from aside.overlay.css import build_css
@@ -44,6 +44,7 @@ class OverlayWindow(Gtk.Window):
         self._dismiss_timer_id: int | None = None
         self._thinking_tick_id: int | None = None
         self._thinking_dots: int = 0
+        self._thinking_base_text: str = ""
 
         overlay_cfg = config.get("overlay", {})
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
@@ -502,7 +503,7 @@ class OverlayWindow(Gtk.Window):
         msg = {
             "action": "query",
             "text": text.strip(),
-            "conversation_id": conv_id if conv_id != "__new__" else "__new__",
+            "conversation_id": conv_id,
         }
         threading.Thread(
             target=self._send_to_daemon, args=(msg,), daemon=True

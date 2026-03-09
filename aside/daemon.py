@@ -154,8 +154,10 @@ class Daemon:
                 speed=tts_cfg.get("speed", 1.0),
             )
             log.info("TTS pipeline initialised")
-        except (ImportError, Exception):
+        except ImportError:
             log.info("TTS not available — piper-tts not installed")
+        except Exception:
+            log.exception("TTS init failed")
             self.tts = None
 
         # Last conversation ID (in-memory, authoritative)
@@ -371,23 +373,26 @@ class Daemon:
                             else:
                                 log.info("Mic capture returned empty, no query started")
                                 _overlay_close(overlay_sock)
-                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
+                                clear_sock = _connect_overlay()
+                                _overlay_send(clear_sock, {"cmd": "clear"})
+                                _overlay_close(clear_sock)
                         except Exception as exc:
                             log.exception("Mic capture error")
                             try:
-                                err_sock = overlay_sock or _connect_overlay()
-                                if overlay_sock is None:
-                                    _overlay_send(err_sock, {
-                                        "cmd": "open",
-                                        "mode": "user",
-                                    })
+                                err_sock = _connect_overlay()
+                                _overlay_send(err_sock, {
+                                    "cmd": "open",
+                                    "mode": "user",
+                                })
                                 _overlay_send(err_sock, {
                                     "cmd": "replace",
                                     "data": f"Mic error: {exc}",
                                 })
                                 time.sleep(2)
                                 _overlay_close(err_sock)
-                                _overlay_send(_connect_overlay(), {"cmd": "clear"})
+                                clear_sock = _connect_overlay()
+                                _overlay_send(clear_sock, {"cmd": "clear"})
+                                _overlay_close(clear_sock)
                             except Exception:
                                 log.debug("Failed to show mic error in overlay")
 

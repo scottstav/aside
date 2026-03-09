@@ -52,8 +52,8 @@ do_setup() {
     ssh_run "sudo apt-get update -qq && sudo apt-get install -y -qq \
         python3-venv python3-pip python3-dev \
         meson ninja-build valac \
-        libgtk-4-dev gobject-introspection libgirepository1.0-dev \
-        python3-gi python3-gi-cairo gir1.2-gtk-4.0 git \
+        libgtk-4-dev libadwaita-1-dev gobject-introspection libgirepository1.0-dev \
+        python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 git \
         linux-modules-extra-\$(uname -r)"
 
     echo "=> [3/6] Building gtk4-layer-shell from source"

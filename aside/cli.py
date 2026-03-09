@@ -35,7 +35,7 @@ def _send_overlay(msg: dict) -> None:
         sys.exit(1)
 
     try:
-        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
         sock.shutdown(socket.SHUT_WR)
     finally:
         sock.close()
@@ -56,7 +56,7 @@ def _send(msg: dict) -> None:
         sys.exit(1)
 
     try:
-        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
         sock.shutdown(socket.SHUT_WR)
     finally:
         sock.close()
@@ -77,7 +77,7 @@ def _send_recv(msg: dict) -> dict:
         sys.exit(1)
 
     try:
-        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
         sock.shutdown(socket.SHUT_WR)
 
         chunks = []

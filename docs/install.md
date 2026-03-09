@@ -9,9 +9,9 @@ System deps:
 pacman -S gtk4 gtk4-layer-shell python-gobject
 
 # Debian/Ubuntu
-apt install python3-venv python3-dev libgtk-4-dev gobject-introspection \
-    libgirepository1.0-dev python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
-    meson ninja-build valac
+apt install python3-venv python3-dev libgtk-4-dev libadwaita-1-dev \
+    gobject-introspection libgirepository1.0-dev python3-gi python3-gi-cairo \
+    gir1.2-gtk-4.0 gir1.2-adw-1 meson ninja-build valac
 
 # gtk4-layer-shell (not yet packaged in Ubuntu — build from source)
 git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell

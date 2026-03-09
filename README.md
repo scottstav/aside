@@ -148,9 +148,9 @@ Requires Python 3.11+, GTK4, and gtk4-layer-shell.
 pacman -S gtk4 gtk4-layer-shell python-gobject
 
 # system deps (Ubuntu/Debian — gtk4-layer-shell must be built from source)
-apt install python3-venv python3-dev libgtk-4-dev gobject-introspection \
-    libgirepository1.0-dev python3-gi python3-gi-cairo gir1.2-gtk-4.0 \
-    meson ninja-build valac
+apt install python3-venv python3-dev libgtk-4-dev libadwaita-1-dev \
+    gobject-introspection libgirepository1.0-dev python3-gi python3-gi-cairo \
+    gir1.2-gtk-4.0 gir1.2-adw-1 meson ninja-build valac
 git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
 cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && sudo ldconfig
 

@@ -44,7 +44,7 @@ build() {
     "$_pip" install --no-cache-dir --no-deps \
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
-    "$_pip" install --no-cache-dir litellm
+    "$_pip" install --no-cache-dir litellm mistune
 }
 
 package() {
