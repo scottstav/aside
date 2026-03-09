@@ -34,5 +34,8 @@ piper1-gpl/
 # Secrets
 .env
 
+# Planning docs
+docs/plans/
+
 # Misc
 *.log
