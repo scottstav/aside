@@ -358,7 +358,14 @@ class Daemon:
                             log.debug("mic: capture_one_shot returned: %r", text[:80] if text else "")
 
                             if text:
-                                log.debug("mic: closing overlay, starting query")
+                                log.debug("mic: showing final transcription, starting query")
+                                # Show the final transcription, then re-start thinking dots
+                                # so user sees dots while waiting for LLM response.
+                                _overlay_send(overlay_sock, {
+                                    "cmd": "replace",
+                                    "data": text,
+                                })
+                                _overlay_send(overlay_sock, {"cmd": "thinking"})
                                 _overlay_close(overlay_sock)
                                 self.start_query(text, conversation_id=conv_id, from_mic=True)
                             else:

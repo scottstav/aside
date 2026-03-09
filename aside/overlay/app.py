@@ -115,6 +115,7 @@ class OverlayApp(Adw.Application):
     def _dispatch(self, cmd: dict) -> bool:
         """Dispatch a command to the overlay window. Runs on GTK main thread."""
         name = cmd.get("cmd", "")
+        log.debug("dispatch: cmd=%s", name)
         if name == "open":
             self._window.handle_open(cmd.get("mode", "user"), cmd.get("conv_id", ""))
         elif name == "text":
@@ -125,6 +126,8 @@ class OverlayApp(Adw.Application):
             self._window.handle_clear()
         elif name == "replace":
             self._window.handle_replace(cmd.get("data", ""))
+        elif name == "stream_start":
+            self._window.handle_stream_start()
         elif name == "thinking":
             self._window.handle_thinking()
         elif name == "listening":
@@ -140,8 +143,12 @@ class OverlayApp(Adw.Application):
 
 def main() -> None:
     """Entry point for aside-overlay."""
+    import os
+    import sys
+    debug = os.environ.get("ASIDE_DEBUG", "").lower() in ("1", "true", "yes") \
+            or "--debug" in sys.argv
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )

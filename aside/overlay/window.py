@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 import json
 import logging
+import math
 import socket
 import threading
 
@@ -52,7 +53,7 @@ class OverlayWindow(Gtk.Window):
         # Dimensions
         width = overlay_cfg.get("width", 400)
         self._default_width = width
-        self._max_height = overlay_cfg.get("max_height", 500)
+        max_height = overlay_cfg.get("max_height", 500)
         self.set_title("aside")
         self.set_decorated(False)
         self.set_size_request(width, -1)
@@ -117,10 +118,20 @@ class OverlayWindow(Gtk.Window):
         self._main_box.append(self._stack)
 
         # --- Stream view ---
+        self._max_height = max_height
+        self._current_window_h = 0
         stream_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self._stream_box = stream_box
         self._stream_history = ConversationHistory(markdown=self._markdown_enabled)
-        self._stream_history.set_max_content_height(self._max_height)
+        # Let ScrolledWindow report its content height so parent measure() is accurate
+        self._stream_history.set_propagate_natural_height(True)
+        self._stream_history.set_max_content_height(max_height)
         stream_box.append(self._stream_history)
+
+        # Window controls its own height based on content
+        vadj = self._stream_history.get_vadjustment()
+        if vadj is not None:
+            vadj.connect("changed", self._on_stream_content_changed)
         # Action buttons (icon-only: mic, copy, reply)
         self._action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._action_bar.add_css_class("action-bar")
@@ -159,7 +170,7 @@ class OverlayWindow(Gtk.Window):
         # --- Convo view ---
         convo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self._convo_history = ConversationHistory(markdown=self._markdown_enabled)
-        self._convo_history.set_max_content_height(self._max_height)
+        self._convo_history.set_max_content_height(max_height)
         convo_box.append(self._convo_history)
         self._convo_reply = ReplyInput()
         self._convo_reply.connect_submit(self._on_submit)
@@ -198,11 +209,12 @@ class OverlayWindow(Gtk.Window):
 
     def _set_state(self, state: OverlayState) -> None:
         self._state = state
-        # Only grab keyboard when user explicitly interacts (picker, convo, reply)
+        # EXCLUSIVE: grab keyboard for interactive states (picker, convo, reply)
+        # ON_DEMAND: receive pointer events (hover) without stealing keyboard focus
         if state in (OverlayState.CONVO, OverlayState.PICKER):
             Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         else:
-            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
+            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 
     # --- Socket command handlers ---
 
@@ -212,13 +224,27 @@ class OverlayWindow(Gtk.Window):
         self._conv_id = conv_id or None
         self._accumulated_text = ""
         self._stream_history.clear()
-        self._stream_history.add_message("assistant", "")
-        self._action_bar.set_visible(False)
+        self._stream_history.add_message(mode, "")
+        self._action_bar.set_visible(True)
         self._stream_reply.set_visible(False)
         self._stack.set_visible_child_name("stream")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
-        self._resize_to_content()
+        self.set_visible(True)
+
+    def handle_stream_start(self) -> None:
+        """Transition from user text to assistant streaming without clearing.
+
+        Used after mic capture: keeps the user's transcribed text visible
+        and adds a new assistant message for the LLM response.
+        """
+        self._stop_thinking_dots()
+        if self._accumulated_text:
+            self._stream_history.update_last_message(self._accumulated_text)
+        self._accumulated_text = ""
+        self._stream_history.add_message("assistant", "")
+        self._accent_bar.set_state(BarState.STREAMING)
+        self._set_state(OverlayState.STREAMING)
 
     def handle_text(self, data: str) -> None:
         """Append streamed text to current message."""
@@ -227,9 +253,8 @@ class OverlayWindow(Gtk.Window):
         self._stream_history.update_last_message(self._accumulated_text)
 
     def handle_done(self) -> None:
-        """STREAMING->DISPLAY: show action buttons, start dismiss timer."""
+        """STREAMING->DISPLAY: start dismiss timer."""
         self._accent_bar.set_state(BarState.IDLE)
-        self._action_bar.set_visible(True)
         self._set_state(OverlayState.DISPLAY)
         self._start_dismiss_timer(self._dismiss_timeout)
 
@@ -238,6 +263,8 @@ class OverlayWindow(Gtk.Window):
         self._cancel_dismiss_timer()
         self._stop_thinking_dots()
         self.set_visible(False)
+        self._current_window_h = 0
+        self.set_size_request(self._default_width, -1)
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.HIDDEN)
 
@@ -251,14 +278,15 @@ class OverlayWindow(Gtk.Window):
         """Set accent bar to thinking animation and show animated dots."""
         self._accent_bar.set_state(BarState.THINKING)
         self._thinking_dots = 0
+        self._thinking_base_text = self._accumulated_text.rstrip()
         self._stop_thinking_dots()
         self._thinking_tick_id = GLib.timeout_add(400, self._on_thinking_tick)
 
     def _on_thinking_tick(self) -> bool:
-        """Cycle dots: . -> .. -> ... -> . ..."""
+        """Cycle dots appended to current text."""
         self._thinking_dots = (self._thinking_dots % 3) + 1
-        dots = "." * self._thinking_dots
-        self._stream_history.update_last_message(dots)
+        dots = " " + "." * self._thinking_dots if self._thinking_base_text else "." * self._thinking_dots
+        self._stream_history.update_last_message(self._thinking_base_text + dots)
         return True  # keep repeating
 
     def _stop_thinking_dots(self) -> None:
@@ -291,7 +319,7 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("picker")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.PICKER)
-        self._resize_to_content()
+        self.set_visible(True)
         self._picker.focus_input()
 
     def handle_convo(self, conv_id: str | None = None) -> None:
@@ -333,17 +361,24 @@ class OverlayWindow(Gtk.Window):
         self._stack.set_visible_child_name("convo")
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.CONVO)
-        self._resize_to_content()
+        self.set_visible(True)
         self._convo_reply.focus_input()
 
-    def _resize_to_content(self) -> None:
-        """Force window to re-fit content by hiding and re-showing."""
-        self.set_visible(False)
-        GLib.idle_add(self._show_after_resize)
+    # --- Window sizing ---
 
-    def _show_after_resize(self) -> bool:
-        self.set_visible(True)
-        return False  # run once
+    def _on_stream_content_changed(self, vadj) -> None:
+        """Resize window to fit content, capped at max_height.
+
+        With propagate_natural_height on the ScrolledWindow, main_box.measure()
+        returns the true total including all children, margins, borders, and padding.
+        """
+        _, nat_h, _, _ = self._main_box.measure(
+            Gtk.Orientation.VERTICAL, self._default_width
+        )
+        target = min(math.ceil(nat_h), self._max_height)
+        if target != self._current_window_h:
+            self._current_window_h = target
+            self.set_size_request(self._default_width, target)
 
     # --- Dismiss timer ---
 

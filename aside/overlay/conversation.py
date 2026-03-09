@@ -17,59 +17,50 @@ class ConversationHistory(Gtk.ScrolledWindow):
         super().__init__()
         self._markdown = markdown
         self._messages: list[MessageView] = []
-        self._want_scroll = False
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self._box.set_margin_bottom(16)
         self.set_child(self._box)
 
-        # Size to content, don't grab extra space
         self.set_hexpand(True)
-        self.set_propagate_natural_height(True)
+        self.set_vexpand(True)
 
-        # Scroll to bottom when layout changes (vadjustment upper updates)
+        # Auto-scroll to bottom on content changes
         vadj = self.get_vadjustment()
         if vadj is not None:
             vadj.connect("changed", self._on_vadj_changed)
 
     def _on_vadj_changed(self, vadj) -> None:
-        if self._want_scroll:
-            vadj.set_value(vadj.get_upper())
+        vadj.set_value(vadj.get_upper() - vadj.get_page_size())
+
+    def content_height(self) -> float:
+        """Return the actual content height (vadjustment upper)."""
+        vadj = self.get_vadjustment()
+        return vadj.get_upper() if vadj else 0
 
     def add_message(self, role: str, text: str) -> MessageView:
-        """Create a MessageView, append it, and scroll to bottom."""
         mv = MessageView(role=role, text=text, markdown=self._markdown)
         self._messages.append(mv)
         self._box.append(mv)
-        self._want_scroll = True
         return mv
 
     def update_last_message(self, text: str) -> None:
-        """Update the last message's text (used during streaming)."""
         if self._messages:
             self._messages[-1].set_text(text)
-            self._want_scroll = True
 
     def get_last_message(self) -> MessageView | None:
-        """Return the last message, or None if empty."""
         return self._messages[-1] if self._messages else None
 
     def message_count(self) -> int:
-        """Return the number of messages."""
         return len(self._messages)
 
     def clear(self) -> None:
-        """Remove all messages."""
         for mv in self._messages:
             self._box.remove(mv)
         self._messages.clear()
-        self._want_scroll = False
 
     def load_conversation(self, conv: dict) -> None:
-        """Clear and populate from a conversation dict.
-
-        Skips tool-role messages. Handles both plain string content
-        and multimodal list format (list of {type, text} dicts).
-        """
+        """Clear and populate from a conversation dict."""
         self.clear()
         for msg in conv.get("messages", []):
             role = msg.get("role", "")
@@ -77,7 +68,6 @@ class ConversationHistory(Gtk.ScrolledWindow):
                 continue
             content = msg.get("content", "")
             if isinstance(content, list):
-                # Multimodal: extract text parts
                 text = "".join(
                     part.get("text", "")
                     for part in content

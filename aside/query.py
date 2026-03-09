@@ -218,19 +218,23 @@ def _connect_overlay() -> socket.socket | None:
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(str(sock_path))
+        log.debug("overlay: connected to %s", sock_path)
         return sock
-    except (ConnectionRefusedError, FileNotFoundError, OSError):
+    except (ConnectionRefusedError, FileNotFoundError, OSError) as e:
+        log.warning("overlay: connect failed: %s", e)
         return None
 
 
 def _overlay_send(sock: socket.socket | None, msg: dict) -> None:
     """Send a JSON-line command to the overlay.  Swallows errors."""
     if sock is None:
+        log.debug("overlay_send: no socket, dropping cmd=%s", msg.get("cmd"))
         return
     try:
         sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
-    except (BrokenPipeError, OSError):
-        pass
+        log.debug("overlay_send: cmd=%s", msg.get("cmd"))
+    except (BrokenPipeError, OSError) as e:
+        log.warning("overlay_send: error sending cmd=%s: %s", msg.get("cmd"), e)
 
 
 def _overlay_close(sock: socket.socket | None) -> None:
@@ -508,9 +512,10 @@ def send_query(
     deferred_open: dict | None = None
 
     if from_mic:
-        # Overlay is already visible with user text pulsing (thinking mode).
-        # Defer the "open" until the first LLM response chunk arrives.
-        deferred_open = open_cmd
+        # Overlay is already visible with user text + thinking dots.
+        # Send stream_start (keeps user text, adds assistant message)
+        # instead of open (which clears everything).
+        deferred_open = {"cmd": "stream_start"}
     else:
         _overlay_send(overlay_sock, open_cmd)
 
