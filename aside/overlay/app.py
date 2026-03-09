@@ -129,6 +129,8 @@ class OverlayApp(Adw.Application):
             self._window.handle_thinking()
         elif name == "listening":
             self._window.handle_listening()
+        elif name == "audio_level":
+            self._window.handle_audio_level(cmd.get("data", 0.0))
         elif name == "input":
             self._window.handle_input()
         elif name in ("reply", "convo"):

@@ -319,30 +319,46 @@ class Daemon:
 
                         overlay_sock = None
                         try:
+                            log.debug("mic: connecting to overlay socket")
                             overlay_sock = _connect_overlay()
+                            log.debug("mic: overlay socket=%s", overlay_sock)
                             _overlay_send(overlay_sock, {
                                 "cmd": "open",
                                 "mode": "user",
-                                "conv_id": conv_id or "",
+                                "conv_id": "" if conv_id is NEW_CONVERSATION else (conv_id or ""),
                             })
-
+                            log.debug("mic: sent open+listening to overlay")
                             _overlay_send(overlay_sock, {"cmd": "listening"})
 
                             def on_interim(text):
+                                log.debug("mic: on_interim called: %r", text[:80] if text else "")
                                 _overlay_send(overlay_sock, {
                                     "cmd": "replace",
                                     "data": text,
                                 })
 
+                            def on_audio_level(level):
+                                _overlay_send(overlay_sock, {
+                                    "cmd": "audio_level",
+                                    "data": level,
+                                })
+
+                            def on_capture_end():
+                                log.debug("mic: on_capture_end — sending thinking to overlay")
+                                _overlay_send(overlay_sock, {"cmd": "thinking"})
+
+                            log.debug("mic: calling capture_one_shot")
                             text = capture_one_shot(
                                 self.config.get("voice", {}),
                                 on_interim=on_interim,
+                                on_audio_level=on_audio_level,
+                                on_capture_end=on_capture_end,
                                 cancel_event=cancel,
                             )
+                            log.debug("mic: capture_one_shot returned: %r", text[:80] if text else "")
 
                             if text:
-                                # Keep user text visible, start pulsing
-                                _overlay_send(overlay_sock, {"cmd": "thinking"})
+                                log.debug("mic: closing overlay, starting query")
                                 _overlay_close(overlay_sock)
                                 self.start_query(text, conversation_id=conv_id, from_mic=True)
                             else:
@@ -369,7 +385,7 @@ class Daemon:
                                 log.debug("Failed to show mic error in overlay")
 
                     threading.Thread(target=_mic_capture, daemon=True).start()
-                    log.info("Socket: mic capture started (conv=%s)", raw_conv or "auto")
+                    log.info("Socket: mic capture started (conv=%s)", conv_id or "auto")
                 else:
                     text = msg.get("text", "").strip()
                     if not text:
@@ -382,7 +398,7 @@ class Daemon:
                             image=msg.get("image"),
                             file=msg.get("file"),
                         )
-                        log.info("Socket: query (conv=%s)", raw_conv or "auto")
+                        log.info("Socket: query (conv=%s)", conv_id or "auto")
 
             elif action == "cancel":
                 self.cancel_query()
@@ -479,11 +495,16 @@ class Daemon:
 
 def main() -> None:
     """CLI entry point: load config and run the daemon."""
+    import sys
+    debug = os.environ.get("ASIDE_DEBUG", "").lower() in ("1", "true", "yes") \
+            or "--debug" in sys.argv
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    if debug:
+        log.info("Debug logging enabled")
     _restore_api_keys()
 
     from aside.keyring import load_keyring_keys

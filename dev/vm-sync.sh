@@ -53,7 +53,8 @@ do_setup() {
         python3-venv python3-pip python3-dev \
         meson ninja-build valac \
         libgtk-4-dev gobject-introspection libgirepository1.0-dev \
-        python3-gi python3-gi-cairo gir1.2-gtk-4.0 git"
+        python3-gi python3-gi-cairo gir1.2-gtk-4.0 git \
+        linux-modules-extra-\$(uname -r)"
 
     echo "=> [3/6] Building gtk4-layer-shell from source"
     ssh_run "if [ ! -f /usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so ]; then \

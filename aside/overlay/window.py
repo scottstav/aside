@@ -41,6 +41,8 @@ class OverlayWindow(Gtk.Window):
         self._conv_id: str | None = None
         self._accumulated_text = ""
         self._dismiss_timer_id: int | None = None
+        self._thinking_tick_id: int | None = None
+        self._thinking_dots: int = 0
 
         overlay_cfg = config.get("overlay", {})
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
@@ -192,6 +194,7 @@ class OverlayWindow(Gtk.Window):
 
     def handle_open(self, mode: str = "user", conv_id: str = "") -> None:
         """HIDDEN->STREAMING: show overlay, start streaming."""
+        self._stop_thinking_dots()
         self._conv_id = conv_id or None
         self._accumulated_text = ""
         self._stream_history.clear()
@@ -205,6 +208,7 @@ class OverlayWindow(Gtk.Window):
 
     def handle_text(self, data: str) -> None:
         """Append streamed text to current message."""
+        self._stop_thinking_dots()
         self._accumulated_text += data
         self._stream_history.update_last_message(self._accumulated_text)
 
@@ -218,22 +222,43 @@ class OverlayWindow(Gtk.Window):
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
         self._cancel_dismiss_timer()
+        self._stop_thinking_dots()
         self.set_visible(False)
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.HIDDEN)
 
     def handle_replace(self, data: str) -> None:
         """Replace all text in current message."""
+        self._stop_thinking_dots()
         self._accumulated_text = data
         self._stream_history.update_last_message(data)
 
     def handle_thinking(self) -> None:
-        """Set accent bar to thinking animation."""
+        """Set accent bar to thinking animation and show animated dots."""
         self._accent_bar.set_state(BarState.THINKING)
+        self._thinking_dots = 0
+        self._stop_thinking_dots()
+        self._thinking_tick_id = GLib.timeout_add(400, self._on_thinking_tick)
+
+    def _on_thinking_tick(self) -> bool:
+        """Cycle dots: . -> .. -> ... -> . ..."""
+        self._thinking_dots = (self._thinking_dots % 3) + 1
+        dots = "." * self._thinking_dots
+        self._stream_history.update_last_message(dots)
+        return True  # keep repeating
+
+    def _stop_thinking_dots(self) -> None:
+        if self._thinking_tick_id is not None:
+            GLib.source_remove(self._thinking_tick_id)
+            self._thinking_tick_id = None
 
     def handle_listening(self) -> None:
         """Set accent bar to listening animation."""
         self._accent_bar.set_state(BarState.LISTENING)
+
+    def handle_audio_level(self, level: float) -> None:
+        """Push an audio level to the waveform visualizer."""
+        self._accent_bar.push_audio_level(level)
 
     def handle_input(self) -> None:
         """Any->PICKER: show conversation picker."""

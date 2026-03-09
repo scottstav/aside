@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import enum
 import math
 
@@ -9,6 +10,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
+
+_WAVEFORM_BARS = 48
+_WAVEFORM_HEIGHT = 32
 
 
 class BarState(enum.Enum):
@@ -35,6 +39,9 @@ class AccentBar(Gtk.DrawingArea):
 
     Uses *accent_color* for LLM states (thinking, streaming) and
     *user_accent_color* for user states (listening).
+
+    In LISTENING state, expands to show a live audio waveform fed by
+    push_audio_level().
     """
 
     def __init__(
@@ -48,10 +55,15 @@ class AccentBar(Gtk.DrawingArea):
         self._accent = _parse_hex_color(accent_color)
         self._user_accent = _parse_hex_color(user_accent_color or accent_color)
         self._corner_radius = corner_radius
+        self._bar_height = height
         self._state = BarState.IDLE
         self._progress: float = 0.0
         self._tick_id: int | None = None
         self._last_frame_time: int | None = None
+        # Ring buffer of audio levels for waveform (0.0–1.0)
+        self._levels: collections.deque[float] = collections.deque(
+            [0.0] * _WAVEFORM_BARS, maxlen=_WAVEFORM_BARS
+        )
         self.set_size_request(-1, height)
         self.set_draw_func(self._draw)
 
@@ -59,13 +71,26 @@ class AccentBar(Gtk.DrawingArea):
     def state(self) -> BarState:
         return self._state
 
+    def push_audio_level(self, level: float) -> None:
+        """Push a new audio level (0.0–1.0) into the waveform buffer."""
+        self._levels.append(max(0.0, min(1.0, level)))
+
     def set_state(self, state: BarState) -> None:
         """Transition to a new bar state, starting/stopping animations."""
         if state == self._state:
             return
+        prev = self._state
         self._state = state
         self._progress = 0.0
         self._last_frame_time = None
+
+        if state == BarState.LISTENING:
+            self.set_size_request(-1, _WAVEFORM_HEIGHT)
+            # Clear waveform buffer
+            self._levels.clear()
+            self._levels.extend([0.0] * _WAVEFORM_BARS)
+        elif prev == BarState.LISTENING:
+            self.set_size_request(-1, self._bar_height)
 
         if state in (BarState.THINKING, BarState.LISTENING, BarState.STREAMING, BarState.DONE):
             if self._tick_id is None:
@@ -158,10 +183,7 @@ class AccentBar(Gtk.DrawingArea):
             cr.fill()
 
         elif self._state == BarState.LISTENING:
-            alpha = 0.4 + 0.6 * (0.5 + 0.5 * math.sin(self._progress * 2.0 * math.pi))
-            cr.set_source_rgba(r, g, b, alpha)
-            cr.rectangle(0, 0, width, height)
-            cr.fill()
+            self._draw_waveform(cr, width, height, r, g, b)
 
         elif self._state == BarState.STREAMING:
             cr.set_source_rgb(r, g, b)
@@ -185,4 +207,38 @@ class AccentBar(Gtk.DrawingArea):
             alpha = 1.0 - self._progress
             cr.set_source_rgba(r, g, b, alpha)
             cr.rectangle(0, 0, width, height)
+            cr.fill()
+
+    def _draw_waveform(self, cr, width, height, r, g, b) -> None:
+        """Draw a centered waveform from the audio level buffer."""
+        n = len(self._levels)
+        if n == 0:
+            return
+
+        # Subtle background
+        cr.set_source_rgba(r, g, b, 0.08)
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+
+        gap = 2
+        bar_w = max(2, (width - gap * (n - 1)) / n)
+        center_y = height / 2.0
+        min_h = 2  # minimum bar height even at silence
+
+        for i, level in enumerate(self._levels):
+            x = i * (bar_w + gap)
+            bar_h = max(min_h, level * (height - 4))
+            y = center_y - bar_h / 2.0
+
+            # Brighter at higher amplitude
+            a = 0.3 + 0.7 * level
+            cr.set_source_rgba(r, g, b, a)
+            # Rounded rect for each bar
+            radius = min(bar_w / 2, bar_h / 2, 2)
+            cr.new_path()
+            cr.arc(x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
+            cr.arc(x + bar_w - radius, y + radius, radius, 1.5 * math.pi, 2 * math.pi)
+            cr.arc(x + bar_w - radius, y + bar_h - radius, radius, 0, 0.5 * math.pi)
+            cr.arc(x + radius, y + bar_h - radius, radius, 0.5 * math.pi, math.pi)
+            cr.close_path()
             cr.fill()

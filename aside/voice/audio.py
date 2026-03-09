@@ -67,8 +67,12 @@ class AudioPipeline:
         """Kill the pw-record subprocess."""
         if self._proc is not None:
             log.info("Stopping pw-record")
-            self._proc.terminate()
-            self._proc.wait()
+            try:
+                self._proc.kill()  # SIGKILL — don't risk SIGTERM deadlock
+                self._proc.stdout.close()  # unblock any pending reads
+                self._proc.wait(timeout=2)
+            except Exception:
+                log.debug("pw-record cleanup error", exc_info=True)
             self._proc = None
 
     def _read_exact(self, num_bytes: int) -> bytes:
