@@ -1,0 +1,94 @@
+# Maintainer: Scott Stavinoha <scottstavinoha@gmail.com>
+pkgname=aside-git
+pkgver=r0
+pkgrel=1
+pkgdesc="Wayland-native LLM desktop assistant (dev branch)"
+arch=('x86_64')
+url="https://github.com/scottstav/aside"
+license=('MIT')
+depends=(
+    'gtk4'
+    'libadwaita'
+    'gtk4-layer-shell'
+    'python'
+    'python-gobject'
+    'python-cairo'
+    'python-tiktoken'
+    'python-openai'
+    'python-pydantic'
+    'python-aiohttp'
+    'python-httpx'
+    'gobject-introspection'
+)
+makedepends=(
+    'git'
+    'python-build'
+    'python-wheel'
+    'python-setuptools'
+)
+optdepends=(
+    'portaudio: voice input (aside enable-stt)'
+    'pipewire: voice input via pw-record'
+)
+provides=('aside')
+conflicts=('aside')
+source=("$pkgname::git+$url.git#branch=dev")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$pkgname"
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "$pkgname"
+    python -m build --wheel --no-isolation
+
+    python -m venv --system-site-packages "$srcdir/venv"
+    local _pip="$srcdir/venv/bin/pip"
+
+    "$_pip" install --no-cache-dir --no-deps \
+        "$srcdir/$pkgname/dist/aside_assistant-"*.whl
+
+    "$_pip" install --no-cache-dir litellm
+}
+
+package() {
+    # ── venv ──────────────────────────────────────────────────────────────
+    install -d "$pkgdir/opt"
+    cp -a "$srcdir/venv" "$pkgdir/opt/aside"
+
+    find "$pkgdir/opt/aside/bin" -type f -exec \
+        sed -i "s|$srcdir/venv|/opt/aside|g" {} +
+    sed -i "s|$srcdir/venv|/opt/aside|g" "$pkgdir/opt/aside/pyvenv.cfg"
+
+    # ── wrapper scripts ──────────────────────────────────────────────────
+    install -d "$pkgdir/usr/bin"
+    for cmd in aside aside-overlay aside-status; do
+        [ -f "$pkgdir/opt/aside/bin/$cmd" ] || continue
+        cat > "$pkgdir/usr/bin/$cmd" <<EOF
+#!/bin/sh
+exec /opt/aside/bin/$cmd "\$@"
+EOF
+        chmod 755 "$pkgdir/usr/bin/$cmd"
+    done
+
+    cd "$pkgname"
+
+    # ── systemd units (patched for /usr/bin paths) ────────────────────────
+    install -Dm644 data/aside-daemon.service "$pkgdir/usr/lib/systemd/user/aside-daemon.service"
+    install -Dm644 data/aside-overlay.service "$pkgdir/usr/lib/systemd/user/aside-overlay.service"
+    sed -i 's|%h/.local/bin/aside|/usr/bin/aside|' \
+        "$pkgdir/usr/lib/systemd/user/aside-daemon.service"
+    sed -i 's|%h/.local/bin/aside-overlay|/usr/bin/aside-overlay|' \
+        "$pkgdir/usr/lib/systemd/user/aside-overlay.service"
+
+    # ── desktop entry ─────────────────────────────────────────────────────
+    install -Dm644 data/aside.desktop "$pkgdir/usr/share/applications/aside.desktop"
+
+    # ── example config ────────────────────────────────────────────────────
+    install -Dm644 data/config.toml.example "$pkgdir/usr/share/aside/config.toml.example"
+
+    # ── license ───────────────────────────────────────────────────────────
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/aside/LICENSE"
+}
