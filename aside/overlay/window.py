@@ -432,7 +432,8 @@ class OverlayWindow(Gtk.Window):
             threading.Thread(
                 target=self._send_to_daemon, args=(msg,), daemon=True
             ).start()
-        elif button == 3:  # right click — cancel query + TTS
+        elif button == 3:  # right click — cancel active query, TTS, and dismiss
+            # Intentionally works during streaming so user can kill a bad response
             msg = {"action": "cancel"}
             threading.Thread(
                 target=self._send_to_daemon, args=(msg,), daemon=True

@@ -147,7 +147,7 @@ def resolve_conversations_dir(cfg: dict[str, Any]) -> Path:
     Uses ``cfg["storage"]["conversations_dir"]`` when set, otherwise
     ``<state_dir>/conversations``.
     """
-    custom = cfg.get("storage", {}).get("archive_dir", "")
+    custom = cfg.get("storage", {}).get("conversations_dir", "")
     if custom:
         return Path(custom).expanduser()
     return resolve_state_dir(cfg) / "conversations"
