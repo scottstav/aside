@@ -26,20 +26,21 @@ class ConversationHistory(Gtk.ScrolledWindow):
         self.set_hexpand(True)
         self.set_vexpand(True)
 
-        # Auto-scroll to bottom on content changes.
-        # "changed" fires during layout — we defer the actual scroll
-        # to an idle handler that runs AFTER layout/draw completes.
+        # Auto-scroll to bottom when content changes.
         vadj = self.get_vadjustment()
         if vadj is not None:
             vadj.connect("changed", self._on_vadj_changed)
 
     def _on_vadj_changed(self, vadj) -> None:
+        # Synchronous scroll — works for streaming where updates are
+        # frequent and small. Also schedule a deferred scroll as a
+        # fallback for bulk loads where layout isn't settled yet.
+        vadj.set_value(vadj.get_upper() - vadj.get_page_size())
         self._schedule_scroll()
 
     def _schedule_scroll(self) -> None:
-        """Debounced scroll-to-bottom that runs after the layout pass."""
+        """Debounced deferred scroll-to-bottom for after layout settles."""
         if self._scroll_idle_id is None:
-            # DEFAULT_IDLE (200) runs after GTK layout/draw (HIGH_IDLE = 100)
             self._scroll_idle_id = GLib.idle_add(
                 self._do_scroll_to_bottom,
                 priority=GLib.PRIORITY_DEFAULT_IDLE,
@@ -102,7 +103,6 @@ class ConversationHistory(Gtk.ScrolledWindow):
             else:
                 text = str(content)
             self.add_message(role, text)
-        # Scroll twice: once via idle (catches most cases), once via
-        # timeout (catches lazy text layout across multiple frames).
+        # Deferred scrolls for bulk load — layout may not be settled yet.
         self.scroll_to_bottom()
         GLib.timeout_add(150, self._do_scroll_to_bottom)
