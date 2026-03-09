@@ -1,6 +1,6 @@
 # Maintainer: Scott Stavinoha <scottstavinoha@gmail.com>
 pkgname=aside
-pkgver=0.4.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc="Wayland-native LLM desktop assistant"
 arch=('x86_64')
@@ -32,7 +32,7 @@ optdepends=(
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
 )
-sha256sums=('SKIP')
+sha256sums=('aa2da2eb850bf19203de403cb04cc97bc7e30e5b3b53c512d49a09ed0ae9aa37')
 
 build() {
     cd "$srcdir/$pkgname-$pkgver"
