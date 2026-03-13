@@ -46,8 +46,7 @@ class OverlayWindow(Gtk.Window):
         self._thinking_tick_id: int | None = None
         self._thinking_dots: int = 0
         self._thinking_base_text: str = ""
-        self._convo_msgs_ready: bool = False  # _on_submit pre-added messages
-        self._convo_can_dismiss: bool = False
+        self._msgs_ready: bool = False  # _on_submit pre-added messages
 
         overlay_cfg = config.get("overlay", {})
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
@@ -114,29 +113,29 @@ class OverlayWindow(Gtk.Window):
         )
         self._main_box.append(self._accent_bar)
 
-        # Stack for view switching
+        # Stack: "main" for content, "picker" for conversation picker
         self._stack = Gtk.Stack()
         self._stack.set_vhomogeneous(False)
         self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._stack.set_transition_duration(150)
         self._main_box.append(self._stack)
 
-        # --- Stream view ---
+        # --- Main view (history + action bar + reply) ---
         self._max_height = max_height
         self._current_window_h = 0
-        stream_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self._stream_box = stream_box
-        self._stream_history = ConversationHistory(markdown=self._markdown_enabled)
-        # Let ScrolledWindow report its content height so parent measure() is accurate
-        self._stream_history.set_propagate_natural_height(True)
-        self._stream_history.set_max_content_height(max_height)
-        stream_box.append(self._stream_history)
+        main_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # Window controls its own height based on content
-        vadj = self._stream_history.get_vadjustment()
+        self._history = ConversationHistory(markdown=self._markdown_enabled)
+        self._history.set_propagate_natural_height(True)
+        self._history.set_max_content_height(max_height)
+        main_view.append(self._history)
+
+        # Dynamic window sizing: grow with content, cap at max_height
+        vadj = self._history.get_vadjustment()
         if vadj is not None:
-            vadj.connect("changed", self._on_stream_content_changed)
-        # Action buttons (icon-only: mic, copy, reply)
+            vadj.connect("changed", self._on_content_changed)
+
+        # Action buttons (visible in DISPLAY only)
         self._action_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._action_bar.add_css_class("action-bar")
         self._action_bar.set_halign(Gtk.Align.CENTER)
@@ -162,25 +161,16 @@ class OverlayWindow(Gtk.Window):
         reply_btn.connect("clicked", self._on_reply_clicked)
         self._action_bar.append(reply_btn)
 
-        stream_box.append(self._action_bar)
-        # Inline reply input (hidden until Reply is clicked)
-        self._stream_reply = ReplyInput()
-        self._stream_reply.connect_submit(self._on_stream_reply_submit)
-        self._stream_reply.connect_expand(self._on_expand_convo)
-        self._stream_reply.set_visible(False)
-        stream_box.append(self._stream_reply)
-        self._stack.add_named(stream_box, "stream")
+        main_view.append(self._action_bar)
 
-        # --- Convo view ---
-        convo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self._convo_history = ConversationHistory(markdown=self._markdown_enabled)
-        self._convo_history.set_max_content_height(max_height)
-        convo_box.append(self._convo_history)
-        self._convo_reply = ReplyInput()
-        self._convo_reply.connect_submit(self._on_submit)
-        self._convo_reply.connect_expand(self._on_expand_convo)
-        convo_box.append(self._convo_reply)
-        self._stack.add_named(convo_box, "convo")
+        # Reply input (visible in REPLY and CONVO)
+        self._reply = ReplyInput()
+        self._reply.connect_submit(self._on_submit)
+        self._reply.connect_expand(self._on_expand_convo)
+        self._reply.set_visible(False)
+        main_view.append(self._reply)
+
+        self._stack.add_named(main_view, "main")
 
         # --- Picker view ---
         self._picker = ConversationPicker()
@@ -211,47 +201,67 @@ class OverlayWindow(Gtk.Window):
     def state(self) -> OverlayState:
         return self._state
 
-    def _set_state(self, state: OverlayState) -> None:
-        self._state = state
-        # EXCLUSIVE: grab keyboard for interactive states (picker, convo, reply)
-        # ON_DEMAND: receive pointer events (hover) without stealing keyboard focus
-        if state in (OverlayState.CONVO, OverlayState.PICKER):
-            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+    def _set_state(self, new_state: OverlayState) -> None:
+        old_state = self._state
+        self._state = new_state
+
+        # Keyboard mode
+        if new_state in (OverlayState.REPLY, OverlayState.CONVO, OverlayState.PICKER):
+            Gtk4LayerShell.set_keyboard_mode(
+                self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE
+            )
         else:
-            Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            Gtk4LayerShell.set_keyboard_mode(
+                self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+            )
 
-    def _in_convo_view(self) -> bool:
-        return self.get_visible() and self._stack.get_visible_child_name() == "convo"
+        # Widget visibility (only for main view states)
+        if new_state in (
+            OverlayState.STREAMING,
+            OverlayState.DISPLAY,
+            OverlayState.REPLY,
+            OverlayState.CONVO,
+        ):
+            self._action_bar.set_visible(new_state == OverlayState.DISPLAY)
+            self._reply.set_visible(
+                new_state in (OverlayState.REPLY, OverlayState.CONVO)
+            )
 
-    def _active_history(self) -> ConversationHistory:
-        """Return the history widget for the currently visible view."""
-        if self._in_convo_view():
-            return self._convo_history
-        return self._stream_history
+        # Window sizing for CONVO: fixed at max_height
+        if new_state == OverlayState.CONVO:
+            self._history.set_min_content_height(self._max_height)
+            self._history.set_vexpand(True)
+            self.set_size_request(self._default_width, self._max_height)
+            self._current_window_h = self._max_height
+        elif old_state == OverlayState.CONVO:
+            # Leaving CONVO — reset to dynamic sizing
+            self._history.set_min_content_height(0)
+            self._history.set_vexpand(True)
 
     # --- Socket command handlers ---
 
     def handle_open(self, mode: str = "user", conv_id: str = "") -> None:
-        """HIDDEN->STREAMING: show overlay, start streaming."""
+        """Show overlay and prepare for streaming."""
         self._stop_thinking_dots()
-        # If convo view is showing, stream into it instead of switching
-        if self._in_convo_view():
-            if not self._convo_msgs_ready:
-                self._convo_history.add_message(mode, "")
-            self._convo_msgs_ready = False
+        self._cancel_dismiss_timer()
+
+        if self._state == OverlayState.CONVO:
+            # Streaming into existing convo view — don't switch away.
+            if not self._msgs_ready:
+                self._history.add_message(mode, "")
+            self._msgs_ready = False
             self._accumulated_text = ""
-            self._convo_can_dismiss = False
             if conv_id:
                 self._conv_id = conv_id
             self._accent_bar.set_state(BarState.STREAMING)
             return
+
+        # All other states: start fresh stream.
         self._conv_id = conv_id or None
         self._accumulated_text = ""
-        self._stream_history.clear()
-        self._stream_history.add_message(mode, "")
-        self._action_bar.set_visible(True)
-        self._stream_reply.set_visible(False)
-        self._stack.set_visible_child_name("stream")
+        self._history.clear()
+        self._history.add_message(mode, "")
+        self._stack.set_visible_child_name("main")
         self._accent_bar.set_state(BarState.STREAMING)
         self._set_state(OverlayState.STREAMING)
         self.set_visible(True)
@@ -263,12 +273,11 @@ class OverlayWindow(Gtk.Window):
         and adds a new assistant message for the LLM response.
         """
         self._stop_thinking_dots()
-        history = self._active_history()
         if self._accumulated_text:
-            history.update_last_message(self._accumulated_text)
+            self._history.update_last_message(self._accumulated_text)
         self._accumulated_text = ""
-        if not self._in_convo_view():
-            self._stream_history.add_message("assistant", "")
+        if self._state != OverlayState.CONVO:
+            self._history.add_message("assistant", "")
             self._set_state(OverlayState.STREAMING)
         self._accent_bar.set_state(BarState.STREAMING)
 
@@ -276,25 +285,25 @@ class OverlayWindow(Gtk.Window):
         """Append streamed text to current message."""
         self._stop_thinking_dots()
         self._accumulated_text += data
-        self._active_history().update_last_message(self._accumulated_text)
+        self._history.update_last_message(self._accumulated_text)
 
     def handle_done(self) -> None:
-        """STREAMING->DISPLAY: start dismiss timer."""
+        """Streaming complete."""
         self._accent_bar.set_state(BarState.IDLE)
-        if self._in_convo_view():
-            self._convo_can_dismiss = True
-            self._convo_reply.clear()
-            self._convo_reply.focus_input()
-        else:
-            self._set_state(OverlayState.DISPLAY)
+        if self._state == OverlayState.CONVO:
+            # Stay in CONVO. Clear and focus reply for next message.
+            self._reply.clear()
+            self._reply.focus_input()
+            # No dismiss timer in CONVO.
+            return
+        self._set_state(OverlayState.DISPLAY)
         self._start_dismiss_timer(self._dismiss_timeout)
 
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
         self._cancel_dismiss_timer()
         self._stop_thinking_dots()
-        self._convo_msgs_ready = False
-        self._convo_can_dismiss = False
+        self._msgs_ready = False
         self.set_visible(False)
         self._current_window_h = 0
         self.set_size_request(self._default_width, -1)
@@ -305,7 +314,7 @@ class OverlayWindow(Gtk.Window):
         """Replace all text in current message."""
         self._stop_thinking_dots()
         self._accumulated_text = data
-        self._active_history().update_last_message(data)
+        self._history.update_last_message(data)
 
     def handle_thinking(self) -> None:
         """Set accent bar to thinking animation and show animated dots."""
@@ -319,8 +328,8 @@ class OverlayWindow(Gtk.Window):
         """Cycle dots appended to current text."""
         self._thinking_dots = (self._thinking_dots % 3) + 1
         dots = " " + "." * self._thinking_dots if self._thinking_base_text else "." * self._thinking_dots
-        self._active_history().update_last_message(self._thinking_base_text + dots)
-        return True  # keep repeating
+        self._history.update_last_message(self._thinking_base_text + dots)
+        return True
 
     def _stop_thinking_dots(self) -> None:
         if self._thinking_tick_id is not None:
@@ -367,49 +376,45 @@ class OverlayWindow(Gtk.Window):
                 conv_id = store.resolve_last()
                 if not conv_id:
                     return
-        self._load_convo(conv_id)
+        self._expand_to_convo(conv_id)
 
-    def _load_convo(self, conv_id: str) -> None:
-        """Load conversation history into convo view."""
+    def _expand_to_convo(self, conv_id: str) -> None:
+        """Load full conversation history and enter CONVO state."""
         self._cancel_dismiss_timer()
-        self._convo_msgs_ready = False
-        self._convo_can_dismiss = False
-        # If we're already showing this conversation, load from disk
-        # but skip reload if we have in-memory state (avoids stale-file race)
-        already_showing = (
-            self._conv_id == conv_id
-            and self._state in (OverlayState.STREAMING, OverlayState.DISPLAY)
-        )
-        if not already_showing:
-            from aside.state import ConversationStore
-            conv_dir = resolve_conversations_dir(self._config)
-            store = ConversationStore(conv_dir)
-            conv = store.get_or_create(conv_id)
-            self._convo_history.load_conversation(conv)
-        else:
-            # Copy messages from stream view into convo view
-            self._convo_history.clear()
-            for mv in self._stream_history._messages:
-                self._convo_history.add_message(mv.role, mv.get_raw_text())
-            self._convo_history.scroll_to_bottom()
-        self._conv_id = conv_id
-        self._convo_reply.clear()
-        self._stack.set_visible_child_name("convo")
-        self.set_size_request(self._default_width, self._max_height)
-        self._current_window_h = self._max_height
-        self._accent_bar.set_state(BarState.IDLE)
+        self._msgs_ready = False
+
+        # Enter CONVO state FIRST — this sets min_content_height on the
+        # ScrolledWindow so page_size is correct when scroll_to_bottom fires.
+        self._stack.set_visible_child_name("main")
         self._set_state(OverlayState.CONVO)
         self.set_visible(True)
-        self._convo_reply.focus_input()
+
+        # Now load conversation into the already-visible, correctly-sized widget.
+        from aside.state import ConversationStore
+        conv_dir = resolve_conversations_dir(self._config)
+        store = ConversationStore(conv_dir)
+        conv = store.get_or_create(conv_id)
+        self._history.load_conversation(conv)
+
+        self._conv_id = conv_id
+        self._reply.clear()
+        self._accent_bar.set_state(BarState.IDLE)
+        self._reply.focus_input()
 
     # --- Window sizing ---
 
-    def _on_stream_content_changed(self, vadj) -> None:
+    def _on_content_changed(self, vadj) -> None:
         """Resize window to fit content, capped at max_height.
 
-        With propagate_natural_height on the ScrolledWindow, main_box.measure()
-        returns the true total including all children, margins, borders, and padding.
+        Only active during STREAMING, DISPLAY, and REPLY — CONVO uses fixed
+        max_height set by _set_state().
         """
+        if self._state not in (
+            OverlayState.STREAMING,
+            OverlayState.DISPLAY,
+            OverlayState.REPLY,
+        ):
+            return
         _, nat_h, _, _ = self._main_box.measure(
             Gtk.Orientation.VERTICAL, self._default_width
         )
@@ -435,19 +440,17 @@ class OverlayWindow(Gtk.Window):
 
     def _on_dismiss_timeout(self) -> bool:
         self._dismiss_timer_id = None
-        if self._state in (OverlayState.DISPLAY, OverlayState.CONVO):
+        if self._state == OverlayState.DISPLAY:
             self.handle_clear()
-        return False  # don't repeat
+        return False
 
     def _on_hover_enter(self, *_args) -> None:
         """Pause auto-dismiss while cursor is over the overlay."""
         self._cancel_dismiss_timer()
 
     def _on_hover_leave(self, *_args) -> None:
-        """Restart auto-dismiss when cursor leaves the overlay."""
+        """Restart auto-dismiss when cursor leaves — DISPLAY only."""
         if self._state == OverlayState.DISPLAY:
-            self._start_dismiss_timer(self._dismiss_timeout)
-        elif self._state == OverlayState.CONVO and self._convo_can_dismiss:
             self._start_dismiss_timer(self._dismiss_timeout)
 
     # --- User action handlers ---
@@ -500,56 +503,39 @@ class OverlayWindow(Gtk.Window):
             subprocess.Popen(["xdg-open", str(path)])
 
     def _on_reply_clicked(self, button) -> None:
-        """Show inline reply input below the streamed response."""
+        """DISPLAY->REPLY: show reply input."""
         self._cancel_dismiss_timer()
-        self._action_bar.set_visible(False)
-        self._stream_reply.clear()
-        self._stream_reply.set_visible(True)
-        self._set_state(OverlayState.CONVO)
-        self._stream_reply.focus_input()
+        self._set_state(OverlayState.REPLY)
+        self._reply.clear()
+        self._reply.focus_input()
 
     def _on_expand_convo(self) -> None:
         """Shift+Tab: expand to full conversation view."""
         if self._conv_id:
-            self._load_convo(self._conv_id)
+            self._expand_to_convo(self._conv_id)
 
     def _on_submit(self, text: str) -> None:
-        """Send query from convo view — stream response into the same view."""
+        """Send query from REPLY or CONVO state."""
         text = text.strip()
         if not text:
             return
         self._cancel_dismiss_timer()
-        self._convo_can_dismiss = False
-        self._convo_history.add_message("user", text)
-        self._convo_history.add_message("assistant", "")
-        self._accumulated_text = ""
-        self._convo_msgs_ready = True
-        self._accent_bar.set_state(BarState.STREAMING)
-        self._convo_reply.clear()
+
+        if self._state == OverlayState.CONVO:
+            # Chat mode: add messages to visible history, stream in-place.
+            self._history.add_message("user", text)
+            self._history.add_message("assistant", "")
+            self._accumulated_text = ""
+            self._msgs_ready = True
+            self._accent_bar.set_state(BarState.STREAMING)
+            self._reply.clear()
+        # else: REPLY state — daemon will send open which transitions to STREAMING
+
         msg = {
             "action": "query",
             "text": text,
             "conversation_id": self._conv_id,
         }
-        threading.Thread(
-            target=self._send_to_daemon, args=(msg,), daemon=True
-        ).start()
-
-    def _on_stream_reply_submit(self, text: str) -> None:
-        """Send query to daemon when user submits from inline stream reply."""
-        self._send_reply(text)
-
-    def _send_reply(self, text: str) -> None:
-        """Common handler for reply submissions."""
-        if not text.strip():
-            return
-        msg = {
-            "action": "query",
-            "text": text.strip(),
-            "conversation_id": self._conv_id,
-        }
-        self._convo_reply.clear()
-        self._stream_reply.clear()
         threading.Thread(
             target=self._send_to_daemon, args=(msg,), daemon=True
         ).start()
@@ -580,6 +566,7 @@ class OverlayWindow(Gtk.Window):
     def _on_key(self, ctl, keyval, keycode, state) -> bool:
         """Window-level keyboard handler."""
         self._cancel_dismiss_timer()
+
         if keyval == Gdk.KEY_Escape:
             self.handle_clear()
             return True
@@ -592,7 +579,7 @@ class OverlayWindow(Gtk.Window):
                 return True
             if keyval == Gdk.KEY_Tab and shift:
                 if self._conv_id:
-                    self._load_convo(self._conv_id)
+                    self._expand_to_convo(self._conv_id)
                 return True
             if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
                 focused = self.get_focus()
@@ -602,10 +589,11 @@ class OverlayWindow(Gtk.Window):
                     self._on_reply_clicked(None)
                 return True
 
-        if self._state == OverlayState.CONVO:
+        # Shift+Tab in REPLY expands to full CONVO
+        if self._state == OverlayState.REPLY:
             if keyval == Gdk.KEY_Tab and shift:
                 if self._conv_id:
-                    self._load_convo(self._conv_id)
+                    self._expand_to_convo(self._conv_id)
                 return True
 
         return False
