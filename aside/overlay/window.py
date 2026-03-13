@@ -204,6 +204,7 @@ class OverlayWindow(Gtk.Window):
     def _set_state(self, new_state: OverlayState) -> None:
         old_state = self._state
         self._state = new_state
+        log.debug("state: %s -> %s", old_state.value, new_state.value)
 
         # Keyboard mode
         if new_state in (OverlayState.REPLY, OverlayState.CONVO, OverlayState.PICKER):
@@ -230,13 +231,11 @@ class OverlayWindow(Gtk.Window):
         # Window sizing for CONVO: fixed at max_height
         if new_state == OverlayState.CONVO:
             self._history.set_min_content_height(self._max_height)
-            self._history.set_vexpand(True)
             self.set_size_request(self._default_width, self._max_height)
             self._current_window_h = self._max_height
         elif old_state == OverlayState.CONVO:
             # Leaving CONVO — reset to dynamic sizing
             self._history.set_min_content_height(0)
-            self._history.set_vexpand(True)
 
     # --- Socket command handlers ---
 
@@ -511,6 +510,8 @@ class OverlayWindow(Gtk.Window):
 
     def _on_expand_convo(self) -> None:
         """Shift+Tab: expand to full conversation view."""
+        if self._state == OverlayState.CONVO:
+            return  # already expanded
         if self._conv_id:
             self._expand_to_convo(self._conv_id)
 
@@ -587,13 +588,6 @@ class OverlayWindow(Gtk.Window):
                     focused.activate()
                 else:
                     self._on_reply_clicked(None)
-                return True
-
-        # Shift+Tab in REPLY expands to full CONVO
-        if self._state == OverlayState.REPLY:
-            if keyval == Gdk.KEY_Tab and shift:
-                if self._conv_id:
-                    self._expand_to_convo(self._conv_id)
                 return True
 
         return False
