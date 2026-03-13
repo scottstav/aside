@@ -30,6 +30,7 @@ class OverlayState(enum.Enum):
     HIDDEN = "hidden"
     STREAMING = "streaming"
     DISPLAY = "display"
+    REPLY = "reply"
     CONVO = "convo"
     PICKER = "picker"
 
