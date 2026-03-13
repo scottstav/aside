@@ -59,6 +59,8 @@ class ConversationHistory(Gtk.ScrolledWindow):
         self._box.append(mv)
         if text:
             GLib.idle_add(self._deferred_set_text, mv, text)
+        else:
+            GLib.timeout_add(50, self._delayed_scroll)
         return mv
 
     def _deferred_set_text(self, mv: MessageView, text: str) -> bool:
