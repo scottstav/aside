@@ -64,7 +64,7 @@ class OverlayWindow(Gtk.Window):
         # Layer-shell setup
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+        Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
         Gtk4LayerShell.set_namespace(self, "aside")
 
         # Anchoring from config
@@ -206,14 +206,15 @@ class OverlayWindow(Gtk.Window):
         self._state = new_state
         log.debug("state: %s -> %s", old_state.value, new_state.value)
 
-        # Keyboard mode
+        # Keyboard mode: EXCLUSIVE only for states with text input.
+        # NONE for display-only states so the overlay never steals focus.
         if new_state in (OverlayState.REPLY, OverlayState.CONVO, OverlayState.PICKER):
             Gtk4LayerShell.set_keyboard_mode(
                 self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE
             )
         else:
             Gtk4LayerShell.set_keyboard_mode(
-                self, Gtk4LayerShell.KeyboardMode.ON_DEMAND
+                self, Gtk4LayerShell.KeyboardMode.NONE
             )
 
         # Widget visibility (only for main view states)
