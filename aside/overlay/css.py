@@ -1,5 +1,20 @@
 """CSS generation from overlay config colors."""
 
+import gi
+
+gi.require_version("Pango", "1.0")
+from gi.repository import Pango
+
+
+def _pango_to_css(desc_str: str) -> str:
+    """Convert a Pango font description to a CSS font rule."""
+    fd = Pango.FontDescription.from_string(desc_str)
+    family = fd.get_family()
+    size = fd.get_size()
+    if size and not fd.get_size_is_absolute():
+        return f'font: {size // Pango.SCALE}pt {family};'
+    return f"font-family: {family};"
+
 
 def rgb_strip_alpha(color: str) -> str:
     """Return '#RRGGBB' from '#RRGGBB' or '#RRGGBBAA'."""
@@ -24,7 +39,7 @@ def build_css(colors: dict, font: str = "", opacity: float = 0.95) -> str:
     user_accent = rgb_strip_alpha(colors["user_accent"]) if "user_accent" in colors else None
     bg_opacity = max(0.0, min(1.0, opacity))
 
-    font_rule = f'font-family: "{font}";' if font else ""
+    font_rule = _pango_to_css(font) if font else ""
 
     # Use configured colors or fall back to GTK theme named colors.
     bg_val = f"alpha({bg}, {bg_opacity})" if bg else "@theme_bg_color"

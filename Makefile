@@ -12,19 +12,10 @@ CONFIG   := $(HOME)/.config/aside
 all: install
 
 # ---------------------------------------------------------------------------
-# Fast dev reinstall — copies into AUR-installed package, restarts services
+# Fast dev reinstall — pip install into venv, restart services
 # ---------------------------------------------------------------------------
-SITE := /opt/aside/lib/python3.14/site-packages/aside
-
 dev:
-	@if [ ! -d /opt/aside ]; then \
-		echo "Error: /opt/aside not found — install the AUR package first"; \
-		exit 1; \
-	fi
-	sudo cp -a aside/*.py $(SITE)/
-	sudo cp -a aside/overlay/*.py $(SITE)/overlay/
-	sudo cp -a aside/tools/*.py $(SITE)/tools/
-	sudo cp -a aside/voice/*.py $(SITE)/voice/
+	$(VENV)/bin/pip install --quiet .
 	systemctl --user restart aside-daemon aside-overlay
 	@echo "==> Dev reinstall done"
 

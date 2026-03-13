@@ -228,14 +228,10 @@ class OverlayWindow(Gtk.Window):
                 new_state in (OverlayState.REPLY, OverlayState.CONVO)
             )
 
-        # Window sizing for CONVO: fixed at max_height
+        # Window sizing for CONVO: fixed at max_height, history fills remaining space
         if new_state == OverlayState.CONVO:
-            self._history.set_min_content_height(self._max_height)
             self.set_size_request(self._default_width, self._max_height)
             self._current_window_h = self._max_height
-        elif old_state == OverlayState.CONVO:
-            # Leaving CONVO — reset to dynamic sizing
-            self._history.set_min_content_height(0)
 
     # --- Socket command handlers ---
 

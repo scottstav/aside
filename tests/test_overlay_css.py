@@ -44,6 +44,10 @@ class TestBuildCss:
         ]:
             assert cls in css, f"Missing CSS class: {cls}"
 
-    def test_font_parameter(self):
-        css = build_css({}, font="Monospace 14")
-        assert "font-family" in css
+    def test_font_pango_description(self):
+        css = build_css({}, font="Iosevka 12")
+        assert "font: 12pt Iosevka;" in css
+
+    def test_no_font_parameter(self):
+        css = build_css({})
+        assert "font:" not in css.split(".overlay-container")[1].split("}")[0]
