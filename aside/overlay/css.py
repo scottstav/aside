@@ -157,9 +157,10 @@ window.background {{
     border: none;
     border-radius: 50%;
     color: alpha({fg_val}, 0.6);
-    min-width: 36px;
-    min-height: 36px;
-    padding: 6px;
+    min-width: 18px;
+    min-height: 18px;
+    padding: 3px;
+    -gtk-icon-size: 14px;
 }}
 .action-icon:hover {{
     background: alpha({fg_val}, 0.15);
