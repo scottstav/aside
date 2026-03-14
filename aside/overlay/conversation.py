@@ -21,7 +21,6 @@ class ConversationHistory(Gtk.ScrolledWindow):
         super().__init__()
         self._markdown = markdown
         self._messages: list[MessageView] = []
-        self._auto_scroll = True
 
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self._box.set_margin_bottom(16)
