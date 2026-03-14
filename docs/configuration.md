@@ -1,197 +1,108 @@
 # Configuration
 
-All configuration lives in a single TOML file:
+aside is configured via a TOML file at `$XDG_CONFIG_HOME/aside/config.toml` (usually `~/.config/aside/config.toml`). All keys are optional — sensible defaults are used for anything you don't set.
 
-```
-~/.config/aside/config.toml
-```
+An annotated example is included at [`data/config.toml.example`](../data/config.toml.example).
 
-(Or `$XDG_CONFIG_HOME/aside/config.toml` if `XDG_CONFIG_HOME` is set.)
+## `[model]`
 
-Copy the example to get started:
+LLM model selection. Uses [LiteLLM](https://docs.litellm.ai/) provider/model format. If a model is set through the cli while the daemon is running, it will be changed for that daemon instance without a restart. A restart will revert back to this config setting.
 
-```bash
-cp /usr/share/aside/config.toml.example ~/.config/aside/config.toml
-```
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `name` | string | `"anthropic/claude-sonnet-4-6"` | Model identifier (e.g. `openai/gpt-4o`, `ollama/llama3`) |
+| `system_prompt` | string | `""` | Extra text appended to the built-in system prompt |
 
-Only uncomment the values you want to change. Aside uses sensible defaults for everything.
+## `[input]`
 
-Changes take effect on daemon restart (`systemctl --user restart aside-daemon`).
+Input popup window settings.
 
----
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `font` | string | `""` | Pango font description for the input popup. Falls back to `overlay.font` when empty |
 
-## Model
+## `[voice]`
 
-```toml
-[model]
-name = "anthropic/claude-sonnet-4-6"
-system_prompt = ""
-```
+Speech-to-text capture via faster-whisper.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `name` | `anthropic/claude-sonnet-4-6` | LiteLLM model identifier. Format: `provider/model-name`. Examples: `openai/gpt-4o`, `ollama/llama3`, `gemini/gemini-pro` |
-| `system_prompt` | `""` | Extra text appended to the built-in system prompt. The built-in prompt handles conciseness and desktop context — use this for personal preferences |
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable voice input, togglable via cli without daemon restart. Reverts to this setting on restart. |
+| `stt_model` | string | `"base"` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, `large`. The model is downloaded on first voice capture after a daemon start. Changing this requires a daemon restart. |
+| `stt_device` | string | `"cpu"` | Inference device: `"cpu"` or `"cuda"`. Changing this requires a daemon restart. |
+| `smart_silence` | bool | `true` | Adjust silence timeout based on transcript content. When on, waits less after complete sentences (1.5s) and longer after mid-sentence words like "the" or "and" (3.5s). When off, always waits exactly `silence_timeout`. |
+| `silence_timeout` | float | `2.5` | Seconds of silence before auto-sending the query |
+| `no_speech_timeout` | float | `3.0` | Seconds with no speech detected before cancelling |
+| `force_send_phrases` | array | `["send it", "that's it"]` | Spoken phrases that trigger an immediate send |
 
-## Input
+## `[tts]`
 
-```toml
-[input]
-terminal = "foot -e"
-font = ""
-```
+Text-to-speech playback via Piper.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `terminal` | `foot -e` | Terminal emulator used to launch the input popup. Must accept `-e` to run a command. Works with `foot`, `alacritty`, `kitty`, etc. |
-| `font` | `""` | Font for the input window text area. Empty = inherit from overlay font |
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable TTS playback of responses |
+| `model` | string | `""` | Path to a Piper `.onnx` voice model. When empty, uses `/usr/share/piper-voices/en/en_US/lessac/medium/en_US-lessac-medium.onnx` |
+| `speed` | float | `1.0` | Speech rate multiplier. Values above 1 are faster, below 1 slower |
 
-## Voice
+## `[overlay]`
 
-```toml
-[voice]
-enabled = false
-stt_model = "base"
-stt_device = "cpu"
-smart_silence = true
-silence_timeout = 2.5
-no_speech_timeout = 3.0
-force_send_phrases = ["send it", "that's it"]
-```
+Wayland layer-shell overlay appearance and layout. Width is clamped to 200–2000 and max_lines to 1–50.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `false` | Enable voice input (STT via faster-whisper) |
-| `stt_model` | `base` | faster-whisper model size: `tiny`, `base`, `small`, `medium`, or `large`. Larger = more accurate, slower |
-| `stt_device` | `cpu` | Whisper inference device: `cpu` or `cuda` |
-| `smart_silence` | `true` | Dynamically adjust silence timeout based on transcript content. Waits longer mid-sentence, shorter after sentence-ending punctuation |
-| `silence_timeout` | `2.5` | Base seconds of silence before auto-sending |
-| `no_speech_timeout` | `3.0` | Seconds without any detected speech before cancelling capture |
-| `force_send_phrases` | `["send it", "that's it"]` | Phrases that trigger an immediate send, bypassing silence detection |
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `font` | string | `"Sans 13"` | Pango font description |
+| `width` | int | `600` | Overlay width in logical pixels (200–2000) |
+| `max_lines` | int | `5` | Maximum visible lines of text (1–50) |
+| `position` | string | `"top-center"` | Screen position: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
+| `margin_top` | int | `10` | Top margin in pixels |
+| `margin_right` | int | `0` | Right margin in pixels |
+| `margin_bottom` | int | `0` | Bottom margin in pixels |
+| `margin_left` | int | `0` | Left margin in pixels |
+| `padding_x` | int | `20` | Horizontal text padding in pixels |
+| `padding_y` | int | `16` | Vertical text padding in pixels |
+| `corner_radius` | int | `12` | Corner rounding radius in pixels |
+| `border_width` | int | `2` | Border thickness in pixels |
+| `accent_height` | int | `3` | Accent bar height in pixels (0 disables). Top bar for agent responses, bottom bar for user/mic mode |
+| `scroll_duration` | int | `200` | Text scroll animation in milliseconds |
+| `fade_duration` | int | `400` | Fade-out animation in milliseconds |
 
-## Text-to-Speech
+## `[overlay.colors]`
 
-TTS is optional. Install it with:
+All colors use `#RRGGBBAA` hex format. The last two digits are alpha (e.g. `e6` is ~90% opaque, `ff` is fully opaque).
 
-```bash
-sudo aside enable-tts
-```
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `background` | string | `"#1a1b26e6"` | Background fill |
+| `foreground` | string | `"#c0caf5ff"` | Text color |
+| `border` | string | `"#414868ff"` | Border color |
+| `accent` | string | `"#7aa2f7ff"` | Accent bar color for agent responses |
+| `user_accent` | string | `"#a07048ff"` | Accent bar color for user/mic mode |
 
-This installs `piper-tts` into the aside venv and downloads a default English voice model. To remove it later: `sudo aside disable-tts`.
+## `[storage]`
 
-```toml
-[tts]
-enabled = false
-model = ""
-speed = 1.0
-```
+Override default state directories. When empty, XDG defaults are used (`$XDG_STATE_HOME/aside/` or `~/.local/state/aside/`).
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `enabled` | `false` | Enable TTS output via Piper |
-| `model` | `""` | Path to a Piper `.onnx` voice model file. Empty = use the default model installed by `enable-tts`. Download additional voices from [Piper voices](https://huggingface.co/rhasspy/piper-voices) |
-| `speed` | `1.0` | Speech playback speed multiplier (>1 = faster, <1 = slower) |
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `conversations_dir` | string | `""` | Directory for conversation JSON state files. Default: `<state_dir>/conversations` |
+| `archive_dir` | string | `""` | Directory for exported markdown transcripts. Default: `<state_dir>/archive` |
 
-## Overlay
+## `[tools]`
 
-Controls the floating overlay that displays responses.
+Plugin tool loading.
 
-```toml
-[overlay]
-font = "Sans 13"
-width = 400
-max_height = 500
-position = "top-center"
-margin_top = 10
-opacity = 0.95
-dismiss_timeout = 5.0
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `dirs` | array | `[]` | Additional directories to scan for tool plugins |
 
-[overlay.colors]
-background = "#0f0f14"
-foreground = "#e2e8f0"
-border = "#2a2a3a"
-accent = "#8b5cf6"
-user_accent = "#22d3ee"
-```
+## `[status]`
 
-### Layout
+Status bar integration. The daemon sends a real-time signal on state changes so status bar modules (e.g. waybar custom modules) can refresh immediately.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `font` | `Sans 13` | Pango font description for overlay text |
-| `width` | `400` | Overlay width in pixels |
-| `max_height` | `500` | Maximum overlay height in pixels. Applies to streaming, convo view, and picker |
-| `position` | `top-center` | Overlay position on screen: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
-| `margin_top` | `10` | Top margin in pixels |
-| `margin_right` | `0` | Right margin in pixels |
-| `margin_bottom` | `0` | Bottom margin in pixels |
-| `margin_left` | `0` | Left margin in pixels |
-| `padding_x` | `20` | Horizontal padding inside the overlay |
-| `padding_y` | `16` | Vertical padding inside the overlay |
-| `corner_radius` | `12` | Border corner radius in pixels |
-| `border_width` | `2` | Border thickness in pixels |
-| `accent_height` | `3` | Height of the colored accent line at the top. Set to `0` to disable |
-
-### Behavior
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `opacity` | `0.95` | Background opacity (0.0 = fully transparent, 1.0 = fully opaque) |
-| `dismiss_timeout` | `5.0` | Seconds before the overlay auto-dismisses after a response completes. Set to `0` to disable auto-dismiss |
-
-### Animation
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `scroll_duration` | `200` | Text scroll animation duration in milliseconds |
-| `fade_duration` | `400` | Fade-out animation duration in milliseconds |
-
-### Colors
-
-All colors are RGBA hex strings. The last two hex digits control alpha (transparency). `ff` = fully opaque, `00` = fully transparent.
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `background` | `#0f0f14` | Overlay background |
-| `foreground` | `#e2e8f0` | Text color |
-| `border` | `#2a2a3a` | Border color |
-| `accent` | `#8b5cf6` | LLM accent — accent bar during thinking/streaming, LLM message border, buttons |
-| `user_accent` | `#22d3ee` | User accent — accent bar during listening, user message color, reply input border |
-
-## Storage
-
-```toml
-[storage]
-archive_dir = ""
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `archive_dir` | `""` | Custom path for conversation files. Empty = `$XDG_STATE_HOME/aside/conversations` |
-
-## Tools
-
-```toml
-[tools]
-dirs = []
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `dirs` | `[]` | Additional directories to scan for tool plugin files. See [Plugins](plugins.md) for the plugin API |
-
-Built-in tools are always loaded from `aside/tools/` inside the package. User tools in `~/.config/aside/tools/` are also loaded automatically.
-
-## Status
-
-```toml
-[status]
-signal = 12
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `signal` | `12` | SIGRTMIN+N signal number sent to waybar for status updates. The `aside status` waybar module listens on this signal |
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `signal` | int | `12` | SIGRTMIN+N signal number sent to waybar for status updates |
 
 ---
 

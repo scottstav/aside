@@ -1,6 +1,6 @@
 # aside
 
-A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, and never lose focus on what you're doing.
+An LLM assistant for Wayland desktops that does what you ask and gets out of the way. Configurable to fit your look. Infinitely extensible with custom tools.
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
@@ -9,13 +9,13 @@ A desktop LLM assistant for Wayland. Ask questions, get answers, launch tools, a
 - **input picker** — integrated conversation picker. Continue one or start fresh.
 
 
-Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query. 
+Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query.
 
 ## tools
 
-aside ships with a memory tool built in. Drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically. See `examples/tools/` for reference implementations.
+Where the magic happens
 
-The tool system is flexible enough to do real work — run scripts, search files, open applications, etc, even create new tools.
+aside ships with a memory tool built in. To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
 
 the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
 
@@ -47,7 +47,7 @@ everything goes through the CLI, which makes it easy to script, integrate with p
 # models — auto-detects what's available based on your API keys
 aside models
 aside model set gemini/gemini-2.5-pro
-aside model exclude openai/o1
+aside model exclude openai/o1   # LiteLLM may identify available models that have actually been deprecated or are not "chat" models in which case they will error. Exclude them so they dont show in `aside models` list
 
 # querying — rapid follow-ups auto-attach to the same conversation
 aside query "what time is it in tokyo"
@@ -70,6 +70,10 @@ aside toggle-tts
 aside stop-tts
 aside cancel
 ```
+
+a GUI for continuing conversations is provided if you don't want to script your own:
+
+![aside-input](screenshots/demo2.gif)
 
 ## theming and customization
 
@@ -125,6 +129,11 @@ filter = {skip_code_blocks = true, skip_urls = true}
 
 voice, TTS, model, plugins, and storage are all configurable too — see [config reference](docs/configuration.md).
 
+## requirements
+
+- **Wayland compositor with layer-shell support** — Sway, Hyprland, KDE Plasma 6+, or any compositor implementing `zwlr_layer_shell_v1`. GNOME is **not** supported (the overlay won't render; the input popup will fall back to a regular window).
+- **PipeWire** — required for audio (TTS playback and STT mic capture).
+
 ## install
 
 ### arch linux (AUR)
@@ -133,11 +142,19 @@ voice, TTS, model, plugins, and storage are all configurable too — see [config
 yay -S aside
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
-
-# optional add-ons
-sudo aside enable-stt   # speech-to-text (faster-whisper, ~100MB)
-sudo aside enable-tts   # text-to-speech (piper-tts, ~60MB voice model)
 ```
+
+#### optional add-ons
+
+```bash
+# speech-to-text (faster-whisper, ~100MB model download)
+sudo aside enable-stt
+
+# text-to-speech (piper-tts, ~60MB voice model)
+sudo aside enable-tts
+```
+
+STT requires `pipewire` (provides `pw-record`) and `python-numpy` — both are already pulled in by the AUR package. TTS requires `portaudio` — also included.
 
 ### manual
 
@@ -161,21 +178,26 @@ git checkout $(git describe --tags --abbrev=0)
 make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay
+```
 
-# optional add-ons
+#### optional add-ons
+
+The enable commands pip-install the Python packages into aside's venv but rely on a few system libraries:
+
+| Add-on | Command | System deps |
+|--------|---------|-------------|
+| STT | `sudo aside enable-stt` | `pipewire-utils` (Fedora) · `pipewire` (Arch, Ubuntu) — for `pw-record` <br> `python3-numpy` (Fedora) · `python-numpy` (Arch) · `python3-numpy` (Ubuntu) |
+| TTS | `sudo aside enable-tts` | `portaudio` (Arch, Fedora) · `libportaudio2` (Ubuntu) |
+
+Install the system deps first, then run the enable command:
+
+```bash
+# example for Fedora:
+sudo dnf install -y pipewire-utils python3-numpy portaudio
+
 sudo aside enable-stt   # speech-to-text
 sudo aside enable-tts   # text-to-speech
 ```
-
-## docs
-
-| | |
-|---|---|
-| [Installation](docs/install.md) | dependencies, build, AUR |
-| [Usage](docs/usage.md) | CLI reference |
-| [Configuration](docs/configuration.md) | config options |
-| [Plugins](docs/plugins.md) | plugin API |
-| [Architecture](docs/architecture.md) | system design |
 
 ## donate
 

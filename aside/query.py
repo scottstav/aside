@@ -598,7 +598,16 @@ def send_query(
 
                 # Format tool result for conversation history.
                 if isinstance(result, dict) and result.get("type") == "image":
-                    result_content = json.dumps(result)
+                    mt = result.get("media_type", "image/png")
+                    result_content = [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mt};base64,{result['base64']}",
+                            },
+                        },
+                        {"type": "text", "text": "Screenshot captured."},
+                    ]
                 else:
                     result_content = str(result)
 

@@ -58,7 +58,7 @@ class TestDaemonConstruction:
     def test_construct_with_minimal_config(self, minimal_config, tmp_path):
         """Daemon should initialise all components from config."""
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
+            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"), mock.patch("aside.daemon.resolve_archive_dir", return_value=tmp_path / "archive"):
                 d = Daemon(minimal_config)
 
         assert d.config is minimal_config
@@ -72,7 +72,7 @@ class TestDaemonConstruction:
     def test_construct_with_tts_import_error(self, minimal_config, tmp_path):
         """Daemon should handle missing TTS deps gracefully."""
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
+            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"), mock.patch("aside.daemon.resolve_archive_dir", return_value=tmp_path / "archive"):
                 with mock.patch("aside.daemon.TTSPipeline", side_effect=ImportError("no tts")):
                     d = Daemon(minimal_config)
         assert d.tts is None
@@ -87,7 +87,7 @@ class TestQueryDispatch:
     def _make_daemon(self, config, tmp_path):
         """Helper to build a Daemon with mocked paths."""
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
+            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"), mock.patch("aside.daemon.resolve_archive_dir", return_value=tmp_path / "archive"):
                 return Daemon(config)
 
     def test_start_query_spawns_thread(self, minimal_config, tmp_path):
@@ -171,7 +171,7 @@ class TestCommandParsing:
 
     def _make_daemon(self, config, tmp_path):
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
+            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"), mock.patch("aside.daemon.resolve_archive_dir", return_value=tmp_path / "archive"):
                 return Daemon(config)
 
     def _run_command(self, daemon, cmd_dict):
@@ -319,7 +319,7 @@ class TestSocketServer:
         import socket
 
         with mock.patch("aside.daemon.resolve_state_dir", return_value=tmp_path / "state"):
-            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"):
+            with mock.patch("aside.daemon.resolve_conversations_dir", return_value=tmp_path / "conversations"), mock.patch("aside.daemon.resolve_archive_dir", return_value=tmp_path / "archive"):
                 d = Daemon(minimal_config)
 
         # Run server in background

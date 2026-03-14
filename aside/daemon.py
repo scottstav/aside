@@ -16,6 +16,7 @@ from pathlib import Path
 
 from aside.config import (
     load_config,
+    resolve_archive_dir,
     resolve_conversations_dir,
     resolve_socket_path,
     resolve_state_dir,
@@ -123,9 +124,10 @@ class Daemon:
         # Resolve directories
         state_dir = resolve_state_dir(config)
         conv_dir = resolve_conversations_dir(config)
+        archive_dir = resolve_archive_dir(config)
 
         # Core state
-        self.store = ConversationStore(conv_dir)
+        self.store = ConversationStore(conv_dir, archive_dir=archive_dir)
         self.usage_log = UsageLog(state_dir / "usage.jsonl")
         self.status = StatusState(
             state_dir,

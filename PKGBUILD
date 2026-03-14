@@ -1,8 +1,8 @@
 # Maintainer: Scott Stavinoha <scottstavinoha@gmail.com>
 pkgname=aside
-pkgver=0.3.1
+pkgver=0.4.0
 pkgrel=1
-pkgdesc="Wayland-native LLM desktop assistant"
+pkgdesc="LLM assistant for Wayland desktops — overlay, voice, tools, any model"
 arch=('x86_64')
 url="https://github.com/scottstav/aside"
 license=('MIT')
@@ -32,7 +32,7 @@ optdepends=(
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"
 )
-sha256sums=('aa2da2eb850bf19203de403cb04cc97bc7e30e5b3b53c512d49a09ed0ae9aa37')
+sha256sums=('d455a148df0cd3544d1bab8ef3bb072de48d14fdd7be3dc8c2b176cb65b6cfb2')
 
 build() {
     cd "$srcdir/$pkgname-$pkgver"

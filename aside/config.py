@@ -18,7 +18,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "system_prompt": "",
     },
     "input": {
-        "terminal": "foot -e",
         "font": "",
     },
     "voice": {
@@ -34,10 +33,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "model": "",
         "speed": 1.0,
-        "filter": {
-            "skip_code_blocks": True,
-            "skip_urls": True,
-        },
     },
     "overlay": {
         "font": "Sans 13",
@@ -142,15 +137,27 @@ def resolve_state_dir(cfg: dict[str, Any]) -> Path:
 
 
 def resolve_conversations_dir(cfg: dict[str, Any]) -> Path:
-    """Return the conversations directory.
+    """Return the conversations directory (JSON state files).
 
     Uses ``cfg["storage"]["archive_dir"]`` when set, otherwise
     ``<state_dir>/conversations``.
     """
-    custom = cfg.get("storage", {}).get("archive_dir", "")
+    custom = cfg.get("storage", {}).get("conversations_dir", "")
     if custom:
         return Path(custom).expanduser()
     return resolve_state_dir(cfg) / "conversations"
+
+
+def resolve_archive_dir(cfg: dict[str, Any]) -> Path:
+    """Return the archive directory (exported markdown transcripts).
+
+    Uses ``cfg["storage"]["archive_dir"]`` when set, otherwise
+    ``<state_dir>/archive``.
+    """
+    custom = cfg.get("storage", {}).get("archive_dir", "")
+    if custom:
+        return Path(custom).expanduser()
+    return resolve_state_dir(cfg) / "archive"
 
 
 def resolve_socket_path(name: str = "aside.sock") -> Path:
