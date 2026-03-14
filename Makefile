@@ -58,7 +58,11 @@ install:
 uninstall:
 	systemctl --user disable --now aside-daemon aside-overlay 2>/dev/null || true
 	rm -f $(BIN)/aside $(BIN)/aside-overlay $(BIN)/aside-status
-	rm -rf $(LIB) 2>/dev/null || sudo rm -rf $(LIB) 2>/dev/null || true
+	rm -rf $(LIB) 2>/dev/null; \
+	if [ -d "$(LIB)" ]; then \
+		echo "Warning: $(LIB) has root-owned files (from sudo aside enable-stt/tts)."; \
+		echo "Run manually: sudo rm -rf $(LIB)"; \
+	fi
 	rm -f $(SYSTEMD)/aside-daemon.service $(SYSTEMD)/aside-overlay.service
 	rm -f $(APPS)/aside.desktop
 	systemctl --user daemon-reload
