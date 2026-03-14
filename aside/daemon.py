@@ -21,7 +21,7 @@ from aside.config import (
     resolve_state_dir,
 )
 from aside.plugins import load_tools
-from aside.query import NEW_CONVERSATION, send_query
+from aside.query import NEW_CONVERSATION, ContextWindowFull, send_query
 from aside.state import ConversationStore, StatusState, UsageLog
 
 log = logging.getLogger("aside")
@@ -240,6 +240,9 @@ class Daemon:
                 )
                 if result_id:
                     self.last_conv_id = result_id
+            except ContextWindowFull:
+                log.info("Context window full — resetting to new conversation")
+                self.last_conv_id = None
             except Exception:
                 log.exception("Query thread error")
             finally:
@@ -414,6 +417,15 @@ class Daemon:
 
             elif action == "cancel":
                 self.cancel_query()
+                # Dismiss the overlay — since this is an explicit cancel,
+                # no new operation is taking over.
+                try:
+                    from aside.query import _connect_overlay, _overlay_send, _overlay_close
+                    sock = _connect_overlay()
+                    _overlay_send(sock, {"cmd": "clear"})
+                    _overlay_close(sock)
+                except Exception:
+                    pass
                 log.info("Socket: cancel")
 
             elif action == "stop_tts":

@@ -33,6 +33,11 @@ MAX_TOKENS = 4096
 NEW_CONVERSATION = object()
 
 
+class ContextWindowFull(Exception):
+    """Raised when the conversation exceeds the model's context window."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
@@ -335,8 +340,9 @@ def stream_response(
 
     for chunk in response_stream:
         if cancel_event and cancel_event.is_set():
-            _overlay_send(overlay_sock, {"cmd": "clear"})
-            # Close the stream iterator if possible.
+            # Don't send overlay commands here — the new operation
+            # (mic capture, new query) already owns the overlay.
+            # Explicit cancels are handled by the cancel socket handler.
             if hasattr(response_stream, "close"):
                 response_stream.close()
             return accumulated_text, [], usage
@@ -632,11 +638,24 @@ def send_query(
         log.info("Conversation %s complete (%d messages)",
                  conv["id"][:8], len(conv["messages"]))
 
-        # Fade out overlay.
-        _overlay_send(overlay_sock, {"cmd": "done"})
+        # Fade out overlay — but not if cancelled, since a new operation
+        # (mic capture, new query) already owns the overlay.
+        if not (cancel_event and cancel_event.is_set()):
+            _overlay_send(overlay_sock, {"cmd": "done"})
         _overlay_close(overlay_sock)
 
         return conv["id"]
+
+    except litellm.ContextWindowExceededError:
+        log.warning("Context window exceeded for conversation %s", conv["id"][:8])
+        _overlay_send(overlay_sock, {"cmd": "clear"})
+        _overlay_close(overlay_sock)
+        notify_error("Conversation too long — starting a new one")
+        if tts is not None:
+            tts.stop()
+        store.save(conv)
+        # Raise so the daemon can retry with a fresh conversation.
+        raise ContextWindowFull()
 
     except litellm.exceptions.NotFoundError as e:
         log.error("Model not found: %s — %s", model, e)
