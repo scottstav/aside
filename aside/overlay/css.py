@@ -165,6 +165,20 @@ window.background {{
     background: alpha({fg_val}, 0.15);
     color: alpha({fg_val}, 0.9);
 }}
+.header-btn {{
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: alpha({fg_val}, 0.25);
+    min-width: 18px;
+    min-height: 18px;
+    padding: 1px;
+    -gtk-icon-size: 12px;
+}}
+.header-btn:hover {{
+    background: alpha({fg_val}, 0.12);
+    color: alpha({fg_val}, 0.8);
+}}
 .dim-label {{
     color: alpha({fg_val}, 0.4);
     font-size: 0.85em;

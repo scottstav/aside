@@ -113,6 +113,41 @@ class OverlayWindow(Gtk.Window):
         )
         self._main_box.append(self._accent_bar)
 
+        # Header buttons (right-aligned, between accent bar and content)
+        header_btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        header_btns.set_halign(Gtk.Align.END)
+        header_btns.set_margin_end(6)
+        header_btns.set_margin_top(2)
+        header_btns.set_margin_bottom(0)
+
+        # Check TTS availability
+        try:
+            from piper import PiperVoice  # noqa: F401
+            _tts_available = True
+        except ImportError:
+            _tts_available = False
+
+        if _tts_available:
+            mute_btn = Gtk.Button.new_from_icon_name("audio-volume-muted-symbolic")
+            mute_btn.set_tooltip_text("Stop TTS")
+            mute_btn.add_css_class("header-btn")
+            mute_btn.connect("clicked", self._on_stop_tts_clicked)
+            header_btns.append(mute_btn)
+
+        cancel_btn = Gtk.Button.new_from_icon_name("media-playback-stop-symbolic")
+        cancel_btn.set_tooltip_text("Cancel query")
+        cancel_btn.add_css_class("header-btn")
+        cancel_btn.connect("clicked", self._on_cancel_clicked)
+        header_btns.append(cancel_btn)
+
+        close_btn = Gtk.Button.new_from_icon_name("window-close-symbolic")
+        close_btn.set_tooltip_text("Dismiss")
+        close_btn.add_css_class("header-btn")
+        close_btn.connect("clicked", self._on_close_clicked)
+        header_btns.append(close_btn)
+
+        self._main_box.append(header_btns)
+
         # Stack: "main" for content, "picker" for conversation picker
         self._stack = Gtk.Stack()
         self._stack.set_vhomogeneous(False)
@@ -181,12 +216,6 @@ class OverlayWindow(Gtk.Window):
         key_ctl = Gtk.EventControllerKey()
         key_ctl.connect("key-pressed", self._on_key)
         self.add_controller(key_ctl)
-
-        # Mouse click controller
-        click = Gtk.GestureClick()
-        click.set_button(0)  # all buttons
-        click.connect("pressed", self._on_click)
-        self.add_controller(click)
 
         # Hover pauses auto-dismiss (without stealing focus)
         motion = Gtk.EventControllerMotion()
@@ -451,32 +480,24 @@ class OverlayWindow(Gtk.Window):
 
     # --- User action handlers ---
 
-    def _on_click(self, gesture, n_press, x, y) -> None:
-        """Handle mouse clicks: left=dismiss, middle=stop TTS, right=cancel."""
-        # Don't dismiss if clicking an interactive widget (e.g. Reply button)
-        target = self.pick(x, y, Gtk.PickFlags.DEFAULT)
-        if target is not None and target is not self._main_box and target is not self:
-            widget = target
-            while widget is not None:
-                if isinstance(widget, Gtk.Button):
-                    return
-                widget = widget.get_parent()
-        button = gesture.get_current_button()
-        if button == 1:  # left click
-            if self._state == OverlayState.DISPLAY:
-                self.handle_clear()
-        elif button == 2:  # middle click — stop TTS
-            msg = {"action": "stop_tts"}
-            threading.Thread(
-                target=self._send_to_daemon, args=(msg,), daemon=True
-            ).start()
-        elif button == 3:  # right click — cancel active query, TTS, and dismiss
-            # Intentionally works during streaming so user can kill a bad response
-            msg = {"action": "cancel"}
-            threading.Thread(
-                target=self._send_to_daemon, args=(msg,), daemon=True
-            ).start()
-            self.handle_clear()
+    def _on_close_clicked(self, button) -> None:
+        """Dismiss the overlay."""
+        self.handle_clear()
+
+    def _on_cancel_clicked(self, button) -> None:
+        """Cancel active query and dismiss."""
+        msg = {"action": "cancel"}
+        threading.Thread(
+            target=self._send_to_daemon, args=(msg,), daemon=True
+        ).start()
+        self.handle_clear()
+
+    def _on_stop_tts_clicked(self, button) -> None:
+        """Stop TTS playback."""
+        msg = {"action": "stop_tts"}
+        threading.Thread(
+            target=self._send_to_daemon, args=(msg,), daemon=True
+        ).start()
 
     def _on_mic_reply_clicked(self, button) -> None:
         """Start a voice reply for the current conversation."""
