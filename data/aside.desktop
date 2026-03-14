@@ -2,7 +2,7 @@
 Type=Application
 Name=aside
 Comment=Wayland-native LLM desktop assistant
-Exec=aside-input
+Exec=aside input
 Icon=utilities-terminal
 Categories=Utility;
 Keywords=ai;llm;assistant;voice;

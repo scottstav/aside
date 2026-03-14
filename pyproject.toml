@@ -1,6 +1,6 @@
 [build-system]
-requires = ["meson-python>=0.16", "meson>=0.64"]
-build-backend = "mesonpy"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "aside-assistant"
@@ -11,14 +11,17 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "litellm>=1.30.0",
+    "mistune>=3.0",
 ]
 
 [project.optional-dependencies]
 stt = ["faster-whisper==1.2.1", "webrtcvad-wheels>=2.0.10", "numpy>=2.0"]
 tts = ["piper-tts", "sounddevice"]
 
+[tool.setuptools.packages.find]
+include = ["aside*"]
+
 [project.scripts]
 aside = "aside.cli:main"
-aside-input = "aside.input.window:main"
-aside-reply = "aside.reply.window:main"
+aside-overlay = "aside.overlay.app:main"
 aside-status = "aside.status:main"

@@ -20,6 +20,27 @@ from aside.config import load_config, load_excluded_models, resolve_archive_dir,
 # ---------------------------------------------------------------------------
 
 
+def _send_overlay(msg: dict) -> None:
+    """Connect to the overlay socket, send a JSON message, and close.
+
+    Prints an error and exits with code 1 if the overlay is not running.
+    """
+    sock_path = resolve_socket_path("aside-overlay.sock")
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(str(sock_path))
+    except (ConnectionRefusedError, FileNotFoundError, OSError):
+        print("Error: aside overlay is not running", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
+        sock.shutdown(socket.SHUT_WR)
+    finally:
+        sock.close()
+
+
 def _send(msg: dict) -> None:
     """Connect to the daemon socket, send a JSON message, and close.
 
@@ -35,7 +56,7 @@ def _send(msg: dict) -> None:
         sys.exit(1)
 
     try:
-        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
         sock.shutdown(socket.SHUT_WR)
     finally:
         sock.close()
@@ -56,7 +77,7 @@ def _send_recv(msg: dict) -> dict:
         sys.exit(1)
 
     try:
-        sock.sendall(json.dumps(msg).encode("utf-8"))
+        sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
         sock.shutdown(socket.SHUT_WR)
 
         chunks = []
@@ -166,11 +187,17 @@ def _build_parser() -> argparse.ArgumentParser:
     rm_cmd = sub.add_parser("rm", help="Delete a conversation")
     rm_cmd.add_argument("conversation_id", help="Conversation ID to delete")
 
-    # aside reply CONVERSATION_ID [TEXT] [--gui] [--mic]
+    # aside input
+    sub.add_parser("input", help="Open the conversation picker overlay")
+
+    # aside view [CONVERSATION_ID]
+    view_cmd = sub.add_parser("view", help="View a conversation in the overlay")
+    view_cmd.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
+
+    # aside reply CONVERSATION_ID [TEXT] [--mic]
     reply = sub.add_parser("reply", help="Continue a conversation by ID")
     reply.add_argument("conversation_id", help="Conversation ID to continue")
     reply.add_argument("text", nargs="?", default=None, help="Reply text (optional)")
-    reply.add_argument("--gui", action="store_true", default=False, help="Open GTK input popup")
     reply.add_argument("--mic", action="store_true", default=False, help="One-shot voice capture")
 
     # aside ls [-n LIMIT]
@@ -237,14 +264,28 @@ def _cmd_query(args: argparse.Namespace) -> None:
     _send(msg)
 
 
+def _cmd_input(args: argparse.Namespace) -> None:
+    """Open the conversation picker overlay."""
+    _send_overlay({"cmd": "input"})
+
+
+def _cmd_view(args: argparse.Namespace) -> None:
+    """View a conversation in the overlay."""
+    if args.conversation_id:
+        cfg = load_config()
+        conv_dir = resolve_conversations_dir(cfg)
+        full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+        _send_overlay({"cmd": "convo", "conversation_id": full_id})
+    else:
+        # Let the overlay decide — it knows the in-memory conversation
+        _send_overlay({"cmd": "convo"})
+
+
 def _cmd_reply(args: argparse.Namespace) -> None:
     """Continue a conversation by ID."""
     # Validate mutual exclusion
     if args.text and args.mic:
         print("Error: text and --mic are mutually exclusive", file=sys.stderr)
-        sys.exit(1)
-    if args.gui and args.mic:
-        print("Error: --gui and --mic are mutually exclusive", file=sys.stderr)
         sys.exit(1)
 
     # Resolve prefix to full conversation ID
@@ -252,15 +293,12 @@ def _cmd_reply(args: argparse.Namespace) -> None:
     conv_dir = resolve_conversations_dir(cfg)
     full_id = _resolve_conv_id(conv_dir, args.conversation_id)
 
-    if args.gui:
-        subprocess.Popen(["aside-input", "-c", full_id])
-    elif args.mic:
+    if args.mic:
         _send({"action": "query", "conversation_id": full_id, "mic": True})
     elif args.text:
         _send({"action": "query", "text": args.text, "conversation_id": full_id})
     else:
-        text = input(">>> ")
-        _send({"action": "query", "text": text, "conversation_id": full_id})
+        _send_overlay({"cmd": "convo", "conversation_id": full_id})
 
 
 def _cmd_cancel(args: argparse.Namespace) -> None:
@@ -642,6 +680,8 @@ def _cmd_model(args: argparse.Namespace) -> None:
 
 _HANDLERS = {
     "query": _cmd_query,
+    "input": _cmd_input,
+    "view": _cmd_view,
     "reply": _cmd_reply,
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,

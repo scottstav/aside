@@ -4,13 +4,9 @@ An LLM assistant for Wayland desktops that does what you ask and gets out of the
 
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/scottstav) [![Bitcoin](https://img.shields.io/badge/BTC-Donate-f7931a?logo=bitcoin&logoColor=white)](#donate) [![Monero](https://img.shields.io/badge/XMR-Donate-ff6600?logo=monero&logoColor=white)](#donate)
 
-
-![demo](screenshots/demo.gif)
-
-
-- **overlay** — C layer-shell surface. Streams tokens in real time. Reply or open full transcript with inline actions. Left click to dismiss, right-click to cancel query, middle click to mute TTS. **Very** customizable.
+- **overlay** — GTK4 layer-shell overlay. Streams tokens in real time with markdown rendering. Reply inline, view full conversation history, or open transcript. **Very** customizable.
 - **voice** — STT via faster-whisper, TTS via Piper (optional add-ons).
-- **input popup** — GTK4 window with conversation history. Continue one or start fresh.
+- **input picker** — integrated conversation picker. Continue one or start fresh.
 
 
 Bind `aside query --mic` to a hotkey and start talking. Aside detects silence and automatically sends your query.
@@ -21,14 +17,7 @@ Where the magic happens
 
 aside ships with a memory tool built in. To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
 
-The tool system is flexible enough to do real work.
-
-Be a cheater:
-![demo](screenshots/demo5.gif)
-
-launch a [wreccless](https://github.com/scottstav/wreccless) worker:
-![demo](screenshots/demo3.gif)
-
+the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
 
 ## any LLM
 
@@ -64,6 +53,11 @@ aside model exclude openai/o1   # LiteLLM may identify available models that hav
 aside query "what time is it in tokyo"
 aside query --mic
 aside reply abc123 "tell me more"
+
+# overlay — open picker, view a conversation, reply inline
+aside input                     # open conversation picker
+aside view <id>                 # view conversation in overlay
+aside reply <id>                # open reply input for conversation
 
 # state
 aside status                    # JSON, great for status bars
@@ -101,6 +95,7 @@ dirs = ["~/.config/aside/tools"]
 [overlay]
 position = "top-center"
 font = "Iosevka 12"
+markdown = true
 max_lines = 5
 corner_radius = 8
 border_width = 1
@@ -109,14 +104,14 @@ scroll_duration = 200
 fade_duration = 400
 width = 450
 margin_top = 5
-padding_top = 2.5
+padding_x = 20
+padding_y = 16
 
 [overlay.colors]
 background = "#1a1c1ee6"
 foreground = "#d4d4d4ff"
 border = "#5a4a3aff"
 accent = "#5b9a6a"
-user_accent = "#a07048"
 
 [voice]
 enabled = false
@@ -163,51 +158,23 @@ STT requires `pipewire` (provides `pw-record`) and `python-numpy` — both are a
 
 ### manual
 
-`make install` builds the C overlay and Python package into a venv at `~/.local/lib/aside/venv/`, then symlinks executables (`aside`, `aside-overlay`, `aside-input`, `aside-reply`) into `~/.local/bin/`. Make sure `~/.local/bin` is in your `PATH`.
-
-First install the build dependencies for your distro:
-
-<details>
-<summary>Fedora / RHEL</summary>
+Requires Python 3.11+, GTK4, and gtk4-layer-shell.
 
 ```bash
-sudo dnf install -y gcc make meson ninja-build \
-  cairo-devel pango-devel json-c-devel wayland-devel wayland-protocols-devel \
-  python3-pip python3-devel \
-  gtk4-devel libadwaita-devel gtk4-layer-shell-devel \
-  gobject-introspection-devel python3-gobject python3-cairo
-```
-</details>
+# system deps (Arch)
+pacman -S gtk4 gtk4-layer-shell python-gobject
 
-<details>
-<summary>Ubuntu / Debian</summary>
+# system deps (Ubuntu/Debian — gtk4-layer-shell must be built from source)
+apt install python3-venv python3-dev libgtk-4-dev libadwaita-1-dev \
+    gobject-introspection libgirepository1.0-dev python3-gi python3-gi-cairo \
+    gir1.2-gtk-4.0 gir1.2-adw-1 meson ninja-build valac
+git clone https://github.com/wmww/gtk4-layer-shell.git /tmp/gtk4-layer-shell
+cd /tmp/gtk4-layer-shell && meson setup build && ninja -C build && sudo ninja -C build install && sudo ldconfig
 
-```bash
-sudo apt install -y gcc make meson ninja-build \
-  libcairo2-dev libpango1.0-dev libjson-c-dev libwayland-dev wayland-protocols \
-  python3-pip python3-dev python3-venv \
-  libgtk-4-dev libadwaita-1-dev libgtk4-layer-shell-dev \
-  libgirepository1.0-dev python3-gi python3-gi-cairo gir1.2-gtk-4.0
-```
-</details>
-
-<details>
-<summary>Arch (if not using the AUR package)</summary>
-
-```bash
-sudo pacman -S --noconfirm gcc make meson ninja \
-  cairo pango json-c wayland wayland-protocols \
-  python python-pip \
-  gtk4 libadwaita gtk4-layer-shell \
-  gobject-introspection python-gobject python-cairo
-```
-</details>
-
-Then build and install:
-
-```bash
+# install aside (use a tagged release for stability)
 git clone https://github.com/scottstav/aside.git
 cd aside
+git checkout $(git describe --tags --abbrev=0)
 make install
 aside set-key anthropic sk-ant-...
 systemctl --user enable --now aside-daemon aside-overlay

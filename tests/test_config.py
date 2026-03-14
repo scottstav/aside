@@ -68,6 +68,7 @@ class TestDefaultConfig:
         o = self.defaults["overlay"]
         assert o["font"] == "Sans 13"
         assert o["width"] == 600
+        assert o["markdown"] is True
         assert o["max_lines"] == 5
         assert o["margin_top"] == 10
         assert o["padding_x"] == 20

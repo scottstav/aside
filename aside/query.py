@@ -33,6 +33,11 @@ MAX_TOKENS = 4096
 NEW_CONVERSATION = object()
 
 
+class ContextWindowFull(Exception):
+    """Raised when the conversation exceeds the model's context window."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
@@ -218,19 +223,23 @@ def _connect_overlay() -> socket.socket | None:
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(str(sock_path))
+        log.debug("overlay: connected to %s", sock_path)
         return sock
-    except (ConnectionRefusedError, FileNotFoundError, OSError):
+    except (ConnectionRefusedError, FileNotFoundError, OSError) as e:
+        log.warning("overlay: connect failed: %s", e)
         return None
 
 
 def _overlay_send(sock: socket.socket | None, msg: dict) -> None:
     """Send a JSON-line command to the overlay.  Swallows errors."""
     if sock is None:
+        log.debug("overlay_send: no socket, dropping cmd=%s", msg.get("cmd"))
         return
     try:
         sock.sendall((json.dumps(msg) + "\n").encode("utf-8"))
-    except (BrokenPipeError, OSError):
-        pass
+        log.debug("overlay_send: cmd=%s", msg.get("cmd"))
+    except (BrokenPipeError, OSError) as e:
+        log.warning("overlay_send: error sending cmd=%s: %s", msg.get("cmd"), e)
 
 
 def _overlay_close(sock: socket.socket | None) -> None:
@@ -331,8 +340,9 @@ def stream_response(
 
     for chunk in response_stream:
         if cancel_event and cancel_event.is_set():
-            _overlay_send(overlay_sock, {"cmd": "clear"})
-            # Close the stream iterator if possible.
+            # Don't send overlay commands here — the new operation
+            # (mic capture, new query) already owns the overlay.
+            # Explicit cancels are handled by the cancel socket handler.
             if hasattr(response_stream, "close"):
                 response_stream.close()
             return accumulated_text, [], usage
@@ -416,7 +426,7 @@ def send_query(
     text:
         The user's message.
     conversation_id:
-        - ``None`` -> auto-detect (most recent within threshold)
+        - ``None`` -> continue last conversation (or start new)
         - ``NEW_CONVERSATION`` -> explicit fresh conversation
         - ``"uuid-string"`` -> continue that specific conversation
     config:
@@ -454,7 +464,7 @@ def send_query(
     elif conversation_id is not None:
         conv = store.get_or_create(conversation_id)
     else:
-        resolved = store.auto_resolve()
+        resolved = store.resolve_last()
         conv = store.get_or_create(resolved) if resolved else store.get_or_create()
 
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
@@ -508,9 +518,10 @@ def send_query(
     deferred_open: dict | None = None
 
     if from_mic:
-        # Overlay is already visible with user text pulsing (thinking mode).
-        # Defer the "open" until the first LLM response chunk arrives.
-        deferred_open = open_cmd
+        # Overlay is already visible with user text + thinking dots.
+        # Send stream_start (keeps user text, adds assistant message)
+        # instead of open (which clears everything).
+        deferred_open = {"cmd": "stream_start"}
     else:
         _overlay_send(overlay_sock, open_cmd)
 
@@ -636,11 +647,24 @@ def send_query(
         log.info("Conversation %s complete (%d messages)",
                  conv["id"][:8], len(conv["messages"]))
 
-        # Fade out overlay.
-        _overlay_send(overlay_sock, {"cmd": "done"})
+        # Fade out overlay — but not if cancelled, since a new operation
+        # (mic capture, new query) already owns the overlay.
+        if not (cancel_event and cancel_event.is_set()):
+            _overlay_send(overlay_sock, {"cmd": "done"})
         _overlay_close(overlay_sock)
 
         return conv["id"]
+
+    except litellm.ContextWindowExceededError:
+        log.warning("Context window exceeded for conversation %s", conv["id"][:8])
+        _overlay_send(overlay_sock, {"cmd": "clear"})
+        _overlay_close(overlay_sock)
+        notify_error("Conversation too long — starting a new one")
+        if tts is not None:
+            tts.stop()
+        store.save(conv)
+        # Raise so the daemon can retry with a fresh conversation.
+        raise ContextWindowFull()
 
     except litellm.exceptions.NotFoundError as e:
         log.error("Model not found: %s — %s", model, e)

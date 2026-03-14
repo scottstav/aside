@@ -37,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "overlay": {
         "font": "Sans 13",
         "width": 600,
+        "markdown": True,
         "max_lines": 5,
         "position": "top-center",
         "margin_top": 10,
@@ -138,7 +139,7 @@ def resolve_state_dir(cfg: dict[str, Any]) -> Path:
 def resolve_conversations_dir(cfg: dict[str, Any]) -> Path:
     """Return the conversations directory (JSON state files).
 
-    Uses ``cfg["storage"]["conversations_dir"]`` when set, otherwise
+    Uses ``cfg["storage"]["archive_dir"]`` when set, otherwise
     ``<state_dir>/conversations``.
     """
     custom = cfg.get("storage", {}).get("conversations_dir", "")

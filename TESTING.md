@@ -49,30 +49,58 @@ vmt view arch-sway
 
 The VM auto-logs in and launches sway on the DRM display. Open a terminal with `Super+Return`. The default password is `vmt`.
 
-## Iterating on Code Changes
+## Iterating on Code Changes (Fast Dev Loop)
 
-After making changes to aside locally:
+Use `dev/vm-sync.sh` for rapid iteration. It rsyncs your local changes directly to the VM over SSH — no git commit/push/pull needed.
 
 ```bash
-# Push changes
+# First time: boot VM and do initial setup
+cd ~/projects/vmt && source .venv/bin/activate
+vmt up aside-ubuntu-kde
+vmt ssh aside-ubuntu-kde -- "cloud-init status --wait"
+
+# Initial build + install
+cd ~/projects/aside
+dev/vm-sync.sh --setup
+
+# Set your API key in the VM
+dev/vm-sync.sh --ssh "echo 'export ANTHROPIC_API_KEY=sk-...' >> ~/.bashrc"
+
+# Open the desktop viewer
+cd ~/projects/vmt && source .venv/bin/activate && vmt view aside-ubuntu-kde
+```
+
+Then iterate:
+
+```bash
+# Make changes locally, then sync + rebuild + restart (full cycle)
+dev/vm-sync.sh
+
+# Only changed Python code?
+dev/vm-sync.sh --python-only
+
+# Only changed C overlay code?
+dev/vm-sync.sh --overlay-only
+
+# Sync + rebuild + run a test query
+dev/vm-sync.sh --query "Hello, what are you?"
+
+# Check logs
+dev/vm-sync.sh --logs
+
+# Run arbitrary commands in the VM
+dev/vm-sync.sh --ssh "journalctl --user -u test-compositor -n 20"
+```
+
+### Old method (git-based, slower)
+
+If rsync isn't available, you can still use the git push/pull method:
+
+```bash
 cd ~/projects/aside && git add -A && git commit -m "fix: whatever" && git push
-
-# Pull and rebuild in the VM
-vmt ssh arch-sway -- "cd /tmp/aside && git pull"
-
-# Rebuild overlay (if C code changed)
-vmt ssh arch-sway -- "cd /tmp/aside/overlay && ninja -C build && sudo ninja -C build install"
-
-# Reinstall Python package (if Python code changed)
-vmt ssh arch-sway -- "pip install /tmp/aside --break-system-packages"
-
-# Restart services
-vmt ssh arch-sway -- "pkill aside-overlay; pkill -f 'python3 -m aside.daemon'"
-vmt ssh arch-sway -- 'source ~/.bashrc && nohup python3 -m aside.daemon > /dev/null 2>&1 &'
-vmt ssh arch-sway -- 'source ~/.bashrc && nohup aside-overlay > /dev/null 2>&1 &'
-
-# Test again
-vmt ssh arch-sway -- 'source ~/.bashrc && aside query "test"'
+vmt ssh aside-ubuntu-kde -- "cd ~/aside && git pull"
+vmt ssh aside-ubuntu-kde -- "cd ~/aside/overlay && ninja -C build && sudo ninja -C build install"
+vmt ssh aside-ubuntu-kde -- "cd ~/aside && .venv/bin/pip install -e . -q"
 ```
 
 ## Screenshots

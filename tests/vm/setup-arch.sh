@@ -32,7 +32,7 @@ makepkg -si --noconfirm --skipchecksums
 # ── Runtime extras (not in PKGBUILD depends) ──────────────────────────────
 # xdg-utils: aside open uses xdg-open
 # emacs:     already in cloud image; used as markdown viewer
-# foot:      already in cloud image; terminal for aside-input
+# foot:      already in cloud image; terminal emulator
 sudo pacman -S --noconfirm --needed xdg-utils perl-file-mimeinfo
 
 # ── xdg-open: set mousepad as handler for markdown/text ───────────────────

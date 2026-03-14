@@ -102,4 +102,95 @@ Status bar integration. The daemon sends a real-time signal on state changes so 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `signal` | int | `12` | SIGRTMIN+N signal number sent to waybar on state changes |
+| `signal` | int | `12` | SIGRTMIN+N signal number sent to waybar for status updates |
+
+---
+
+## API key configuration
+
+Aside needs an API key for your chosen LLM provider. Keys are resolved in this order:
+
+1. **Environment variable** — set directly or via systemd EnvironmentFile
+2. **KWallet** — queried via `kwalletcli-getentry`
+3. **GNOME Keyring** — queried via `secret-tool`
+4. **Runtime cache** — `$XDG_RUNTIME_DIR/aside-api-keys` (survives daemon restarts)
+
+### Supported provider keys
+
+| Variable | When needed |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic models (`anthropic/claude-*`) |
+| `OPENAI_API_KEY` | OpenAI models (`openai/gpt-*`) |
+| `GEMINI_API_KEY` | Google Gemini models |
+| `GROQ_API_KEY` | Groq models |
+| `MISTRAL_API_KEY` | Mistral models |
+| `DEEPSEEK_API_KEY` | DeepSeek models |
+| `TOGETHER_API_KEY` | Together AI models |
+| `COHERE_API_KEY` | Cohere models |
+
+For local models via Ollama, no API key is needed — just set `model.name = "ollama/llama3"`.
+
+### Using the CLI (recommended)
+
+```bash
+aside set-key anthropic sk-ant-...
+aside set-key openai sk-...
+```
+
+This stores the key in KWallet or GNOME Keyring (whichever is available), falling back to `~/.config/aside/env`. To verify:
+
+```bash
+aside get-key anthropic
+# anthropic: sk-a...xyz
+```
+
+### Using a desktop keyring manually
+
+**KWallet:**
+
+```bash
+echo -n "sk-..." | kwalletcli-setentry -f aside -e anthropic-api-key
+```
+
+**GNOME Keyring:**
+
+```bash
+echo -n "sk-..." | secret-tool store --label='aside: anthropic API key' service aside provider anthropic
+```
+
+### Using an environment file
+
+Create `~/.config/aside/env` (mode 0600):
+
+```
+ANTHROPIC_API_KEY=sk-...
+```
+
+The systemd unit loads this file automatically via `EnvironmentFile`. For shell use, source it: `. ~/.config/aside/env`.
+
+### Using environment variables directly
+
+```bash
+export ANTHROPIC_API_KEY="sk-..."
+```
+
+Or in a systemd override (`systemctl --user edit aside-daemon`):
+
+```ini
+[Service]
+Environment=ANTHROPIC_API_KEY=sk-...
+```
+
+## File paths
+
+| Path | Purpose |
+|------|---------|
+| `~/.config/aside/config.toml` | Main configuration file |
+| `~/.config/aside/env` | API key environment file (loaded by systemd) |
+| `~/.config/aside/tools/` | User tool plugins |
+| `~/.local/state/aside/conversations/` | Conversation JSON files |
+| `~/.local/state/aside/usage.jsonl` | Token usage log |
+| `~/.local/state/aside/status.json` | Current daemon status (read by waybar module) |
+| `$XDG_RUNTIME_DIR/aside.sock` | Daemon Unix socket |
+| `$XDG_RUNTIME_DIR/aside-overlay.sock` | Overlay Unix socket |
+| `$XDG_RUNTIME_DIR/aside-api-keys` | Cached API keys |
