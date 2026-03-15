@@ -17,8 +17,6 @@ Where the magic happens
 
 aside ships with a memory tool built in. To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
 
-the demo shows a tool for launching [wreccless](https://github.com/scottstav/wreccless) workers.
-
 ## any LLM
 
 [LiteLLM](https://github.com/BerriAI/litellm) under the hood — Claude, GPT, Gemini, Ollama, whatever. aside auto-detects which providers are available based on your API keys.
@@ -40,8 +38,6 @@ aside set-key openai sk-...
 ## CLI
 
 everything goes through the CLI, which makes it easy to script, integrate with pickers, or wire into status bars.
-
-![demo](screenshots/demo4.gif)
 
 ```bash
 # models — auto-detects what's available based on your API keys
@@ -71,9 +67,7 @@ aside stop-tts
 aside cancel
 ```
 
-a GUI for continuing conversations is provided if you don't want to script your own:
-
-![aside-input](screenshots/demo2.gif)
+a GUI for continuing conversations is provided if you don't want to script your own.
 
 ## theming and customization
 
