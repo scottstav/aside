@@ -666,6 +666,18 @@ def send_query(
         # Raise so the daemon can retry with a fresh conversation.
         raise ContextWindowFull()
 
+    except litellm.BadRequestError as e:
+        if "request_too_large" in str(e):
+            log.warning("Request too large for conversation %s", conv["id"][:8])
+            _overlay_send(overlay_sock, {"cmd": "clear"})
+            _overlay_close(overlay_sock)
+            notify_error("Conversation too long — starting a new one")
+            if tts is not None:
+                tts.stop()
+            store.save(conv)
+            raise ContextWindowFull()
+        raise  # Re-raise other BadRequestErrors to be caught by APIError below
+
     except litellm.exceptions.NotFoundError as e:
         log.error("Model not found: %s — %s", model, e)
         _overlay_send(overlay_sock, {"cmd": "clear"})

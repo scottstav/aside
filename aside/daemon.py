@@ -243,8 +243,27 @@ class Daemon:
                 if result_id:
                     self.last_conv_id = result_id
             except ContextWindowFull:
-                log.info("Context window full — resetting to new conversation")
-                self.last_conv_id = None
+                log.info("Context window full — retrying with new conversation")
+                try:
+                    result_id = send_query(
+                        text=text,
+                        conversation_id=NEW_CONVERSATION,
+                        config=self.config,
+                        store=self.store,
+                        status=self.status,
+                        usage_log=self.usage_log,
+                        cancel_event=cancel_event,
+                        image=image,
+                        file=file,
+                        tts=self.tts,
+                        plugin_dirs=self.tools_dirs,
+                        tools=self._get_tools(),
+                        from_mic=from_mic,
+                    )
+                    if result_id:
+                        self.last_conv_id = result_id
+                except Exception:
+                    log.exception("Retry with new conversation failed")
             except Exception:
                 log.exception("Query thread error")
             finally:
