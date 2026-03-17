@@ -307,6 +307,7 @@ def stream_response(
     sentence_buf: SentenceBuffer,
     speak_on: bool,
     deferred_open: dict | None = None,
+    timeout: int | float = 30,
 ) -> tuple[str, list[dict], dict]:
     """Stream an LLM response via LiteLLM.
 
@@ -326,7 +327,7 @@ def stream_response(
         "max_tokens": MAX_TOKENS,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "timeout": 30,
+        "timeout": timeout,
     }
     if tools:
         api_kwargs["tools"] = tools
@@ -468,6 +469,7 @@ def send_query(
         conv = store.get_or_create(resolved) if resolved else store.get_or_create()
 
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
+    timeout = config.get("model", {}).get("timeout", 30)
     system_extra = config.get("model", {}).get("system_prompt", "")
     system_prompt = _build_system_prompt(extra=system_extra)
 
@@ -551,6 +553,7 @@ def send_query(
                 sentence_buf=sentence_buf,
                 speak_on=speak_on,
                 deferred_open=deferred_open,
+                timeout=timeout,
             )
             deferred_open = None  # Only defer on the first iteration
 
