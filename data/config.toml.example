@@ -14,6 +14,7 @@
 [model]
 # name = "anthropic/claude-sonnet-4-6"
 # system_prompt = ""
+# timeout = 30                         # LLM request timeout in seconds
 
 # ---------------------------------------------------------------------------
 # Input
