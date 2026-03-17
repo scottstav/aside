@@ -14,14 +14,6 @@ LLM model selection. Uses [LiteLLM](https://docs.litellm.ai/) provider/model for
 | `system_prompt` | string | `""` | Extra text appended to the built-in system prompt |
 | `timeout` | int/float | `30` | LLM request timeout in seconds |
 
-## `[input]`
-
-Input popup window settings.
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `font` | string | `""` | Pango font description for the input popup. Falls back to `overlay.font` when empty |
-
 ## `[voice]`
 
 Speech-to-text capture via faster-whisper.
@@ -48,37 +40,72 @@ Text-to-speech playback via Piper.
 
 ## `[overlay]`
 
-Wayland layer-shell overlay appearance and layout. Width is clamped to 200–2000 and max_lines to 1–50.
+Overlay layout and behavior. Visual styling (colors, fonts, borders) is handled by [themes](#themes).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `font` | string | `"Sans 13"` | Pango font description |
-| `width` | int | `600` | Overlay width in logical pixels (200–2000) |
-| `max_lines` | int | `5` | Maximum visible lines of text (1–50) |
-| `position` | string | `"top-center"` | Screen position: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`, `center` |
+| `theme` | string | `"default"` | Theme name — loads from `~/.config/aside/themes/<name>/` or bundled themes |
+| `width` | int | `600` | Overlay width in logical pixels |
+| `max_height` | int | `500` | Maximum overlay height in pixels |
+| `markdown` | bool | `true` | Enable markdown rendering in responses |
+| `position` | string | `"top-center"` | Screen position: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` |
 | `margin_top` | int | `10` | Top margin in pixels |
 | `margin_right` | int | `0` | Right margin in pixels |
 | `margin_bottom` | int | `0` | Bottom margin in pixels |
 | `margin_left` | int | `0` | Left margin in pixels |
-| `padding_x` | int | `20` | Horizontal text padding in pixels |
-| `padding_y` | int | `16` | Vertical text padding in pixels |
-| `corner_radius` | int | `12` | Corner rounding radius in pixels |
-| `border_width` | int | `2` | Border thickness in pixels |
-| `accent_height` | int | `3` | Accent bar height in pixels (0 disables). Top bar for agent responses, bottom bar for user/mic mode |
 | `scroll_duration` | int | `200` | Text scroll animation in milliseconds |
 | `fade_duration` | int | `400` | Fade-out animation in milliseconds |
+| `dismiss_timeout` | float | `5.0` | Seconds before auto-dismissing the overlay |
 
-## `[overlay.colors]`
+## Themes
 
-All colors use `#RRGGBBAA` hex format. The last two digits are alpha (e.g. `e6` is ~90% opaque, `ff` is fully opaque).
+All visual styling lives in CSS theme files. aside ships with a bundled default theme. User themes are loaded from `~/.config/aside/themes/<name>/style.css` and layered on top of the default, so you only need to override what you want to change.
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `background` | string | `"#1a1b26e6"` | Background fill |
-| `foreground` | string | `"#c0caf5ff"` | Text color |
-| `border` | string | `"#414868ff"` | Border color |
-| `accent` | string | `"#7aa2f7ff"` | Accent bar color for agent responses |
-| `user_accent` | string | `"#a07048ff"` | Accent bar color for user/mic mode |
+Set the theme in config:
+
+```toml
+[overlay]
+theme = "my-theme"
+```
+
+Create your theme file:
+
+```css
+/* ~/.config/aside/themes/my-theme/style.css */
+@define-color bg #080810;
+@define-color fg #d0d0e0;
+@define-color border_color #282840;
+@define-color accent #d09040;
+@define-color user_accent #3a3a58;
+@define-color code_bg #1a1a2e;
+
+.overlay-container {
+    font: 12pt Iosevka;
+}
+```
+
+### Available `@define-color` names
+
+| Name | Purpose |
+|------|---------|
+| `bg` | Background fill |
+| `fg` | Text color |
+| `border_color` | Border color |
+| `accent` | Accent bar and LLM message border color |
+| `user_accent` | User message border and reply input color |
+| `code_bg` | Code block background |
+
+### Styleable CSS classes
+
+See the [default theme](../aside/overlay/themes/default/style.css) for the full list. Key classes:
+
+- `.overlay-container` — main container (font, background, border-radius, border)
+- `.accent-bar` — top accent bar (`min-height` controls thickness)
+- `.message-user` / `.message-llm` — message left borders
+- `.reply-input` — reply text input
+- `.picker-*` — conversation picker widgets
+- `.action-icon` / `.header-btn` — overlay buttons
+- `.dim-label` — hint text
 
 ## `[storage]`
 

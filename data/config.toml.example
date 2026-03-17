@@ -46,28 +46,17 @@
 # Overlay
 # ---------------------------------------------------------------------------
 [overlay]
-# font = "Sans 13"
+# theme = "default"                  # theme name from ~/.config/aside/themes/<name>/
 # width = 600
-# max_lines = 5
+# max_height = 500
 # position = "top-center"
 # margin_top = 10
 # margin_right = 0
 # margin_bottom = 0
 # margin_left = 0
-# padding_x = 20
-# padding_y = 16
-# corner_radius = 12
-# border_width = 2
-# accent_height = 3
 # scroll_duration = 200
 # fade_duration = 400
-
-[overlay.colors]
-# background = "#1a1b26e6"
-# foreground = "#c0caf5ff"
-# border = "#414868ff"
-# accent = "#7aa2f7ff"
-# user_accent = "#a07048ff"
+# dismiss_timeout = 5.0
 
 # ---------------------------------------------------------------------------
 # Storage

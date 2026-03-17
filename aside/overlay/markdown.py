@@ -5,11 +5,30 @@ from __future__ import annotations
 import gi
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Gtk, Pango
+from gi.repository import Gdk, Gtk, Pango
 
 import mistune
 
 _md = mistune.create_markdown(renderer="ast")
+
+_FALLBACK_CODE_BG = "#2a2a2a"
+
+
+def _get_code_bg() -> str:
+    """Resolve @define-color code_bg from the active CSS, with fallback."""
+    display = Gdk.Display.get_default()
+    if display is None:
+        return _FALLBACK_CODE_BG
+    # Create a temporary widget to access the style context
+    w = Gtk.Label()
+    ctx = w.get_style_context()
+    found, color = ctx.lookup_color("code_bg")
+    if found:
+        r = int(color.red * 255)
+        g = int(color.green * 255)
+        b = int(color.blue * 255)
+        return f"#{r:02x}{g:02x}{b:02x}"
+    return _FALLBACK_CODE_BG
 
 
 def _ensure_tags(buf: Gtk.TextBuffer) -> None:
@@ -22,15 +41,17 @@ def _ensure_tags(buf: Gtk.TextBuffer) -> None:
     if table.lookup("italic") is None:
         buf.create_tag("italic", style=Pango.Style.ITALIC)
 
+    code_bg = _get_code_bg()
+
     if table.lookup("code") is None:
-        buf.create_tag("code", family="monospace", background="#2a2a2a")
+        buf.create_tag("code", family="monospace", background=code_bg)
 
     if table.lookup("code-block") is None:
         buf.create_tag(
             "code-block",
             family="monospace",
-            background="#2a2a2a",
-            paragraph_background="#2a2a2a",
+            background=code_bg,
+            paragraph_background=code_bg,
         )
 
     if table.lookup("h1") is None:

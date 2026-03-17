@@ -21,6 +21,9 @@ tts = ["piper-tts", "sounddevice"]
 [tool.setuptools.packages.find]
 include = ["aside*"]
 
+[tool.setuptools.package-data]
+"aside.overlay.themes" = ["*/style.css"]
+
 [project.scripts]
 aside = "aside.cli:main"
 aside-overlay = "aside.overlay.app:main"

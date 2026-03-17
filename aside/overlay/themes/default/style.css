@@ -1,0 +1,140 @@
+@define-color bg #1a1b26;
+@define-color fg #c0caf5;
+@define-color border_color #414868;
+@define-color accent #7aa2f7;
+@define-color user_accent #a07048;
+@define-color code_bg #2a2a2a;
+
+window {
+    background-color: transparent;
+}
+window.background {
+    background-color: transparent;
+}
+.overlay-container {
+    background-color: alpha(@bg, 0.95);
+    border-radius: 12px;
+    border: 1px solid alpha(@border_color, 0.5);
+    padding: 0;
+    font: 13pt Sans;
+}
+.overlay-container textview {
+    background: transparent;
+    color: @fg;
+}
+.overlay-container textview text {
+    background: transparent;
+    color: @fg;
+}
+.accent-bar {
+    min-height: 4px;
+}
+.message-view {
+    padding: 6px 0;
+}
+.message-user {
+    margin-left: 8px;
+    border-left: 3px solid alpha(@user_accent, 0.6);
+}
+.message-llm {
+    margin-left: 8px;
+    border-left: 3px solid alpha(@accent, 0.4);
+}
+.message-user textview text {
+    color: @user_accent;
+}
+.reply-input {
+    border-radius: 8px;
+    border: 1px solid alpha(@user_accent, 0.3);
+    margin: 8px 12px;
+    padding: 8px 10px;
+    caret-color: @user_accent;
+    background-color: alpha(@user_accent, 0.04);
+}
+.reply-input:focus-within {
+    border-color: alpha(@user_accent, 0.6);
+}
+.reply-input textview {
+    background: transparent;
+}
+.reply-input textview text {
+    background: transparent;
+    color: @fg;
+}
+.picker {
+    background: transparent;
+}
+.picker-title {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: @accent;
+    margin: 12px 16px 4px 16px;
+}
+.picker-listbox {
+    background: transparent;
+}
+.picker-row {
+    border-radius: 6px;
+    margin: 2px 8px;
+    padding: 8px 12px;
+    color: @fg;
+}
+.picker-row:selected {
+    background-color: alpha(@accent, 0.15);
+}
+.picker-input {
+    border-radius: 8px;
+    border: 1px solid alpha(@user_accent, 0.3);
+    margin: 4px 12px;
+    background-color: alpha(@user_accent, 0.04);
+}
+.picker-input:focus-within {
+    border-color: alpha(@user_accent, 0.6);
+}
+.picker-input textview {
+    background: transparent;
+}
+.picker-input textview text {
+    background: transparent;
+    color: @fg;
+}
+.input-hint {
+    font-size: 0.8em;
+    color: alpha(@fg, 0.35);
+    margin: 2px 16px 8px 16px;
+}
+.action-bar {
+    padding: 4px 16px 8px 16px;
+}
+.action-icon {
+    background: alpha(@fg, 0.08);
+    border: none;
+    border-radius: 50%;
+    color: alpha(@fg, 0.6);
+    min-width: 18px;
+    min-height: 18px;
+    padding: 3px;
+    -gtk-icon-size: 14px;
+}
+.action-icon:hover {
+    background: alpha(@fg, 0.15);
+    color: alpha(@fg, 0.9);
+}
+.header-btn {
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: alpha(@fg, 0.25);
+    min-width: 18px;
+    min-height: 18px;
+    padding: 1px;
+    -gtk-icon-size: 12px;
+}
+.header-btn:hover {
+    background: alpha(@fg, 0.12);
+    color: alpha(@fg, 0.8);
+}
+.dim-label {
+    color: alpha(@fg, 0.4);
+    font-size: 0.85em;
+}
