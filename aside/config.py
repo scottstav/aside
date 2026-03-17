@@ -36,7 +36,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "overlay": {
         "theme": "default",
-        "font": "Sans 13",
         "width": 600,
         "max_height": 500,
         "markdown": True,

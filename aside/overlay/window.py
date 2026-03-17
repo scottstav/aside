@@ -503,9 +503,12 @@ class OverlayWindow(Gtk.Window):
         """Open the conversation transcript .md file in default editor."""
         if not self._conv_id:
             return
-        from aside.config import resolve_conversations_dir
+        from aside.config import resolve_archive_dir, resolve_conversations_dir
         from aside.state import ConversationStore
-        store = ConversationStore(resolve_conversations_dir(self._config))
+        store = ConversationStore(
+            resolve_conversations_dir(self._config),
+            archive_dir=resolve_archive_dir(self._config),
+        )
         path = store.transcript_path(self._conv_id)
         if path.exists():
             import subprocess

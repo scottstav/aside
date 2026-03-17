@@ -118,7 +118,7 @@ class ConversationHistory(Gtk.ScrolledWindow):
                     if isinstance(part, dict) and part.get("type") == "text"
                 )
             else:
-                text = str(content)
+                text = str(content) if content is not None else ""
             mv = self.add_message(role, "")
             pending.append((mv, text))
         GLib.idle_add(self._apply_pending_text, pending)

@@ -67,7 +67,6 @@ class TestDefaultConfig:
     def test_overlay_defaults(self):
         o = self.defaults["overlay"]
         assert o["theme"] == "default"
-        assert o["font"] == "Sans 13"
         assert o["width"] == 600
         assert o["max_height"] == 500
         assert o["markdown"] is True

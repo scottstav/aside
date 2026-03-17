@@ -40,15 +40,14 @@ class AccentBar(Gtk.DrawingArea):
 
     def __init__(
         self,
-        height: int = 3,
         corner_radius: int = 12,
     ) -> None:
         super().__init__()
+        self.add_css_class("accent-bar")
         self._accent = self._DEFAULT_ACCENT
         self._user_accent = self._DEFAULT_USER_ACCENT
         self._colors_resolved = False
         self._corner_radius = corner_radius
-        self._bar_height = height
         self._state = BarState.IDLE
         self._progress: float = 0.0
         self._tick_id: int | None = None
@@ -57,7 +56,7 @@ class AccentBar(Gtk.DrawingArea):
         self._levels: collections.deque[float] = collections.deque(
             [0.0] * _WAVEFORM_BARS, maxlen=_WAVEFORM_BARS
         )
-        self.set_size_request(-1, height)
+        self.set_size_request(-1, -1)
         self.set_draw_func(self._draw)
 
     @property
@@ -83,7 +82,7 @@ class AccentBar(Gtk.DrawingArea):
             self._levels.clear()
             self._levels.extend([0.0] * _WAVEFORM_BARS)
         elif prev == BarState.LISTENING:
-            self.set_size_request(-1, self._bar_height)
+            self.set_size_request(-1, -1)
 
         if state in (BarState.THINKING, BarState.LISTENING, BarState.STREAMING, BarState.DONE):
             if self._tick_id is None:

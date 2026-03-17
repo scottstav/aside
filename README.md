@@ -69,59 +69,59 @@ aside cancel
 
 a GUI for continuing conversations is provided if you don't want to script your own.
 
-## theming and customization
+## themes
 
-Highly configurable via `~/.config/aside/config.toml`, overlay position, colors, fonts, size.
+All visual styling lives in CSS theme files. aside ships with a default theme and loads user themes from `~/.config/aside/themes/<name>/style.css`. User themes layer on top of the default — override only what you want.
+
+```toml
+# config.toml
+[overlay]
+theme = "my-theme"
+```
+
+```css
+/* ~/.config/aside/themes/my-theme/style.css */
+@define-color bg #080810;
+@define-color fg #d0d0e0;
+@define-color border_color #282840;
+@define-color accent #d09040;
+@define-color user_accent #3a3a58;
+@define-color code_bg #1a1a2e;
+
+.overlay-container {
+    font: 12pt Iosevka;
+    border-radius: 8px;
+    border: 1px solid @border_color;
+}
+.accent-bar {
+    min-height: 4px;
+}
+```
+
+Available `@define-color` names: `bg`, `fg`, `border_color`, `accent`, `user_accent`, `code_bg`. See the [default theme](aside/overlay/themes/default/style.css) for all styleable classes.
+
+## configuration
+
+Behavior is configured via `~/.config/aside/config.toml`. Visual styling goes in themes (above), not config.
 
 ```toml
 [model]
 name = "anthropic/claude-haiku-4-5"
 
-[input]
-font = "Iosevka 12"
+[overlay]
+theme = "default"
+position = "top-center"
+width = 450
+margin_top = 5
 
 [storage]
 archive_dir = "~/Dropbox/LLM/Chats"
 
 [tools]
 dirs = ["~/.config/aside/tools"]
-
-[overlay]
-position = "top-center"
-font = "Iosevka 12"
-markdown = true
-max_lines = 5
-corner_radius = 8
-border_width = 1
-accent_height = 4
-scroll_duration = 200
-fade_duration = 400
-width = 450
-margin_top = 5
-padding_x = 20
-padding_y = 16
-
-[overlay.colors]
-background = "#1a1c1ee6"
-foreground = "#d4d4d4ff"
-border = "#5a4a3aff"
-accent = "#5b9a6a"
-
-[voice]
-enabled = false
-stt_model = "base"
-stt_device = "cpu"
-smart_silence = true
-silence_timeout = 2.5
-no_speech_timeout = 3.0
-
-[tts]
-enabled = false
-speed = 1.0
-filter = {skip_code_blocks = true, skip_urls = true}
 ```
 
-voice, TTS, model, plugins, and storage are all configurable too — see [config reference](docs/configuration.md).
+Voice, TTS, model, plugins, and storage are all configurable — see [config reference](docs/configuration.md).
 
 ## requirements
 

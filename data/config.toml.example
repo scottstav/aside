@@ -46,7 +46,6 @@
 # ---------------------------------------------------------------------------
 [overlay]
 # theme = "default"                  # theme name from ~/.config/aside/themes/<name>/
-# font = "Sans 13"
 # width = 600
 # max_height = 500
 # position = "top-center"
