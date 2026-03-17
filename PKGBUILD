@@ -1,6 +1,6 @@
 # Maintainer: Scott Stavinoha <scottstavinoha@gmail.com>
 pkgname=aside
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="LLM assistant for Wayland desktops — overlay, voice, tools, any model"
 arch=('x86_64')
