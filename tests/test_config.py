@@ -66,22 +66,15 @@ class TestDefaultConfig:
 
     def test_overlay_defaults(self):
         o = self.defaults["overlay"]
+        assert o["theme"] == "default"
         assert o["font"] == "Sans 13"
         assert o["width"] == 600
+        assert o["max_height"] == 500
         assert o["markdown"] is True
-        assert o["max_lines"] == 5
         assert o["margin_top"] == 10
-        assert o["padding_x"] == 20
-        assert o["padding_y"] == 16
-        assert o["corner_radius"] == 12
-        assert o["border_width"] == 2
-        assert o["accent_height"] == 3
         assert o["scroll_duration"] == 200
         assert o["fade_duration"] == 400
-        assert o["colors"]["background"] == "#1a1b26e6"
-        assert o["colors"]["foreground"] == "#c0caf5ff"
-        assert o["colors"]["border"] == "#414868ff"
-        assert o["colors"]["accent"] == "#7aa2f7ff"
+        assert o["dismiss_timeout"] == 5.0
 
     def test_storage_defaults(self):
         s = self.defaults["storage"]
@@ -178,12 +171,12 @@ class TestLoadConfig:
     def test_merges_nested_overrides(self, tmp_path):
         config_file = tmp_path / "config.toml"
         config_file.write_text(textwrap.dedent("""\
-            [overlay.colors]
-            foreground = "#ffffff"
+            [overlay]
+            theme = "pink"
         """))
         result = self.cfg.load_config(path=config_file)
-        assert result["overlay"]["colors"]["foreground"] == "#ffffff"
-        assert result["overlay"]["colors"]["background"] == "#1a1b26e6"
+        assert result["overlay"]["theme"] == "pink"
+        assert result["overlay"]["font"] == "Sans 13"  # preserved default
 
     def test_xdg_config_home_resolution(self, tmp_path):
         """load_config(path=None) resolves via XDG_CONFIG_HOME."""

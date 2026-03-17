@@ -19,7 +19,7 @@ from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
 from aside.config import resolve_conversations_dir, resolve_socket_path
 from aside.overlay.accent_bar import AccentBar, BarState
 from aside.overlay.conversation import ConversationHistory
-from aside.overlay.css import build_css
+from aside.overlay.theme import load_theme_css
 from aside.overlay.picker import ConversationPicker
 from aside.overlay.reply_input import ReplyInput
 
@@ -50,7 +50,6 @@ class OverlayWindow(Gtk.Window):
 
         overlay_cfg = config.get("overlay", {})
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
-        colors = overlay_cfg.get("colors", {})
         self._markdown_enabled = overlay_cfg.get("markdown", True)
 
         # Dimensions
@@ -87,12 +86,9 @@ class OverlayWindow(Gtk.Window):
             Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT, True)
             Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
 
-        # CSS
-        accent_color = colors.get("accent", "#8b5cf6")
-        user_accent_color = colors.get("user_accent", "#22d3ee")
-        font = overlay_cfg.get("font", "")
-        opacity = overlay_cfg.get("opacity", 0.95)
-        css_text = build_css(colors, font=font, opacity=opacity)
+        # CSS — load from theme
+        theme_name = overlay_cfg.get("theme", "default")
+        css_text = load_theme_css(theme_name)
         provider = Gtk.CssProvider()
         provider.load_from_string(css_text)
         Gtk.StyleContext.add_provider_for_display(
@@ -106,11 +102,7 @@ class OverlayWindow(Gtk.Window):
         self.set_child(self._main_box)
 
         # Accent bar (always visible, outside stack)
-        self._accent_bar = AccentBar(
-            accent_color=accent_color,
-            user_accent_color=user_accent_color,
-            corner_radius=12,
-        )
+        self._accent_bar = AccentBar(corner_radius=12)
         self._main_box.append(self._accent_bar)
 
         # Header buttons (right-aligned, between accent bar and content)

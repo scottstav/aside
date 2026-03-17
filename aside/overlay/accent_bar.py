@@ -25,35 +25,28 @@ class BarState(enum.Enum):
     DONE = "done"
 
 
-def _parse_hex_color(hex_color: str) -> tuple[float, float, float]:
-    """Parse #RRGGBB or #RRGGBBAA to (r, g, b) floats in 0-1 range."""
-    h = hex_color.lstrip("#")
-    r = int(h[0:2], 16) / 255.0
-    g = int(h[2:4], 16) / 255.0
-    b = int(h[4:6], 16) / 255.0
-    return (r, g, b)
-
-
 class AccentBar(Gtk.DrawingArea):
     """Thin animated bar that communicates overlay state via color/motion.
 
-    Uses *accent_color* for LLM states (thinking, streaming) and
-    *user_accent_color* for user states (listening).
+    Reads *accent* and *user_accent* colors from the CSS theme via
+    GTK's lookup_color().  Falls back to sensible defaults if not found.
 
     In LISTENING state, expands to show a live audio waveform fed by
     push_audio_level().
     """
 
+    _DEFAULT_ACCENT = (0.478, 0.635, 0.969)      # #7aa2f7
+    _DEFAULT_USER_ACCENT = (0.627, 0.439, 0.282)  # #a07048
+
     def __init__(
         self,
-        accent_color: str,
-        user_accent_color: str | None = None,
         height: int = 3,
         corner_radius: int = 12,
     ) -> None:
         super().__init__()
-        self._accent = _parse_hex_color(accent_color)
-        self._user_accent = _parse_hex_color(user_accent_color or accent_color)
+        self._accent = self._DEFAULT_ACCENT
+        self._user_accent = self._DEFAULT_USER_ACCENT
+        self._colors_resolved = False
         self._corner_radius = corner_radius
         self._bar_height = height
         self._state = BarState.IDLE
@@ -144,6 +137,17 @@ class AccentBar(Gtk.DrawingArea):
         cr.close_path()
         cr.clip()
 
+    def _resolve_colors(self) -> None:
+        """Read @define-color accent and user_accent from CSS."""
+        ctx = self.get_style_context()
+        found, color = ctx.lookup_color("accent")
+        if found:
+            self._accent = (color.red, color.green, color.blue)
+        found, color = ctx.lookup_color("user_accent")
+        if found:
+            self._user_accent = (color.red, color.green, color.blue)
+        self._colors_resolved = True
+
     def _active_color(self) -> tuple[float, float, float]:
         """Return the color for the current state."""
         if self._state == BarState.LISTENING:
@@ -151,6 +155,8 @@ class AccentBar(Gtk.DrawingArea):
         return self._accent
 
     def _draw(self, area: Gtk.DrawingArea, cr, width: int, height: int) -> None:
+        if not self._colors_resolved:
+            self._resolve_colors()
         if self._corner_radius > 0:
             self._rounded_top_clip(cr, width, height, self._corner_radius)
 

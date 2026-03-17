@@ -1,41 +1,25 @@
-"""Tests for aside.overlay.css — CSS generation from config colors."""
+"""Tests for aside.overlay.theme — theme CSS loading."""
 
-from aside.overlay.css import build_css, rgb_strip_alpha
+from pathlib import Path
 
-
-class TestRgbStripAlpha:
-    def test_nine_char_hex_strips_alpha(self):
-        assert rgb_strip_alpha("#1a1b26e6") == "#1a1b26"
-
-    def test_seven_char_hex_unchanged(self):
-        assert rgb_strip_alpha("#1a1b26") == "#1a1b26"
+from aside.overlay.theme import load_theme_css
 
 
-class TestBuildCss:
-    def test_returns_string(self):
-        css = build_css({
-            "background": "#1a1b26e6",
-            "foreground": "#c0caf5ff",
-            "border": "#414868ff",
-            "accent": "#7aa2f7ff",
-        })
+class TestLoadThemeCss:
+    def test_loads_bundled_default(self):
+        css = load_theme_css("default")
         assert isinstance(css, str)
-        assert "background-color" in css
+        assert "@define-color bg" in css
+        assert ".overlay-container" in css
 
-    def test_uses_default_colors_when_empty(self):
-        css = build_css({})
-        assert isinstance(css, str)
-        assert "background-color" in css
+    def test_fallback_to_default_for_missing(self):
+        css = load_theme_css("nonexistent-theme-xyz")
+        default_css = load_theme_css("default")
+        assert css == default_css
 
     def test_contains_all_overlay_classes(self):
-        css = build_css({
-            "background": "#1a1b26e6",
-            "foreground": "#c0caf5ff",
-            "border": "#414868ff",
-            "accent": "#7aa2f7ff",
-        })
+        css = load_theme_css("default")
         for cls in [
-            "textview", "textview text",
             ".overlay-container", ".accent-bar", ".message-view",
             ".message-user", ".message-llm", ".reply-input",
             ".reply-input:focus-within", ".picker", ".picker-title",
@@ -44,10 +28,22 @@ class TestBuildCss:
         ]:
             assert cls in css, f"Missing CSS class: {cls}"
 
-    def test_font_pango_description(self):
-        css = build_css({}, font="Iosevka 12")
-        assert "font: 12pt Iosevka;" in css
+    def test_user_theme_takes_priority(self, tmp_path):
+        user_theme_dir = tmp_path / ".config" / "aside" / "themes" / "custom"
+        user_theme_dir.mkdir(parents=True)
+        (user_theme_dir / "style.css").write_text("/* custom */")
 
-    def test_no_font_parameter(self):
-        css = build_css({})
-        assert "font:" not in css.split(".overlay-container")[1].split("}")[0]
+        # Monkey-patch home to use tmp_path
+        import aside.overlay.theme as theme_mod
+        orig = Path.home
+        Path.home = staticmethod(lambda: tmp_path)
+        try:
+            css = theme_mod.load_theme_css("custom")
+            assert css == "/* custom */"
+        finally:
+            Path.home = orig
+
+    def test_bundled_default_has_define_colors(self):
+        css = load_theme_css("default")
+        for color_name in ["bg", "fg", "border_color", "accent", "user_accent", "code_bg"]:
+            assert f"@define-color {color_name}" in css, f"Missing @define-color {color_name}"

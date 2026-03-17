@@ -1141,8 +1141,9 @@ class TestSetKeyCommand:
 class TestGetKeyCommand:
     def test_get_key_found(self, capsys):
         args = mock.Mock(provider="anthropic")
-        with mock.patch("aside.keyring.get_key", return_value="sk-ant-1234567890abcdef"):
-            _cmd_get_key(args)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with mock.patch("aside.keyring.get_key", return_value="sk-ant-1234567890abcdef"):
+                _cmd_get_key(args)
         out = capsys.readouterr().out
         assert "sk-a..." in out
         assert "cdef" in out
