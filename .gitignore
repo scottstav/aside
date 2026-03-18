@@ -39,3 +39,4 @@ docs/plans/
 
 # Misc
 *.log
+.worktrees

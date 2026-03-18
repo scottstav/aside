@@ -112,6 +112,24 @@ def _resolve_conv_id(conv_dir, prefix: str) -> str:
     sys.exit(1)
 
 
+def _resolve_last_conv(conv_dir) -> str:
+    """Return the last conversation ID from last.json, or exit with error.
+
+    Uses the same last.json file the daemon writes after each query,
+    mirroring the ``conversation_id: None`` resolution in ``aside query``.
+    """
+    last_file = conv_dir.parent / "last.json"
+    try:
+        data = json.loads(last_file.read_text())
+        conv_id = data.get("conversation_id")
+        if conv_id:
+            return conv_id
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    print("Error: no recent conversation found", file=sys.stderr)
+    sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -175,13 +193,13 @@ def _build_parser() -> argparse.ArgumentParser:
     # aside daemon
     sub.add_parser("daemon", help="Start the aside daemon (foreground)")
 
-    # aside show CONVERSATION_ID
+    # aside show [CONVERSATION_ID]
     show = sub.add_parser("show", help="Print a full conversation transcript")
-    show.add_argument("conversation_id", help="Conversation ID to display")
+    show.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
 
-    # aside open CONVERSATION_ID
+    # aside open [CONVERSATION_ID]
     open_cmd = sub.add_parser("open", help="Export conversation to markdown and open it")
-    open_cmd.add_argument("conversation_id", help="Conversation ID to export and open")
+    open_cmd.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
 
     # aside rm CONVERSATION_ID
     rm_cmd = sub.add_parser("rm", help="Delete a conversation")
@@ -194,9 +212,9 @@ def _build_parser() -> argparse.ArgumentParser:
     view_cmd = sub.add_parser("view", help="View a conversation in the overlay")
     view_cmd.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
 
-    # aside reply CONVERSATION_ID [TEXT] [--mic]
+    # aside reply [CONVERSATION_ID] [TEXT] [--mic]
     reply = sub.add_parser("reply", help="Continue a conversation by ID")
-    reply.add_argument("conversation_id", help="Conversation ID to continue")
+    reply.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
     reply.add_argument("text", nargs="?", default=None, help="Reply text (optional)")
     reply.add_argument("--mic", action="store_true", default=False, help="One-shot voice capture")
 
@@ -288,10 +306,13 @@ def _cmd_reply(args: argparse.Namespace) -> None:
         print("Error: text and --mic are mutually exclusive", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve prefix to full conversation ID
+    # Resolve conversation ID (fall back to most recent)
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
-    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    if args.conversation_id:
+        full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    else:
+        full_id = _resolve_last_conv(conv_dir)
 
     if args.mic:
         _send({"action": "query", "conversation_id": full_id, "mic": True})
@@ -509,7 +530,10 @@ def _cmd_show(args: argparse.Namespace) -> None:
     cfg = load_config()
     conv_dir = resolve_conversations_dir(cfg)
 
-    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    if args.conversation_id:
+        full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    else:
+        full_id = _resolve_last_conv(conv_dir)
     conv_path = conv_dir / f"{full_id}.json"
 
     with open(conv_path) as f:
@@ -553,7 +577,10 @@ def _cmd_open(args: argparse.Namespace) -> None:
     conv_dir = resolve_conversations_dir(cfg)
     archive_dir = resolve_archive_dir(cfg)
 
-    full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    if args.conversation_id:
+        full_id = _resolve_conv_id(conv_dir, args.conversation_id)
+    else:
+        full_id = _resolve_last_conv(conv_dir)
 
     store = ConversationStore(conv_dir, archive_dir=archive_dir)
     conv = store.get_or_create(full_id)
