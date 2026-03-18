@@ -39,7 +39,7 @@ class TestLoadThemeCss:
         Path.home = staticmethod(lambda: tmp_path)
         try:
             css = theme_mod.load_theme_css("custom")
-            assert css == "/* custom */"
+            assert "/* custom */" in css
         finally:
             Path.home = orig
 

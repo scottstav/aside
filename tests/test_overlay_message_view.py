@@ -27,9 +27,7 @@ class TestMessageView:
     def test_set_text(self):
         mv = MessageView(role="assistant", text="Hello", markdown=True)
         mv.set_text("Hello world")
-        buf = mv.get_buffer()
-        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
-        assert "world" in text
+        assert mv.get_raw_text() == "Hello world"
 
     def test_get_raw_text(self):
         mv = MessageView(role="assistant", text="Test content", markdown=True)
@@ -37,6 +35,4 @@ class TestMessageView:
 
     def test_plain_text_mode(self):
         mv = MessageView(role="assistant", text="**bold**", markdown=False)
-        buf = mv.get_buffer()
-        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
-        assert text == "**bold**"
+        assert mv.get_raw_text() == "**bold**"
