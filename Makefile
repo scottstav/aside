@@ -1,26 +1,49 @@
-PREFIX   ?= $(HOME)/.local
 PYTHON   ?= python3
-VENV     := $(PREFIX)/lib/aside/venv
-BIN      := $(PREFIX)/bin
-LIB      := $(PREFIX)/lib/aside
+VENV     := .venv
+BIN      := $(HOME)/.local/bin
 SYSTEMD  := $(HOME)/.config/systemd/user
 APPS     := $(HOME)/.local/share/applications
 CONFIG   := $(HOME)/.config/aside
 
-.PHONY: all install dev uninstall clean
+.PHONY: all install dev system uninstall clean
 
 all: install
 
 # ---------------------------------------------------------------------------
-# Fast dev reinstall — pip install into venv, restart services
+# Dev mode — editable install, shadowing AUR. First run sets up the venv
+# and symlinks; subsequent runs just restart services.
 # ---------------------------------------------------------------------------
 dev:
-	$(VENV)/bin/pip install --quiet .
+	@if [ ! -d "$(VENV)" ] || ! grep -q "include-system-site-packages = true" "$(VENV)/pyvenv.cfg" 2>/dev/null; then \
+		echo "==> Creating venv"; \
+		$(PYTHON) -m venv $(VENV) --clear --system-site-packages; \
+		echo "==> Installing editable build"; \
+		$(VENV)/bin/pip install -q -e .; \
+	fi
+	@if [ ! -L "$(BIN)/aside" ] || [ "$$(readlink $(BIN)/aside)" != "$(CURDIR)/$(VENV)/bin/aside" ]; then \
+		echo "==> Linking local build"; \
+		mkdir -p $(BIN) $(SYSTEMD); \
+		ln -sf $(CURDIR)/$(VENV)/bin/aside $(BIN)/aside; \
+		ln -sf $(CURDIR)/$(VENV)/bin/aside-overlay $(BIN)/aside-overlay; \
+		cp data/aside-daemon.service $(SYSTEMD)/; \
+		cp data/aside-overlay.service $(SYSTEMD)/; \
+		systemctl --user daemon-reload; \
+	fi
 	systemctl --user restart aside-daemon aside-overlay
-	@echo "==> Dev reinstall done"
+	@echo "==> Dev ready"
 
 # ---------------------------------------------------------------------------
-# Full install
+# Switch back to system (AUR) package
+# ---------------------------------------------------------------------------
+system:
+	rm -f $(BIN)/aside $(BIN)/aside-overlay
+	rm -f $(SYSTEMD)/aside-daemon.service $(SYSTEMD)/aside-overlay.service
+	systemctl --user daemon-reload
+	systemctl --user restart aside-daemon aside-overlay
+	@echo "==> Switched to AUR build"
+
+# ---------------------------------------------------------------------------
+# Full install (non-AUR machines, VMs, etc.)
 # ---------------------------------------------------------------------------
 install:
 	@echo "==> Creating venv at $(VENV)"
@@ -29,8 +52,8 @@ install:
 	$(VENV)/bin/pip install .
 	@echo "==> Installing wrapper symlinks"
 	install -d $(BIN)
-	@for cmd in aside aside-overlay aside-status; do \
-		src="$(VENV)/bin/$$cmd"; \
+	@for cmd in aside aside-overlay; do \
+		src="$(CURDIR)/$(VENV)/bin/$$cmd"; \
 		if [ -f "$$src" ]; then \
 			ln -sf "$$src" "$(BIN)/$$cmd"; \
 		fi; \
@@ -57,12 +80,8 @@ install:
 # ---------------------------------------------------------------------------
 uninstall:
 	systemctl --user disable --now aside-daemon aside-overlay 2>/dev/null || true
-	rm -f $(BIN)/aside $(BIN)/aside-overlay $(BIN)/aside-status
-	rm -rf $(LIB) 2>/dev/null; \
-	if [ -d "$(LIB)" ]; then \
-		echo "Warning: $(LIB) has root-owned files (from sudo aside enable-stt/tts)."; \
-		echo "Run manually: sudo rm -rf $(LIB)"; \
-	fi
+	rm -f $(BIN)/aside $(BIN)/aside-overlay
+	rm -rf $(VENV)
 	rm -f $(SYSTEMD)/aside-daemon.service $(SYSTEMD)/aside-overlay.service
 	rm -f $(APPS)/aside.desktop
 	systemctl --user daemon-reload

@@ -11,8 +11,13 @@ LLM model selection. Uses [LiteLLM](https://docs.litellm.ai/) provider/model for
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `name` | string | `"anthropic/claude-sonnet-4-6"` | Model identifier (e.g. `openai/gpt-4o`, `ollama/llama3`) |
-| `system_prompt` | string | `""` | Extra text appended to the built-in system prompt |
 | `timeout` | int/float | `30` | LLM request timeout in seconds |
+
+## System Prompt (`agent.md`)
+
+Place a file at `~/.config/aside/agent.md` to customize the system prompt sent to the LLM. The file contents are sent as-is, with a date line prepended automatically. Changes take effect on the next query — no restart needed.
+
+If no `agent.md` exists, the system message is just the current date.
 
 ## `[voice]`
 

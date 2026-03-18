@@ -15,7 +15,6 @@ from typing import Any
 DEFAULT_CONFIG: dict[str, Any] = {
     "model": {
         "name": "anthropic/claude-sonnet-4-6",
-        "system_prompt": "",
         "timeout": 30,
     },
     "input": {

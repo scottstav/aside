@@ -27,30 +27,39 @@ from aside.query import (
 
 
 class TestBuildSystemPrompt:
-    def test_contains_date(self):
+    def test_date_always_present(self):
         prompt = _build_system_prompt()
         from datetime import datetime
         today = datetime.now().strftime("%Y-%m-%d")
         assert today in prompt
 
-    def test_contains_weekday(self):
+    def test_weekday_present(self):
         prompt = _build_system_prompt()
         from datetime import datetime
         weekday = datetime.now().strftime("%A")
         assert weekday in prompt
 
-    def test_extra_appended(self):
-        prompt = _build_system_prompt(extra="Remember: user likes cats.")
-        assert "Remember: user likes cats." in prompt
+    def test_with_agent_md(self, tmp_path):
+        agent_file = tmp_path / "agent.md"
+        agent_file.write_text("You are a pirate. Say arrr.")
+        prompt = _build_system_prompt(config_dir=tmp_path)
+        assert "You are a pirate. Say arrr." in prompt
+        # Date is still there
+        from datetime import datetime
+        assert datetime.now().strftime("%Y-%m-%d") in prompt
 
-    def test_no_extra(self):
-        prompt = _build_system_prompt()
-        # Should still be a valid non-empty string.
-        assert len(prompt) > 50
+    def test_no_agent_md(self, tmp_path):
+        prompt = _build_system_prompt(config_dir=tmp_path)
+        # Just the date line, nothing else
+        from datetime import datetime
+        assert datetime.now().strftime("%Y-%m-%d") in prompt
+        assert len(prompt.strip().splitlines()) == 1
 
-    def test_extra_stripped(self):
-        prompt = _build_system_prompt(extra="  extra whitespace  ")
-        assert "extra whitespace" in prompt
+    def test_no_hardcoded_persona(self, tmp_path):
+        prompt = _build_system_prompt(config_dir=tmp_path)
+        assert "Arch Linux" not in prompt
+        assert "HUD" not in prompt
+        assert "CONCISENESS" not in prompt
 
 
 # ---------------------------------------------------------------------------

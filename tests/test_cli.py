@@ -1226,37 +1226,41 @@ class TestDaemonModelActions:
             d = Daemon(config)
         return d
 
-    @pytest.mark.asyncio
-    async def test_get_model(self, daemon):
-        reader = asyncio.StreamReader()
-        reader.feed_data(json.dumps({"action": "get_model"}).encode())
-        reader.feed_eof()
+    def test_get_model(self, daemon):
+        async def _run():
+            reader = asyncio.StreamReader()
+            reader.feed_data(json.dumps({"action": "get_model"}).encode())
+            reader.feed_eof()
 
-        writer = mock.AsyncMock()
-        writer.write = mock.Mock()
-        writer.close = mock.Mock()
-        writer.wait_closed = mock.AsyncMock()
+            writer = mock.AsyncMock()
+            writer.write = mock.Mock()
+            writer.close = mock.Mock()
+            writer.wait_closed = mock.AsyncMock()
 
-        await daemon.handle_client(reader, writer)
+            await daemon.handle_client(reader, writer)
 
-        written = writer.write.call_args[0][0]
-        data = json.loads(written.decode())
-        assert data["model"] == "anthropic/claude-haiku-4-5"
+            written = writer.write.call_args[0][0]
+            data = json.loads(written.decode())
+            assert data["model"] == "anthropic/claude-haiku-4-5"
 
-    @pytest.mark.asyncio
-    async def test_set_model(self, daemon):
-        reader = asyncio.StreamReader()
-        reader.feed_data(json.dumps({"action": "set_model", "model": "gemini/gemini-2.5-pro"}).encode())
-        reader.feed_eof()
+        asyncio.run(_run())
 
-        writer = mock.AsyncMock()
-        writer.write = mock.Mock()
-        writer.close = mock.Mock()
-        writer.wait_closed = mock.AsyncMock()
+    def test_set_model(self, daemon):
+        async def _run():
+            reader = asyncio.StreamReader()
+            reader.feed_data(json.dumps({"action": "set_model", "model": "gemini/gemini-2.5-pro"}).encode())
+            reader.feed_eof()
 
-        await daemon.handle_client(reader, writer)
+            writer = mock.AsyncMock()
+            writer.write = mock.Mock()
+            writer.close = mock.Mock()
+            writer.wait_closed = mock.AsyncMock()
 
-        assert daemon.config["model"]["name"] == "gemini/gemini-2.5-pro"
+            await daemon.handle_client(reader, writer)
+
+            assert daemon.config["model"]["name"] == "gemini/gemini-2.5-pro"
+
+        asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------

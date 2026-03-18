@@ -210,10 +210,10 @@ class OverlayWindow(Gtk.Window):
         self.add_controller(key_ctl)
 
         # Hover pauses auto-dismiss (without stealing focus)
-        motion = Gtk.EventControllerMotion()
-        motion.connect("enter", self._on_hover_enter)
-        motion.connect("leave", self._on_hover_leave)
-        self.add_controller(motion)
+        self._motion = Gtk.EventControllerMotion()
+        self._motion.connect("enter", self._on_hover_enter)
+        self._motion.connect("leave", self._on_hover_leave)
+        self.add_controller(self._motion)
 
         # Start hidden
         self.set_visible(False)
@@ -445,6 +445,8 @@ class OverlayWindow(Gtk.Window):
     def _start_dismiss_timer(self, seconds: float = 5.0) -> None:
         self._cancel_dismiss_timer()
         if seconds <= 0:
+            return
+        if self._motion.contains_pointer():
             return
         self._dismiss_timer_id = GLib.timeout_add(
             int(seconds * 1000), self._on_dismiss_timeout

@@ -13,7 +13,6 @@
 # Examples: anthropic/claude-sonnet-4-6, openai/gpt-4o, ollama/llama3
 [model]
 # name = "anthropic/claude-sonnet-4-6"
-# system_prompt = ""
 # timeout = 30                         # LLM request timeout in seconds
 
 # ---------------------------------------------------------------------------

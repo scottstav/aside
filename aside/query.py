@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket
 import subprocess
 import threading
@@ -42,40 +43,29 @@ class ContextWindowFull(Exception):
 # System prompt
 # ---------------------------------------------------------------------------
 
-_SYSTEM_PROMPT_TEMPLATE = """\
-You are an unobtrusive assistant living on a Linux power user's desktop \
-(Arch Linux, Hyprland/Wayland, Emacs). You run as a small overlay — not a chatbot, \
-not a conversation partner. Think of yourself as a HUD element: answer the question, \
-then get out of the way.
+def _build_system_prompt(config_dir: Path | None = None) -> str:
+    """Build system prompt from date line + optional agent.md file.
 
-Today is {today_long} ({today_iso}, {weekday}).
-
-CONCISENESS IS YOUR #1 PRIORITY. Give the shortest useful answer possible. \
-1-2 sentences is the target. No preamble, no hedging, no "Great question!", \
-no sign-offs, no unnecessary context. Jump straight to the answer. \
-If someone asks "how do I use X in Y?", respond with the direct answer — \
-not background, not history, not alternatives they didn't ask about. \
-Only give longer responses when the user explicitly asks for detail or elaboration.
-
-You have tools. Use them proactively when they help answer the question.\
-"""
-
-
-def _build_system_prompt(extra: str = "") -> str:
-    """Render the system prompt with today's date.
-
-    *extra* is appended verbatim after the template (e.g. user-supplied
-    additions from config).
+    Reads ``agent.md`` from *config_dir* (defaults to
+    ``~/.config/aside/``) on every call so edits take effect immediately.
     """
     now = datetime.now()
-    text = _SYSTEM_PROMPT_TEMPLATE.format(
-        today_long=now.strftime("%d %B %Y"),
-        today_iso=now.strftime("%Y-%m-%d"),
+    date_line = "Today is {long} ({iso}, {weekday}).".format(
+        long=now.strftime("%d %B %Y"),
+        iso=now.strftime("%Y-%m-%d"),
         weekday=now.strftime("%A"),
     )
-    if extra:
-        text += "\n\n" + extra.strip()
-    return text
+
+    if config_dir is None:
+        config_dir = Path(
+            os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+        ) / "aside"
+
+    agent_file = config_dir / "agent.md"
+    if agent_file.is_file():
+        return date_line + "\n\n" + agent_file.read_text().strip()
+
+    return date_line
 
 
 # ---------------------------------------------------------------------------
@@ -470,8 +460,7 @@ def send_query(
 
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
     timeout = config.get("model", {}).get("timeout", 30)
-    system_extra = config.get("model", {}).get("system_prompt", "")
-    system_prompt = _build_system_prompt(extra=system_extra)
+    system_prompt = _build_system_prompt()
 
     # ------------------------------------------------------------------
     # TTS setup

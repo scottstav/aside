@@ -27,4 +27,3 @@ include = ["aside*"]
 [project.scripts]
 aside = "aside.cli:main"
 aside-overlay = "aside.overlay.app:main"
-aside-status = "aside.status:main"
