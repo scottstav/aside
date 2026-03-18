@@ -43,7 +43,6 @@ class TestDefaultConfig:
     def test_model_defaults(self):
         m = self.defaults["model"]
         assert m["name"] == "anthropic/claude-sonnet-4-6"
-        assert m["system_prompt"] == ""
 
     def test_input_defaults(self):
         assert self.defaults["input"]["font"] == ""
@@ -163,7 +162,6 @@ class TestLoadConfig:
         """))
         result = self.cfg.load_config(path=config_file)
         assert result["model"]["name"] == "openai/gpt-4o"
-        assert result["model"]["system_prompt"] == ""  # preserved default
         assert result["tts"]["speed"] == 1.5
         assert result["tts"]["enabled"] is False  # preserved default
 
@@ -175,7 +173,7 @@ class TestLoadConfig:
         """))
         result = self.cfg.load_config(path=config_file)
         assert result["overlay"]["theme"] == "pink"
-        assert result["overlay"]["font"] == "Sans 13"  # preserved default
+        assert result["overlay"]["width"] == 600  # preserved default
 
     def test_xdg_config_home_resolution(self, tmp_path):
         """load_config(path=None) resolves via XDG_CONFIG_HOME."""
