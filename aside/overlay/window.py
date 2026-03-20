@@ -43,6 +43,7 @@ class OverlayWindow(Gtk.Window):
         self._conv_id: str | None = None
         self._accumulated_text = ""
         self._dismiss_timer_id: int | None = None
+        self._hovering: bool = False
         self._thinking_tick_id: int | None = None
         self._thinking_dots: int = 0
         self._thinking_base_text: str = ""
@@ -319,6 +320,7 @@ class OverlayWindow(Gtk.Window):
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
         self._cancel_dismiss_timer()
+        self._hovering = False
         self._stop_thinking_dots()
         self._msgs_ready = False
         self.set_visible(False)
@@ -446,8 +448,6 @@ class OverlayWindow(Gtk.Window):
         self._cancel_dismiss_timer()
         if seconds <= 0:
             return
-        if self._motion.contains_pointer():
-            return
         self._dismiss_timer_id = GLib.timeout_add(
             int(seconds * 1000), self._on_dismiss_timeout
         )
@@ -459,16 +459,20 @@ class OverlayWindow(Gtk.Window):
 
     def _on_dismiss_timeout(self) -> bool:
         self._dismiss_timer_id = None
+        if self._hovering:
+            return False  # _on_hover_leave will restart the timer
         if self._state == OverlayState.DISPLAY:
             self.handle_clear()
         return False
 
     def _on_hover_enter(self, *_args) -> None:
         """Pause auto-dismiss while cursor is over the overlay."""
+        self._hovering = True
         self._cancel_dismiss_timer()
 
     def _on_hover_leave(self, *_args) -> None:
         """Restart auto-dismiss when cursor leaves — DISPLAY only."""
+        self._hovering = False
         if self._state == OverlayState.DISPLAY:
             self._start_dismiss_timer(self._dismiss_timeout)
 

@@ -19,6 +19,9 @@ dev:
 		$(PYTHON) -m venv $(VENV) --clear --system-site-packages; \
 		echo "==> Installing editable build"; \
 		$(VENV)/bin/pip install -q -e .; \
+	elif ! grep -q "$(CURDIR)" "$(VENV)"/lib/python*/site-packages/aside_assistant*.dist-info/direct_url.json 2>/dev/null; then \
+		echo "==> Fixing editable install path"; \
+		$(VENV)/bin/pip install -q -e .; \
 	fi
 	@if [ ! -L "$(BIN)/aside" ] || [ "$$(readlink $(BIN)/aside)" != "$(CURDIR)/$(VENV)/bin/aside" ]; then \
 		echo "==> Linking local build"; \
