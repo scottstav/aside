@@ -44,6 +44,7 @@ class OverlayWindow(Gtk.Window):
         self._accumulated_text = ""
         self._dismiss_timer_id: int | None = None
         self._hovering: bool = False
+        self._leave_defer_id: int | None = None
         self._thinking_tick_id: int | None = None
         self._thinking_dots: int = 0
         self._thinking_base_text: str = ""
@@ -320,6 +321,9 @@ class OverlayWindow(Gtk.Window):
     def handle_clear(self) -> None:
         """Any->HIDDEN: hide overlay."""
         self._cancel_dismiss_timer()
+        if self._leave_defer_id is not None:
+            GLib.source_remove(self._leave_defer_id)
+            self._leave_defer_id = None
         self._hovering = False
         self._stop_thinking_dots()
         self._msgs_ready = False
@@ -467,14 +471,32 @@ class OverlayWindow(Gtk.Window):
 
     def _on_hover_enter(self, *_args) -> None:
         """Pause auto-dismiss while cursor is over the overlay."""
+        # Cancel any pending deferred leave (spurious leave from resize).
+        if self._leave_defer_id is not None:
+            GLib.source_remove(self._leave_defer_id)
+            self._leave_defer_id = None
         self._hovering = True
         self._cancel_dismiss_timer()
 
     def _on_hover_leave(self, *_args) -> None:
-        """Restart auto-dismiss when cursor leaves — DISPLAY only."""
+        """Restart auto-dismiss when cursor leaves — DISPLAY only.
+
+        Deferred by 150 ms to filter out spurious leave events that
+        layer-shell compositors emit when the surface resizes (e.g.
+        action bar appearing after streaming finishes).  A real leave
+        won't be followed by an immediate enter; a spurious one will.
+        """
+        if self._leave_defer_id is not None:
+            GLib.source_remove(self._leave_defer_id)
+        self._leave_defer_id = GLib.timeout_add(150, self._on_deferred_leave)
+
+    def _on_deferred_leave(self) -> bool:
+        """Actually process the leave after the debounce window."""
+        self._leave_defer_id = None
         self._hovering = False
         if self._state == OverlayState.DISPLAY:
             self._start_dismiss_timer(self._dismiss_timeout)
+        return False
 
     # --- User action handlers ---
 
