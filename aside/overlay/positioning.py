@@ -49,3 +49,18 @@ def step_position(current: str, direction: str) -> str:
     else:  # right
         col = _COLS[min(len(_COLS) - 1, _COLS.index(col) + 1)]
     return f"{row}-{col}"
+
+
+def anchor_spec(position: str) -> dict[str, str]:
+    """Declarative anchoring for a position: {edge_name: config_margin_key}.
+
+    Edges not in the dict are unanchored. The bottom edge deliberately
+    reuses the "margin_top" config value — existing config-compat quirk.
+    """
+    row, col = normalize_position(position)
+    spec = {row: "margin_top"}
+    if col == "left":
+        spec["left"] = "margin_left"
+    elif col == "right":
+        spec["right"] = "margin_right"
+    return spec

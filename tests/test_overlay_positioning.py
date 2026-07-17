@@ -94,3 +94,25 @@ class TestStepPosition:
     def test_unknown_direction_raises(self):
         with pytest.raises(ValueError):
             step_position("top-center", "diagonal")
+
+
+from aside.overlay.positioning import anchor_spec
+
+
+class TestAnchorSpec:
+    def test_top_center_anchors_top_only(self):
+        assert anchor_spec("top-center") == {"top": "margin_top"}
+
+    def test_bottom_center_reuses_margin_top_quirk(self):
+        # Existing behavior (window.py bottom branch): the BOTTOM margin
+        # is set from the margin_top config value. Preserved deliberately.
+        assert anchor_spec("bottom-center") == {"bottom": "margin_top"}
+
+    def test_corners(self):
+        assert anchor_spec("top-left") == {"top": "margin_top", "left": "margin_left"}
+        assert anchor_spec("top-right") == {"top": "margin_top", "right": "margin_right"}
+        assert anchor_spec("bottom-left") == {"bottom": "margin_top", "left": "margin_left"}
+        assert anchor_spec("bottom-right") == {"bottom": "margin_top", "right": "margin_right"}
+
+    def test_loose_string(self):
+        assert anchor_spec("bottom") == {"bottom": "margin_top"}
