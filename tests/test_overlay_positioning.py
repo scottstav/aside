@@ -161,3 +161,158 @@ class TestClampSize:
 
     def test_in_range(self):
         assert clamp_size(400, 250, 4000) == 400
+
+
+from aside.overlay.positioning import (
+    SessionGeometry,
+    apply_move_payload,
+    apply_resize_payload,
+)
+
+
+class TestSessionGeometry:
+    def _geo(self):
+        return SessionGeometry(
+            config_position="top-center", config_width=400, config_max_height=500
+        )
+
+    def test_effective_defaults_to_config(self):
+        geo = self._geo()
+        assert geo.effective_position == "top-center"
+        assert geo.effective_width == 400
+        assert geo.effective_max_height == 500
+
+    def test_move_to(self):
+        geo = self._geo()
+        geo.move_to("bottom-right")
+        assert geo.effective_position == "bottom-right"
+
+    def test_move_to_unknown_slot_raises(self):
+        geo = self._geo()
+        with pytest.raises(ValueError):
+            geo.move_to("middle-nowhere")
+        assert geo.effective_position == "top-center"
+
+    def test_step_from_config_position(self):
+        geo = self._geo()
+        geo.step("down")
+        assert geo.effective_position == "bottom-center"
+
+    def test_step_chains_from_override(self):
+        geo = self._geo()
+        geo.step("down")
+        geo.step("left")
+        assert geo.effective_position == "bottom-left"
+
+    def test_step_unknown_direction_raises(self):
+        geo = self._geo()
+        with pytest.raises(ValueError):
+            geo.step("diagonal")
+
+    def test_reset_position(self):
+        geo = self._geo()
+        geo.move_to("bottom-left")
+        geo.reset_position()
+        assert geo.effective_position == "top-center"
+
+    def test_resize_relative_and_absolute(self):
+        geo = self._geo()
+        geo.resize(width_spec="+50")
+        assert geo.effective_width == 450
+        geo.resize(max_height_spec="300")
+        assert geo.effective_max_height == 300
+        assert geo.effective_width == 450  # untouched
+
+    def test_resize_clamps(self):
+        geo = self._geo()
+        geo.resize(width_spec="10", max_height_spec="99999")
+        assert geo.effective_width == 250     # MIN_WIDTH
+        assert geo.effective_max_height == 4000  # MAX_DIMENSION
+
+    def test_resize_relative_chains_from_override(self):
+        geo = self._geo()
+        geo.resize(width_spec="+50")
+        geo.resize(width_spec="+50")
+        assert geo.effective_width == 500
+
+    def test_resize_atomic_on_junk(self):
+        geo = self._geo()
+        with pytest.raises(ValueError):
+            geo.resize(width_spec="+50", max_height_spec="junk")
+        assert geo.effective_width == 400       # width NOT applied
+        assert geo.effective_max_height == 500
+
+    def test_reset_size(self):
+        geo = self._geo()
+        geo.resize(width_spec="+100", max_height_spec="-100")
+        geo.reset_size()
+        assert geo.effective_width == 400
+        assert geo.effective_max_height == 500
+
+
+class TestApplyMovePayload:
+    def _geo(self):
+        return SessionGeometry(
+            config_position="top-center", config_width=400, config_max_height=500
+        )
+
+    def test_to(self):
+        geo = self._geo()
+        apply_move_payload(geo, {"cmd": "move", "to": "bottom-left"})
+        assert geo.effective_position == "bottom-left"
+
+    def test_step(self):
+        geo = self._geo()
+        apply_move_payload(geo, {"cmd": "move", "step": "down"})
+        assert geo.effective_position == "bottom-center"
+
+    def test_reset(self):
+        geo = self._geo()
+        geo.move_to("bottom-right")
+        apply_move_payload(geo, {"cmd": "move", "reset": True})
+        assert geo.effective_position == "top-center"
+
+    def test_no_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"cmd": "move"})
+
+    def test_two_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"to": "top-left", "step": "up"})
+
+    def test_unknown_slot_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"to": "middle-nowhere"})
+
+    def test_reset_false_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"reset": False})
+
+
+class TestApplyResizePayload:
+    def _geo(self):
+        return SessionGeometry(
+            config_position="top-center", config_width=400, config_max_height=500
+        )
+
+    def test_width_and_max_height(self):
+        geo = self._geo()
+        apply_resize_payload(geo, {"cmd": "resize", "width": "+50", "max_height": "300"})
+        assert geo.effective_width == 450
+        assert geo.effective_max_height == 300
+
+    def test_reset(self):
+        geo = self._geo()
+        geo.resize(width_spec="+100")
+        apply_resize_payload(geo, {"cmd": "resize", "reset": True})
+        assert geo.effective_width == 400
+
+    def test_no_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_resize_payload(self._geo(), {"cmd": "resize"})
+
+    def test_junk_spec_raises_and_is_atomic(self):
+        geo = self._geo()
+        with pytest.raises(ValueError):
+            apply_resize_payload(geo, {"width": "+50", "max_height": "junk"})
+        assert geo.effective_width == 400
