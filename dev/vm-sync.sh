@@ -16,8 +16,19 @@ set -euo pipefail
 
 VM_NAME="${VM_NAME:-aside-ubuntu-kde}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SSH_KEY="$HOME/.local/share/vmt/id_ed25519"
 VMT_DIR="$HOME/projects/vmt"
+
+# SSH key: $VMT_SSH_KEY if set, else first existing of vmt's data-dir key
+# and the conventional vmt-suffixed key (same order vmt itself uses).
+if [ -n "${VMT_SSH_KEY:-}" ]; then
+    SSH_KEY="$VMT_SSH_KEY"
+elif [ -e "$HOME/.local/share/vmt/id_ed25519" ]; then
+    SSH_KEY="$HOME/.local/share/vmt/id_ed25519"
+elif [ -e "$HOME/.ssh/id_ed25519_vmt" ]; then
+    SSH_KEY="$HOME/.ssh/id_ed25519_vmt"
+else
+    SSH_KEY="$HOME/.local/share/vmt/id_ed25519"
+fi
 
 REMOTE_DIR="/home/ubuntu/aside"
 
