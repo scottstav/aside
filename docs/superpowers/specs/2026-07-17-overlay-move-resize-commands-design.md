@@ -1,3 +1,18 @@
+---
+type: spec
+validated:
+  sha: aea29cf8991f8711511342d44e1722cbae8def7b
+  date: 2026-07-17T05:14:17Z
+  reviewers: [fact-check, solid-hygiene]
+  findings:
+    critical: 0
+    important: 0
+    medium: 2
+    low: 3
+    nitpick: 0
+  net_negative_remaining: 0
+---
+
 # Overlay move & resize commands — design
 
 **Date:** 2026-07-17
@@ -39,16 +54,34 @@ Same newline-delimited JSON protocol on `$XDG_RUNTIME_DIR/aside-overlay.sock`:
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"move","position":"top-left"}` | Move to an absolute slot (any of the six). |
-| `{"cmd":"move","position":"left"}` | Directional step: `up`, `down`, `left`, `right` move one slot from the current effective position, clamped at grid edges (no wrap). |
-| `{"cmd":"move","position":"reset"}` | Clear the override; return to config-defined position. |
+| `{"cmd":"move","to":"top-left"}` | Move to an absolute slot (any of the six). |
+| `{"cmd":"move","step":"left"}` | Directional step: `up`, `down`, `left`, `right` move one slot from the current effective position, clamped at grid edges (no wrap). |
+| `{"cmd":"move","reset":true}` | Clear the override; return to config-defined position. |
 | `{"cmd":"resize","width":"+50"}` | Relative width change (`"+N"` / `"-N"`). |
 | `{"cmd":"resize","width":"450"}` | Absolute width. |
 | `{"cmd":"resize","max_height":"-100"}` | Same forms for `max_height`. Both keys may appear in one command. |
 | `{"cmd":"resize","reset":true}` | Clear both size overrides; restore config dimensions. |
 
-Invalid values (unknown position, non-numeric size) are logged and ignored —
-consistent with the protocol's existing tolerance for malformed input.
+Exactly one of `to` / `step` / `reset` per `move` command; commands carrying
+none or more than one are rejected (logged, ignored).
+
+> **Design note (2026-07-17):** The `move` payload originally multiplexed
+> absolute slots, directions, and a `"reset"` sentinel through a single
+> `position` field, while `resize` used `reset:true` — two conventions on
+> one wire. Reviewer feedback: socket protocols ossify once bound to
+> compositor keybinds, and overloading one enum narrows future vocabulary
+> (e.g. a `"center"` slot would collide with a direction). Revised to
+> per-vocabulary keys (`to` = slot, `step` = direction) and a single reset
+> convention (`reset:true` on both commands), so validation is per-vocabulary
+> and future slot names cannot collide with direction names. CLI ergonomics
+> are unchanged.
+
+Invalid values (unknown position, non-numeric size) are logged and ignored.
+This extends the protocol's existing tolerance for malformed input (currently
+silently dropped) with a debug log for the new commands.
+*(Verified 2026-07-17: was incorrect — the existing protocol drops malformed
+input silently; `parse_command` and `_dispatch` have no log calls. Logging is
+new behavior, not existing consistency.)*
 
 ### CLI subcommands
 
@@ -70,7 +103,16 @@ the whole grid; two binds nudge width).
 
 ### `aside/overlay/positioning.py` (new, pure functions)
 
-- `normalize_position(position: str) -> tuple[str, str]` — maps a position
+This module is the **single interpreter** of position strings and the
+**single source** of the slot/direction vocabulary. No other module parses
+position strings or hardcodes the valid-value sets.
+
+- Constants: `SLOTS` (the six canonical `row-col` names), `DIRECTIONS`
+  (`up`, `down`, `left`, `right`), and named size bounds
+  (`MIN_WIDTH = 250`, `MIN_MAX_HEIGHT = 150`, `MAX_DIMENSION = 4000`).
+  `cli.py` (argparse `choices`) and the overlay-side validation both import
+  these — defense in depth without duplicated enums.
+- `normalize_position(position: str) -> tuple[str, str]` — maps any position
   string to `(row, col)` using the same substring semantics the window
   applies today (`"bottom" in s` → bottom row else top; `"left"`/`"right"`
   substring → that column, else center). Needed because config accepts loose
@@ -80,34 +122,77 @@ the whole grid; two binds nudge width).
   directional moves. Normalizes `current`, then steps on the 2-row
   (`top`, `bottom`) × 3-column (`left`, `center`, `right`) grid.
   Steps clamp at edges (no wrap). Returns a canonical slot name.
+- `anchor_spec(position: str) -> ...` — translates a position string (via
+  `normalize_position`) into a declarative description of which edges to
+  anchor and which config margins apply. The window's `_apply_position`
+  consumes this and only makes the corresponding layer-shell calls — the
+  window contains zero position-string parsing.
 - `parse_size_spec(spec: str, current: int) -> int` — `"+50"`/`"-50"`
   relative to `current`, bare `"450"` absolute. Raises `ValueError` on junk.
-- `clamp_size(value: int, minimum: int, maximum: int) -> int` — floors:
-  width ≥ 250, max_height ≥ 150; ceiling: monitor-independent generous cap
-  (e.g. 4000) since layer-shell clips to output anyway.
+- `clamp_size(value: int, minimum: int, maximum: int) -> int` — clamps to
+  the named bounds above.
 
 No GTK imports — fully unit-testable.
+
+> **Design note (2026-07-17):** Reviewer feedback flagged that loose-string
+> interpretation would otherwise live in two modules (`normalize_position`
+> for stepping, `_apply_position` for anchoring) that could drift silently —
+> only one of them unit-testable — and that the slot/direction vocabulary
+> appeared in three places (argparse `choices`, overlay validation, grid
+> model). Revised so `positioning.py` owns the entire vocabulary and all
+> string interpretation; the window translates its declarative output to
+> layer-shell calls, and CLI/overlay validation import the same constants.
+
+### `SessionGeometry` (in `aside/overlay/positioning.py`)
+
+A small dataclass owning the session-override lifecycle — the "effective
+value = override or config" resolution lives in exactly one place:
+
+- Constructed from config values (`position`, `width`, `max_height`).
+- Fields: the three config defaults plus three optional overrides,
+  all in-memory only.
+- Properties: `effective_position`, `effective_width`,
+  `effective_max_height`.
+- Methods: `move_to(slot)`, `step(direction)` (delegates to
+  `step_position`), `resize(width_spec, max_height_spec)` (delegates to
+  `parse_size_spec` + `clamp_size`), `reset_position()`, `reset_size()`.
+
+Pure and unit-testable; the window owns one instance and never resolves
+overrides itself.
+
+> **Design note (2026-07-17):** Reviewer feedback flagged that three parallel
+> `_x_override` attributes plus scattered `override if not None else config`
+> sites would add to `OverlayWindow`'s already-broad attribute soup (~635
+> lines, state machine + 12 socket handlers + timers + IPC). Revised to
+> group override state and resolution into `SessionGeometry`, giving future
+> geometry features (per-edge margins, persistence if ever wanted) one
+> obvious home.
 
 ### `aside/overlay/window.py`
 
 - Extract the anchoring block currently inline in `__init__`
-  (`window.py:71-89`) into `_apply_position(position: str)`: clear all four
-  anchors, then set anchors + margins for the given slot. `__init__` calls it
-  with the config position.
-- New state: `_position_override: str | None`, `_width_override: int | None`,
-  `_max_height_override: int | None` — all in-memory only. Effective values
-  resolve as `override if override is not None else config`.
+  (`window.py:71-89`) into `_apply_position(position: str)`: translate the
+  position via `positioning.anchor_spec` into anchor/margin settings, clear
+  all four anchors, then apply. No string parsing in the window. `__init__`
+  calls it with the config position.
+- New state: one `SessionGeometry` instance (`self._geometry`), constructed
+  from config. Session-only by nature — gone on overlay restart.
 - Internal reads of `self._default_width` / `self._max_height` in sizing code
-  (`_on_content_changed`, CONVO sizing in `_set_state`, `handle_clear`) switch
-  to effective-value accessors (`_effective_width()`, `_effective_max_height()`).
-- `handle_move(spec: str)`: resolve `reset` / absolute slot / directional step
-  (via `step_position` against the current effective position), store
-  override, call `_apply_position`. Works in any state including HIDDEN
-  (takes effect on next show — the layer-shell anchor calls are valid on a
-  hidden window).
-- `handle_resize(width_spec, max_height_spec, reset)`: parse via
-  `parse_size_spec` + `clamp_size`, store overrides, then re-apply:
-  `set_size_request(effective_width, ...)`,
+  switch to `self._geometry.effective_width` /
+  `self._geometry.effective_max_height`. All three `set_size_request` call
+  sites (`_on_content_changed`, CONVO sizing in `_set_state`,
+  `handle_clear`) plus the `measure()` width in `_on_content_changed`
+  switch together — a stale width at any one of them would flicker back on
+  the next content change.
+- `handle_move(payload: dict)`: exactly one of `to` / `step` / `reset`;
+  validate against `positioning.SLOTS` / `positioning.DIRECTIONS`, update
+  `_geometry` accordingly, call
+  `_apply_position(self._geometry.effective_position)`. Works in any state
+  including HIDDEN (takes effect on next show — the layer-shell anchor
+  calls are valid on a hidden window).
+- `handle_resize(payload: dict)`: `reset:true` or size specs; delegate
+  parsing/clamping to `_geometry.resize` (rejecting junk with a debug log),
+  then re-apply: `set_size_request(effective_width, ...)`,
   `_history.set_max_content_height(effective_max_height)`, and reset
   `_current_window_h` so `_on_content_changed` recomputes cleanly.
 
@@ -122,9 +207,12 @@ Two new dispatch branches in `_dispatch`: `move` → `handle_move`,
 ### `aside/cli.py`
 
 `move` and `resize` subparsers + `_cmd_move` / `_cmd_resize` handlers
-using `_send_overlay`. Position/direction validation happens client-side
-(argparse `choices`) *and* overlay-side (defense in depth; the socket is
-a public interface).
+using `_send_overlay`. `_cmd_move` maps its argument onto the wire format:
+a slot name → `{"to": ...}`, a direction → `{"step": ...}`, `reset` →
+`{"reset": true}`. Argparse `choices` are imported from
+`positioning.SLOTS` / `positioning.DIRECTIONS`; the overlay validates
+against the same constants (defense in depth; the socket is a public
+interface — but a single-sourced vocabulary).
 
 ## Edge cases
 
@@ -139,7 +227,9 @@ a public interface).
 - **Margins:** config margins apply to whichever slot is active, with the
   same interpretation as today (including the existing quirk that
   `margin_top` is reused for bottom-anchored positions — preserved as-is).
-- **Malformed socket input:** logged, ignored, connection continues.
+- **Malformed socket input:** ignored, connection continues (existing
+  behavior); the new `move`/`resize` handlers additionally log rejected
+  values at debug level.
 
 ## Out of scope
 
@@ -152,8 +242,11 @@ a public interface).
 
 - **pytest (no compositor):** `positioning.py` — directional stepping from
   every slot in every direction (24 cases, clamping verified), absolute slot
-  passthrough, `parse_size_spec` (relative/absolute/junk), `clamp_size`
-  bounds; CLI arg parsing → expected socket payloads (mock `_send_overlay`).
+  passthrough, `normalize_position` loose-string cases, `anchor_spec`
+  output, `parse_size_spec` (relative/absolute/junk), `clamp_size` bounds;
+  `SessionGeometry` — override precedence, move/step/resize/reset lifecycle;
+  CLI arg parsing → expected socket payloads including the `to`/`step`/
+  `reset` mapping (mock `_send_overlay`).
 - **VM (manual, `dev/vm-sync.sh`):** all six slots via absolute moves;
   directional stepping walk around the grid; `move reset`; width/max-height
   nudges while a response is streaming; resize in CONVO view; overrides
