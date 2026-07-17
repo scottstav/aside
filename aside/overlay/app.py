@@ -136,6 +136,10 @@ class OverlayApp(Adw.Application):
             self._window.handle_audio_level(cmd.get("data", 0.0))
         elif name == "input":
             self._window.handle_input()
+        elif name == "move":
+            self._window.handle_move(cmd)
+        elif name == "resize":
+            self._window.handle_resize(cmd)
         elif name in ("reply", "convo"):
             self._window.handle_convo(cmd.get("conversation_id", ""))
         return False  # remove from idle queue
