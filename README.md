@@ -100,6 +100,41 @@ theme = "my-theme"
 
 Available `@define-color` names: `bg`, `fg`, `border_color`, `accent`, `user_accent`, `code_bg`. See the [default theme](aside/overlay/themes/default/style.css) for all styleable classes.
 
+### shadows, blur, and compositor effects
+
+aside draws nothing outside `.overlay-container` — the layer-shell surface is
+exactly the size of the rounded container, and GTK's window decoration shadow
+is disabled. If you see a drop shadow, a blurred halo, or solid square corners
+around the popup, your compositor is drawing them via its layer-shell effect
+rules, and they can only be adjusted there. The overlay's layer namespace is
+`aside`:
+
+```
+# SwayFX — disable the shadow entirely:
+layer_effects "aside" shadows disable
+# ...or keep compositor effects but shape them to match your theme:
+layer_effects "aside" { corner_radius 12; blur_ignore_transparent enable; }
+
+# Hyprland — never shadows layer surfaces; if you enable blur for the layer,
+# add an alpha cutoff so the transparent corners stay clear:
+layerrule = match:namespace = aside, blur 1
+layerrule = match:namespace = aside, ignore_alpha 0.2
+```
+
+On niri, layer-surface shadows are opt-in per `layer-rule`; use
+`geometry-corner-radius` there to round them to match your theme.
+
+To add a shadow from the theme itself, give the container transparent space to
+draw into — margin is inside the surface, so the shadow follows the container's
+rounded corners and transparency:
+
+```css
+.overlay-container {
+    margin: 24px;
+    box-shadow: 0 6px 24px alpha(black, 0.6);
+}
+```
+
 ## configuration
 
 Behavior is configured via `~/.config/aside/config.toml`. Visual styling goes in themes (above), not config.
