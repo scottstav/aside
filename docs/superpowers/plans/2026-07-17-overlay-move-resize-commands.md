@@ -1,3 +1,18 @@
+---
+type: plan
+validated:
+  sha: da1d787f229e760dd30d7333c290b3132b7a4d99
+  date: 2026-07-17T05:37:40Z
+  reviewers: [fact-check, solid-hygiene]
+  findings:
+    critical: 0
+    important: 0
+    medium: 2
+    low: 3
+    nitpick: 1
+  net_negative_remaining: 0
+---
+
 # Overlay Move & Resize Commands Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -306,6 +321,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01CirL5c2x8Te4dRk5VEY9Rc"
 ```
 
+> **Design note (2026-07-17, plan validation):** `anchor_spec` returning
+> config key names (`"margin_top"` etc.) couples the pure module to the
+> config schema — flagged by review, kept deliberately: it puts the
+> margin_top-for-bottom quirk in exactly one documented, unit-tested place
+> (the spec mandates preserving that quirk). A future config-key rename
+> touches this one function plus its test. The window-side redundant
+> `_overlay_cfg` alias from the same finding was dropped (Task 5 reads
+> `self._config.get("overlay", {})` at the single use site).
+
 ---
 
 ### Task 3: `parse_size_spec` and `clamp_size`
@@ -427,14 +451,27 @@ Claude-Session: https://claude.ai/code/session_01CirL5c2x8Te4dRk5VEY9Rc"
 
 **Interfaces:**
 - Consumes: `SLOTS`, `step_position`, `parse_size_spec`, `clamp_size`, `MIN_WIDTH`, `MIN_MAX_HEIGHT`, `MAX_DIMENSION` (Tasks 1, 3).
-- Produces: `SessionGeometry` dataclass with constructor `SessionGeometry(config_position: str, config_width: int, config_max_height: int)`; properties `effective_position: str`, `effective_width: int`, `effective_max_height: int`; methods `move_to(slot: str) -> None` (ValueError on unknown slot), `step(direction: str) -> None` (ValueError on unknown direction), `resize(width_spec=None, max_height_spec=None) -> None` (ValueError on junk; atomic — junk in either spec leaves BOTH unchanged), `reset_position() -> None`, `reset_size() -> None`.
+- Produces: `SessionGeometry` dataclass with constructor `SessionGeometry(config_position: str, config_width: int, config_max_height: int)`; properties `effective_position: str`, `effective_width: int`, `effective_max_height: int`; methods `move_to(slot: str) -> None` (ValueError on unknown slot), `step(direction: str) -> None` (ValueError on unknown direction), `resize(width_spec=None, max_height_spec=None) -> None` (ValueError on junk; atomic — junk in either spec leaves BOTH unchanged), `reset_position() -> None`, `reset_size() -> None`. Also the payload interpreters `apply_move_payload(geometry: SessionGeometry, payload: dict) -> None` and `apply_resize_payload(geometry: SessionGeometry, payload: dict) -> None` — both validate the decoded wire dict and mutate `geometry`, raising `ValueError` on any invalid payload. All wire-format knowledge lives here; the window never inspects payload shape.
+
+> **Design note (2026-07-17, plan validation):** Reviewer feedback flagged
+> that the exactly-one-of-`to`/`step`/`reset` check and the resize
+> presence/reset branching are pure dict logic, and placing them in
+> `OverlayWindow` (which cannot be unit-tested without a compositor) left
+> the feature's only new branching logic untested until VM verification.
+> Moved into `positioning.py` as `apply_move_payload`/`apply_resize_payload`
+> so they're covered by pytest and the window handlers shrink to thin
+> try/except delegation.
 
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/test_overlay_positioning.py`:
 
 ```python
-from aside.overlay.positioning import SessionGeometry
+from aside.overlay.positioning import (
+    SessionGeometry,
+    apply_move_payload,
+    apply_resize_payload,
+)
 
 
 class TestSessionGeometry:
@@ -515,6 +552,74 @@ class TestSessionGeometry:
         geo.reset_size()
         assert geo.effective_width == 400
         assert geo.effective_max_height == 500
+
+
+class TestApplyMovePayload:
+    def _geo(self):
+        return SessionGeometry(
+            config_position="top-center", config_width=400, config_max_height=500
+        )
+
+    def test_to(self):
+        geo = self._geo()
+        apply_move_payload(geo, {"cmd": "move", "to": "bottom-left"})
+        assert geo.effective_position == "bottom-left"
+
+    def test_step(self):
+        geo = self._geo()
+        apply_move_payload(geo, {"cmd": "move", "step": "down"})
+        assert geo.effective_position == "bottom-center"
+
+    def test_reset(self):
+        geo = self._geo()
+        geo.move_to("bottom-right")
+        apply_move_payload(geo, {"cmd": "move", "reset": True})
+        assert geo.effective_position == "top-center"
+
+    def test_no_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"cmd": "move"})
+
+    def test_two_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"to": "top-left", "step": "up"})
+
+    def test_unknown_slot_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"to": "middle-nowhere"})
+
+    def test_reset_false_raises(self):
+        with pytest.raises(ValueError):
+            apply_move_payload(self._geo(), {"reset": False})
+
+
+class TestApplyResizePayload:
+    def _geo(self):
+        return SessionGeometry(
+            config_position="top-center", config_width=400, config_max_height=500
+        )
+
+    def test_width_and_max_height(self):
+        geo = self._geo()
+        apply_resize_payload(geo, {"cmd": "resize", "width": "+50", "max_height": "300"})
+        assert geo.effective_width == 450
+        assert geo.effective_max_height == 300
+
+    def test_reset(self):
+        geo = self._geo()
+        geo.resize(width_spec="+100")
+        apply_resize_payload(geo, {"cmd": "resize", "reset": True})
+        assert geo.effective_width == 400
+
+    def test_no_keys_raises(self):
+        with pytest.raises(ValueError):
+            apply_resize_payload(self._geo(), {"cmd": "resize"})
+
+    def test_junk_spec_raises_and_is_atomic(self):
+        geo = self._geo()
+        with pytest.raises(ValueError):
+            apply_resize_payload(geo, {"width": "+50", "max_height": "junk"})
+        assert geo.effective_width == 400
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -594,6 +699,42 @@ class SessionGeometry:
     def reset_size(self) -> None:
         self.width_override = None
         self.max_height_override = None
+
+
+def apply_move_payload(geometry: SessionGeometry, payload: dict) -> None:
+    """Validate a decoded move payload and apply it to the geometry.
+
+    Exactly one of to/step/reset must be present. Raises ValueError on
+    any invalid payload — the caller decides how to report it.
+    """
+    keys = [k for k in ("to", "step", "reset") if k in payload]
+    if len(keys) != 1:
+        raise ValueError(f"move: expected exactly one of to/step/reset, got {sorted(payload)}")
+    key = keys[0]
+    if key == "to":
+        geometry.move_to(payload["to"])
+    elif key == "step":
+        geometry.step(payload["step"])
+    elif not payload["reset"]:
+        raise ValueError("move: reset must be true")
+    else:
+        geometry.reset_position()
+
+
+def apply_resize_payload(geometry: SessionGeometry, payload: dict) -> None:
+    """Validate a decoded resize payload and apply it to the geometry.
+
+    Either reset:true, or at least one of width/max_height. Raises
+    ValueError on any invalid payload.
+    """
+    if payload.get("reset"):
+        geometry.reset_size()
+        return
+    width_spec = payload.get("width")
+    max_height_spec = payload.get("max_height")
+    if width_spec is None and max_height_spec is None:
+        raise ValueError("resize: requires width, max_height, or reset")
+    geometry.resize(width_spec, max_height_spec)
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -625,7 +766,7 @@ Claude-Session: https://claude.ai/code/session_01CirL5c2x8Te4dRk5VEY9Rc"
 - Modify: `aside/overlay/app.py` (`_dispatch`, after the `"input"` branch at line ~137)
 
 **Interfaces:**
-- Consumes: `SessionGeometry`, `anchor_spec`, `SLOTS`, `DIRECTIONS` from `aside.overlay.positioning` (Tasks 1, 2, 4).
+- Consumes: `SessionGeometry`, `anchor_spec`, `apply_move_payload`, `apply_resize_payload` from `aside.overlay.positioning` (Tasks 1, 2, 4).
 - Produces: `OverlayWindow.handle_move(payload: dict) -> None`, `OverlayWindow.handle_resize(payload: dict) -> None` — both take the full decoded command dict; `OverlayWindow._apply_position(position: str) -> None`. `app.py` dispatches `{"cmd":"move",...}` → `handle_move(cmd)` and `{"cmd":"resize",...}` → `handle_resize(cmd)`.
 
 No new unit tests in this task: `OverlayWindow` cannot be instantiated without a Wayland compositor + layer-shell (existing `tests/test_overlay_window.py` only tests the state enum for this reason). All logic added here is thin delegation to `positioning.py`, which Tasks 1-4 covered. Behavior is verified on the VM in Task 7. The full suite must still pass (imports, no regressions).
@@ -635,12 +776,16 @@ No new unit tests in this task: `OverlayWindow` cannot be instantiated without a
 Add after the existing `from aside.overlay.reply_input import ReplyInput` import:
 
 ```python
-from aside.overlay.positioning import SessionGeometry, anchor_spec
+from aside.overlay.positioning import (
+    SessionGeometry,
+    anchor_spec,
+    apply_move_payload,
+    apply_resize_payload,
+)
 ```
 
-(No `SLOTS`/`DIRECTIONS` here — slot and direction validation is delegated
-to `SessionGeometry.move_to`/`.step`, which raise `ValueError`; the window
-only catches.)
+(No `SLOTS`/`DIRECTIONS` here — all payload validation is delegated to the
+pure functions, which raise `ValueError`; the window only catches.)
 
 - [ ] **Step 2: Replace config-frozen dimensions with `SessionGeometry` in `__init__`**
 
@@ -660,7 +805,6 @@ with:
 
 ```python
         # Dimensions & position: config defaults + session-only overrides
-        self._overlay_cfg = overlay_cfg
         self._geometry = SessionGeometry(
             config_position=overlay_cfg.get("position", "top-center"),
             config_width=overlay_cfg.get("width", 400),
@@ -725,62 +869,53 @@ Add these methods to `OverlayWindow` (place after `handle_convo` / `_expand_to_c
     def _apply_position(self, position: str) -> None:
         """Anchor the surface for `position` — no string parsing here."""
         spec = anchor_spec(position)
+        overlay_cfg = self._config.get("overlay", {})
         margin_defaults = {"margin_top": 10, "margin_left": 0, "margin_right": 0}
         for name, edge in _LAYER_EDGES.items():
             anchored = name in spec
             Gtk4LayerShell.set_anchor(self, edge, anchored)
             if anchored:
                 key = spec[name]
-                margin = self._overlay_cfg.get(key, margin_defaults[key])
+                margin = overlay_cfg.get(key, margin_defaults[key])
                 Gtk4LayerShell.set_margin(self, edge, margin)
             else:
                 Gtk4LayerShell.set_margin(self, edge, 0)
 
+    def _apply_geometry(self) -> None:
+        """Apply effective width/height for the current state.
+
+        The single home of the state-conditional sizing rule: CONVO pins
+        the window at effective max_height; all other states use natural
+        height capped by _on_content_changed.
+        """
+        width = self._geometry.effective_width
+        max_h = self._geometry.effective_max_height
+        self._history.set_max_content_height(max_h)
+        if self._state == OverlayState.CONVO:
+            self.set_size_request(width, max_h)
+            self._current_window_h = max_h
+        else:
+            self.set_size_request(width, -1)
+            self._on_content_changed(None)
+
     def handle_move(self, payload: dict) -> None:
-        """Move the overlay: exactly one of to/step/reset in the payload."""
-        keys = [k for k in ("to", "step", "reset") if k in payload]
-        if len(keys) != 1:
-            log.debug("move: expected exactly one of to/step/reset, got %r", payload)
-            return
-        key = keys[0]
+        """Move the overlay — validation delegated to positioning."""
         try:
-            if key == "to":
-                self._geometry.move_to(payload["to"])
-            elif key == "step":
-                self._geometry.step(payload["step"])
-            else:
-                self._geometry.reset_position()
+            apply_move_payload(self._geometry, payload)
         except ValueError:
-            log.debug("move: invalid value %r", payload.get(key))
+            log.debug("move: invalid payload %r", payload)
             return
         self._apply_position(self._geometry.effective_position)
 
     def handle_resize(self, payload: dict) -> None:
-        """Resize the overlay: width/max_height specs, or reset:true."""
-        if payload.get("reset"):
-            self._geometry.reset_size()
-        else:
-            width_spec = payload.get("width")
-            max_height_spec = payload.get("max_height")
-            if width_spec is None and max_height_spec is None:
-                log.debug("resize: no width/max_height/reset given")
-                return
-            try:
-                self._geometry.resize(width_spec, max_height_spec)
-            except ValueError:
-                log.debug("resize: invalid specs %r", payload)
-                return
-        # Re-apply effective sizes.
-        self._history.set_max_content_height(self._geometry.effective_max_height)
+        """Resize the overlay — validation delegated to positioning."""
+        try:
+            apply_resize_payload(self._geometry, payload)
+        except ValueError:
+            log.debug("resize: invalid payload %r", payload)
+            return
         self._current_window_h = 0
-        if self._state == OverlayState.CONVO:
-            self.set_size_request(
-                self._geometry.effective_width, self._geometry.effective_max_height
-            )
-            self._current_window_h = self._geometry.effective_max_height
-        else:
-            self.set_size_request(self._geometry.effective_width, -1)
-            self._on_content_changed(None)
+        self._apply_geometry()
 ```
 
 - [ ] **Step 5: Switch every remaining `_default_width` / `_max_height` read to the geometry**
@@ -824,13 +959,21 @@ In `_set_state` (currently `window.py:255-258`), replace:
 with:
 
 ```python
-        # Window sizing for CONVO: fixed at max_height, history fills remaining space
+        # Window sizing for CONVO: single rule lives in _apply_geometry
         if new_state == OverlayState.CONVO:
-            self.set_size_request(
-                self._geometry.effective_width, self._geometry.effective_max_height
-            )
-            self._current_window_h = self._geometry.effective_max_height
+            self._apply_geometry()
 ```
+
+(`self._state` is already `new_state` at this point — assigned at the top
+of `_set_state` — so `_apply_geometry` sees CONVO and pins the height.
+`handle_clear` deliberately does NOT use `_apply_geometry`: clearing resets
+to natural height for the next open regardless of the outgoing state.)
+
+> **Design note (2026-07-17, plan validation):** Reviewer feedback flagged
+> that `handle_resize` was adding a third copy of the CONVO/non-CONVO
+> sizing branch. Collapsed into one `_apply_geometry` method owning that
+> rule, called from both `_set_state`'s CONVO block and `handle_resize` —
+> future sizing changes touch one site.
 
 In `handle_clear` (currently `window.py:331-332`), replace:
 
@@ -871,7 +1014,7 @@ with:
 ```
 
 Then verify no stragglers: `grep -n "_default_width\|_max_height\b" aside/overlay/window.py`
-Expected: only matches inside `self._geometry.effective_max_height` expressions (and none for `_default_width`). Note `max_height = overlay_cfg.get(...)` from the old code must be fully gone.
+Expected: only matches inside `self._geometry.effective_max_height` expressions and the single `config_max_height=` kwarg in the `SessionGeometry(...)` constructor call (`config_max_height` contains `_max_height` at a word boundary — that hit is expected, not a straggler). None for `_default_width`. The old standalone `max_height = overlay_cfg.get(...)` local must be fully gone.
 
 - [ ] **Step 6: Add dispatch branches in `app.py`**
 
@@ -883,6 +1026,10 @@ In `_dispatch` (`aside/overlay/app.py`), after the `elif name == "input":` branc
         elif name == "resize":
             self._window.handle_resize(cmd)
 ```
+
+(Two more branches on the existing if/elif chain — consistent with the
+current pattern; converting `_dispatch` to a handler table was reviewed
+and deliberately left out of this plan's scope.)
 
 - [ ] **Step 7: Run the full suite**
 
@@ -955,7 +1102,9 @@ Add to class `TestArgumentParsing`:
         assert args.reset is True
 ```
 
-Add a new test class (module-level, alongside the existing classes; `argparse` is already imported in the file — if not, add `import argparse`):
+Add a new test class (module-level, alongside the existing classes).
+`argparse` is NOT currently imported in `tests/test_cli.py` — add
+`import argparse` alongside the existing imports (after `import asyncio`):
 
 ```python
 class TestMoveResizeHandlers:
@@ -1039,6 +1188,8 @@ Near `_cmd_view` (~line 290), add the handlers:
 ```python
 def _cmd_move(args: argparse.Namespace) -> None:
     """Move the overlay to a slot, step a direction, or reset."""
+    # Membership disambiguation relies on SLOTS, DIRECTIONS, and "reset"
+    # being disjoint vocabularies (they are, by the spec).
     if args.where in SLOTS:
         _send_overlay({"cmd": "move", "to": args.where})
     elif args.where in DIRECTIONS:
