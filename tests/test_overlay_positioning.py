@@ -116,3 +116,48 @@ class TestAnchorSpec:
 
     def test_loose_string(self):
         assert anchor_spec("bottom") == {"bottom": "margin_top"}
+
+
+from aside.overlay.positioning import clamp_size, parse_size_spec
+
+
+class TestParseSizeSpec:
+    def test_relative_plus(self):
+        assert parse_size_spec("+50", 400) == 450
+
+    def test_relative_minus(self):
+        assert parse_size_spec("-50", 400) == 350
+
+    def test_absolute_string(self):
+        assert parse_size_spec("450", 400) == 450
+
+    def test_absolute_int(self):
+        # JSON senders may pass a bare number.
+        assert parse_size_spec(450, 400) == 450
+
+    def test_whitespace_tolerated(self):
+        assert parse_size_spec(" +50 ", 400) == 450
+
+    def test_junk_raises(self):
+        with pytest.raises(ValueError):
+            parse_size_spec("wide", 400)
+
+    def test_empty_raises(self):
+        with pytest.raises(ValueError):
+            parse_size_spec("", 400)
+
+    def test_bool_raises(self):
+        # True is an int subclass; reject it explicitly.
+        with pytest.raises(ValueError):
+            parse_size_spec(True, 400)
+
+
+class TestClampSize:
+    def test_below_floor(self):
+        assert clamp_size(100, 250, 4000) == 250
+
+    def test_above_ceiling(self):
+        assert clamp_size(9999, 250, 4000) == 4000
+
+    def test_in_range(self):
+        assert clamp_size(400, 250, 4000) == 400

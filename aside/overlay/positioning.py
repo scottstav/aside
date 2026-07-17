@@ -64,3 +64,27 @@ def anchor_spec(position: str) -> dict[str, str]:
     elif col == "right":
         spec["right"] = "margin_right"
     return spec
+
+
+def parse_size_spec(spec: str | int, current: int) -> int:
+    """Parse a size spec: "+50"/"-50" relative to current, "450" absolute.
+
+    A plain int is absolute. Raises ValueError on anything else.
+    """
+    if isinstance(spec, bool):
+        raise ValueError(f"invalid size spec: {spec!r}")
+    if isinstance(spec, int):
+        return spec
+    if not isinstance(spec, str):
+        raise ValueError(f"invalid size spec: {spec!r}")
+    s = spec.strip()
+    if not s:
+        raise ValueError("empty size spec")
+    if s[0] in "+-":
+        return current + int(s)  # int("+50") == 50, int("-50") == -50
+    return int(s)
+
+
+def clamp_size(value: int, minimum: int, maximum: int) -> int:
+    """Clamp value into [minimum, maximum]."""
+    return max(minimum, min(maximum, value))
