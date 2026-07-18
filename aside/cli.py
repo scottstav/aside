@@ -230,7 +230,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     resize_cmd.add_argument(
         "--reset", action="store_true", default=False,
-        help="Restore config width/max_height",
+        help="Restore config width/max_height (overrides --width/--max-height)",
     )
 
     # aside reply [CONVERSATION_ID] [TEXT] [--mic]

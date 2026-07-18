@@ -54,6 +54,8 @@ aside reply abc123 "tell me more"
 aside input                     # open conversation picker
 aside view <id>                 # view conversation in overlay
 aside reply <id>                # open reply input for conversation
+aside move bottom-right         # move overlay (slot, direction, or reset)
+aside resize --width +50        # resize overlay (session-only)
 
 # state
 aside status                    # JSON, great for status bars

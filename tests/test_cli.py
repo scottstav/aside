@@ -1180,6 +1180,10 @@ class TestMoveResizeHandlers:
         _cmd_resize(argparse.Namespace(width=None, max_height=None, reset=True))
         assert self.sent == [{"cmd": "resize", "reset": True}]
 
+    def test_resize_reset_wins_over_size_specs(self):
+        _cmd_resize(argparse.Namespace(width="100", max_height="300", reset=True))
+        assert self.sent == [{"cmd": "resize", "reset": True}]
+
     def test_resize_no_args_exits_nonzero(self, capsys):
         with pytest.raises(SystemExit) as exc:
             _cmd_resize(argparse.Namespace(width=None, max_height=None, reset=False))
