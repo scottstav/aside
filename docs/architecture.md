@@ -59,6 +59,15 @@ Located at `$XDG_RUNTIME_DIR/aside-overlay.sock`. JSON commands, newline-delimit
 | `{"cmd":"input"}` | Open conversation picker |
 | `{"cmd":"reply","conversation_id":"..."}` | Open reply input for conversation |
 | `{"cmd":"convo","conversation_id":"..."}` | Show full conversation history |
+| `{"cmd":"move","to":"top-left"}` | Move to an absolute slot (six positions) |
+| `{"cmd":"move","step":"left"}` | Step one slot (`up`/`down`/`left`/`right`, clamped) |
+| `{"cmd":"move","reset":true}` | Return to the config-defined position |
+| `{"cmd":"resize","width":"+50","max_height":"300"}` | Resize; `"+N"`/`"-N"` relative, bare number absolute |
+| `{"cmd":"resize","reset":true}` | Restore config width/max_height |
+
+Move/resize apply session-only overrides (`SessionGeometry` in
+`aside/overlay/positioning.py`) — config on disk is never modified, and an
+overlay restart returns to the configured geometry.
 
 ## Data flow
 

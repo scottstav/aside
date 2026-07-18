@@ -43,6 +43,8 @@ The overlay listens on `$XDG_RUNTIME_DIR/aside-overlay.sock` (UNIX stream). JSON
 - `{"cmd":"input"}` — open conversation picker
 - `{"cmd":"reply","conversation_id":"..."}` — open reply input
 - `{"cmd":"convo","conversation_id":"..."}` — show conversation history
+- `{"cmd":"move","to":"top-left"}` / `{"cmd":"move","step":"left"}` / `{"cmd":"move","reset":true}` — reposition overlay between the six anchor slots (session-only; exactly one key per command)
+- `{"cmd":"resize","width":"+50","max_height":"300"}` / `{"cmd":"resize","reset":true}` — resize overlay; `"+N"`/`"-N"` relative, bare number absolute (session-only)
 
 The daemon listens on `$XDG_RUNTIME_DIR/aside.sock`. The CLI sends queries there.
 

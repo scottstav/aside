@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import socket
@@ -11,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from aside.cli import main, _send, _send_overlay, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_input, _cmd_view, _cmd_query, _cmd_set_key, _cmd_get_key, _cmd_models, _cmd_model
+from aside.cli import main, _send, _send_overlay, _send_recv, _build_parser, _cmd_ls, _cmd_show, _cmd_open, _cmd_rm, _cmd_reply, _cmd_input, _cmd_view, _cmd_query, _cmd_set_key, _cmd_get_key, _cmd_models, _cmd_model, _cmd_move, _cmd_resize
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +132,36 @@ class TestArgumentParsing:
         assert args.conversation_id == "conv-42"
         assert args.mic is True
         assert args.text is None
+
+    def test_move_absolute_slot(self):
+        args = self.parser.parse_args(["move", "top-left"])
+        assert args.command == "move"
+        assert args.where == "top-left"
+
+    def test_move_direction(self):
+        args = self.parser.parse_args(["move", "up"])
+        assert args.where == "up"
+
+    def test_move_reset(self):
+        args = self.parser.parse_args(["move", "reset"])
+        assert args.where == "reset"
+
+    def test_move_rejects_unknown(self):
+        with pytest.raises(SystemExit):
+            self.parser.parse_args(["move", "diagonal"])
+
+    def test_resize_width(self):
+        args = self.parser.parse_args(["resize", "--width", "+50"])
+        assert args.command == "resize"
+        assert args.width == "+50"
+        assert args.max_height is None
+        assert args.reset is False
+
+    def test_resize_max_height_and_reset_flag(self):
+        args = self.parser.parse_args(["resize", "--max-height", "-100"])
+        assert args.max_height == "-100"
+        args = self.parser.parse_args(["resize", "--reset"])
+        assert args.reset is True
 
     def test_set_key_basic(self):
         args = self.parser.parse_args(["set-key", "anthropic", "sk-test"])
@@ -1110,6 +1141,54 @@ class TestViewCommand:
 
         assert len(overlay_sent) == 1
         assert overlay_sent[0] == {"cmd": "convo", "conversation_id": "full-uuid-here"}
+
+
+# ---------------------------------------------------------------------------
+# move and resize commands
+# ---------------------------------------------------------------------------
+
+
+class TestMoveResizeHandlers:
+    """_cmd_move/_cmd_resize map CLI args onto the wire format."""
+
+    @pytest.fixture(autouse=True)
+    def _capture(self, monkeypatch):
+        self.sent = []
+        monkeypatch.setattr("aside.cli._send_overlay", lambda m: self.sent.append(m))
+
+    def test_move_slot_maps_to_to(self):
+        _cmd_move(argparse.Namespace(where="bottom-right"))
+        assert self.sent == [{"cmd": "move", "to": "bottom-right"}]
+
+    def test_move_direction_maps_to_step(self):
+        _cmd_move(argparse.Namespace(where="left"))
+        assert self.sent == [{"cmd": "move", "step": "left"}]
+
+    def test_move_reset_maps_to_reset_true(self):
+        _cmd_move(argparse.Namespace(where="reset"))
+        assert self.sent == [{"cmd": "move", "reset": True}]
+
+    def test_resize_specs(self):
+        _cmd_resize(argparse.Namespace(width="+50", max_height="300", reset=False))
+        assert self.sent == [{"cmd": "resize", "width": "+50", "max_height": "300"}]
+
+    def test_resize_width_only(self):
+        _cmd_resize(argparse.Namespace(width="450", max_height=None, reset=False))
+        assert self.sent == [{"cmd": "resize", "width": "450"}]
+
+    def test_resize_reset(self):
+        _cmd_resize(argparse.Namespace(width=None, max_height=None, reset=True))
+        assert self.sent == [{"cmd": "resize", "reset": True}]
+
+    def test_resize_reset_wins_over_size_specs(self):
+        _cmd_resize(argparse.Namespace(width="100", max_height="300", reset=True))
+        assert self.sent == [{"cmd": "resize", "reset": True}]
+
+    def test_resize_no_args_exits_nonzero(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            _cmd_resize(argparse.Namespace(width=None, max_height=None, reset=False))
+        assert exc.value.code == 2
+        assert self.sent == []
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aside.config import load_config, load_excluded_models, resolve_archive_dir, resolve_conversations_dir, resolve_excluded_models_path, resolve_socket_path, resolve_state_dir
+from aside.overlay.positioning import DIRECTIONS, SLOTS
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +213,26 @@ def _build_parser() -> argparse.ArgumentParser:
     view_cmd = sub.add_parser("view", help="View a conversation in the overlay")
     view_cmd.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
 
+    # aside move <slot|direction|reset>
+    move_cmd = sub.add_parser("move", help="Move the overlay (session-only)")
+    move_cmd.add_argument(
+        "where",
+        choices=list(SLOTS) + list(DIRECTIONS) + ["reset"],
+        help="Absolute slot, directional step, or 'reset' to config position",
+    )
+
+    # aside resize [--width SPEC] [--max-height SPEC] [--reset]
+    resize_cmd = sub.add_parser("resize", help="Resize the overlay (session-only)")
+    resize_cmd.add_argument("--width", help='Width: "+50", "-50", or absolute "450"')
+    resize_cmd.add_argument(
+        "--max-height", dest="max_height",
+        help='Max height: "+100", "-100", or absolute "300"',
+    )
+    resize_cmd.add_argument(
+        "--reset", action="store_true", default=False,
+        help="Restore config width/max_height (overrides --width/--max-height)",
+    )
+
     # aside reply [CONVERSATION_ID] [TEXT] [--mic]
     reply = sub.add_parser("reply", help="Continue a conversation by ID")
     reply.add_argument("conversation_id", nargs="?", default=None, help="Conversation ID (default: most recent)")
@@ -297,6 +318,37 @@ def _cmd_view(args: argparse.Namespace) -> None:
     else:
         # Let the overlay decide — it knows the in-memory conversation
         _send_overlay({"cmd": "convo"})
+
+
+def _cmd_move(args: argparse.Namespace) -> None:
+    """Move the overlay to a slot, step a direction, or reset."""
+    # Membership disambiguation relies on SLOTS, DIRECTIONS, and "reset"
+    # being disjoint vocabularies (they are, by the spec).
+    if args.where in SLOTS:
+        _send_overlay({"cmd": "move", "to": args.where})
+    elif args.where in DIRECTIONS:
+        _send_overlay({"cmd": "move", "step": args.where})
+    else:  # "reset" — argparse choices guarantee this is the only other value
+        _send_overlay({"cmd": "move", "reset": True})
+
+
+def _cmd_resize(args: argparse.Namespace) -> None:
+    """Resize the overlay width/max_height, or reset to config."""
+    if args.reset:
+        _send_overlay({"cmd": "resize", "reset": True})
+        return
+    if args.width is None and args.max_height is None:
+        print(
+            "Error: resize requires --width, --max-height, or --reset",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    msg: dict = {"cmd": "resize"}
+    if args.width is not None:
+        msg["width"] = args.width
+    if args.max_height is not None:
+        msg["max_height"] = args.max_height
+    _send_overlay(msg)
 
 
 def _cmd_reply(args: argparse.Namespace) -> None:
@@ -709,6 +761,8 @@ _HANDLERS = {
     "query": _cmd_query,
     "input": _cmd_input,
     "view": _cmd_view,
+    "move": _cmd_move,
+    "resize": _cmd_resize,
     "reply": _cmd_reply,
     "cancel": _cmd_cancel,
     "stop-tts": _cmd_stop_tts,

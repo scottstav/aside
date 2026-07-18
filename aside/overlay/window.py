@@ -22,8 +22,21 @@ from aside.overlay.conversation import ConversationHistory
 from aside.overlay.theme import load_theme_css
 from aside.overlay.picker import ConversationPicker
 from aside.overlay.reply_input import ReplyInput
+from aside.overlay.positioning import (
+    SessionGeometry,
+    anchor_spec,
+    apply_move_payload,
+    apply_resize_payload,
+)
 
 log = logging.getLogger(__name__)
+
+_LAYER_EDGES = {
+    "top": Gtk4LayerShell.Edge.TOP,
+    "bottom": Gtk4LayerShell.Edge.BOTTOM,
+    "left": Gtk4LayerShell.Edge.LEFT,
+    "right": Gtk4LayerShell.Edge.RIGHT,
+}
 
 
 class OverlayState(enum.Enum):
@@ -54,13 +67,15 @@ class OverlayWindow(Gtk.Window):
         self._dismiss_timeout: float = overlay_cfg.get("dismiss_timeout", 5.0)
         self._markdown_enabled = overlay_cfg.get("markdown", True)
 
-        # Dimensions
-        width = overlay_cfg.get("width", 400)
-        self._default_width = width
-        max_height = overlay_cfg.get("max_height", 500)
+        # Dimensions & position: config defaults + session-only overrides
+        self._geometry = SessionGeometry(
+            config_position=overlay_cfg.get("position", "top-center"),
+            config_width=overlay_cfg.get("width", 400),
+            config_max_height=overlay_cfg.get("max_height", 500),
+        )
         self.set_title("aside")
         self.set_decorated(False)
-        self.set_size_request(width, -1)
+        self.set_size_request(self._geometry.effective_width, -1)
 
         # Layer-shell setup
         Gtk4LayerShell.init_for_window(self)
@@ -68,25 +83,8 @@ class OverlayWindow(Gtk.Window):
         Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
         Gtk4LayerShell.set_namespace(self, "aside")
 
-        # Anchoring from config
-        position = overlay_cfg.get("position", "top-center")
-        margin_top = overlay_cfg.get("margin_top", 10)
-        margin_left = overlay_cfg.get("margin_left", 0)
-        margin_right = overlay_cfg.get("margin_right", 0)
-
-        if "bottom" in position:
-            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.BOTTOM, True)
-            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.BOTTOM, margin_top)
-        else:
-            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.TOP, True)
-            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.TOP, margin_top)
-
-        if "left" in position:
-            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.LEFT, True)
-            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.LEFT, margin_left)
-        elif "right" in position:
-            Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT, True)
-            Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.RIGHT, margin_right)
+        # Anchoring: config position (plus any session override later)
+        self._apply_position(self._geometry.effective_position)
 
         # CSS — load from theme
         theme_name = overlay_cfg.get("theme", "default")
@@ -150,13 +148,12 @@ class OverlayWindow(Gtk.Window):
         self._main_box.append(self._stack)
 
         # --- Main view (history + action bar + reply) ---
-        self._max_height = max_height
         self._current_window_h = 0
         main_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         self._history = ConversationHistory(markdown=self._markdown_enabled)
         self._history.set_propagate_natural_height(True)
-        self._history.set_max_content_height(max_height)
+        self._history.set_max_content_height(self._geometry.effective_max_height)
         main_view.append(self._history)
 
         # Dynamic window sizing: grow with content, cap at max_height
@@ -252,10 +249,9 @@ class OverlayWindow(Gtk.Window):
                 new_state in (OverlayState.REPLY, OverlayState.CONVO)
             )
 
-        # Window sizing for CONVO: fixed at max_height, history fills remaining space
+        # Window sizing for CONVO: single rule lives in _apply_geometry
         if new_state == OverlayState.CONVO:
-            self.set_size_request(self._default_width, self._max_height)
-            self._current_window_h = self._max_height
+            self._apply_geometry()
 
     # --- Socket command handlers ---
 
@@ -329,7 +325,7 @@ class OverlayWindow(Gtk.Window):
         self._msgs_ready = False
         self.set_visible(False)
         self._current_window_h = 0
-        self.set_size_request(self._default_width, -1)
+        self.set_size_request(self._geometry.effective_width, -1)
         self._accent_bar.set_state(BarState.IDLE)
         self._set_state(OverlayState.HIDDEN)
 
@@ -424,6 +420,59 @@ class OverlayWindow(Gtk.Window):
         self._accent_bar.set_state(BarState.IDLE)
         self._reply.focus_input()
 
+    # --- Move / resize commands ---
+
+    def _apply_position(self, position: str) -> None:
+        """Anchor the surface for `position` — no string parsing here."""
+        spec = anchor_spec(position)
+        overlay_cfg = self._config.get("overlay", {})
+        margin_defaults = {"margin_top": 10, "margin_left": 0, "margin_right": 0}
+        for name, edge in _LAYER_EDGES.items():
+            anchored = name in spec
+            Gtk4LayerShell.set_anchor(self, edge, anchored)
+            if anchored:
+                key = spec[name]
+                margin = overlay_cfg.get(key, margin_defaults[key])
+                Gtk4LayerShell.set_margin(self, edge, margin)
+            else:
+                Gtk4LayerShell.set_margin(self, edge, 0)
+
+    def _apply_geometry(self) -> None:
+        """Apply effective width/height for the current state.
+
+        The single home of the state-conditional sizing rule: CONVO pins
+        the window at effective max_height; all other states use natural
+        height capped by _on_content_changed.
+        """
+        width = self._geometry.effective_width
+        max_h = self._geometry.effective_max_height
+        self._history.set_max_content_height(max_h)
+        if self._state == OverlayState.CONVO:
+            self.set_size_request(width, max_h)
+            self._current_window_h = max_h
+        else:
+            self.set_size_request(width, -1)
+            self._on_content_changed(None)
+
+    def handle_move(self, payload: dict) -> None:
+        """Move the overlay — validation delegated to positioning."""
+        try:
+            apply_move_payload(self._geometry, payload)
+        except ValueError:
+            log.debug("move: invalid payload %r", payload)
+            return
+        self._apply_position(self._geometry.effective_position)
+
+    def handle_resize(self, payload: dict) -> None:
+        """Resize the overlay — validation delegated to positioning."""
+        try:
+            apply_resize_payload(self._geometry, payload)
+        except ValueError:
+            log.debug("resize: invalid payload %r", payload)
+            return
+        self._current_window_h = 0
+        self._apply_geometry()
+
     # --- Window sizing ---
 
     def _on_content_changed(self, vadj) -> None:
@@ -439,12 +488,12 @@ class OverlayWindow(Gtk.Window):
         ):
             return
         _, nat_h, _, _ = self._main_box.measure(
-            Gtk.Orientation.VERTICAL, self._default_width
+            Gtk.Orientation.VERTICAL, self._geometry.effective_width
         )
-        target = min(math.ceil(nat_h), self._max_height)
+        target = min(math.ceil(nat_h), self._geometry.effective_max_height)
         if target != self._current_window_h:
             self._current_window_h = target
-            self.set_size_request(self._default_width, target)
+            self.set_size_request(self._geometry.effective_width, target)
 
     # --- Dismiss timer ---
 
