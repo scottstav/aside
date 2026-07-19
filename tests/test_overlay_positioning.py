@@ -316,3 +316,26 @@ class TestApplyResizePayload:
         with pytest.raises(ValueError):
             apply_resize_payload(geo, {"width": "+50", "max_height": "junk"})
         assert geo.effective_width == 400
+
+
+from aside.overlay.positioning import KEYBOARD_MODES, keyboard_mode_for_state
+
+
+class TestKeyboardModeForState:
+    def test_modes_vocabulary(self):
+        assert KEYBOARD_MODES == ("exclusive", "on_demand", "none")
+
+    def test_reply_and_picker_exclusive(self):
+        assert keyboard_mode_for_state("reply") == "exclusive"
+        assert keyboard_mode_for_state("picker") == "exclusive"
+
+    def test_convo_on_demand(self):
+        assert keyboard_mode_for_state("convo") == "on_demand"
+
+    def test_display_states_none(self):
+        assert keyboard_mode_for_state("hidden") == "none"
+        assert keyboard_mode_for_state("streaming") == "none"
+        assert keyboard_mode_for_state("display") == "none"
+
+    def test_unknown_state_falls_back_to_none(self):
+        assert keyboard_mode_for_state("nonsense") == "none"
