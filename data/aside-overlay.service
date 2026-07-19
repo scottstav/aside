@@ -1,6 +1,7 @@
 [Unit]
 Description=aside - Wayland text overlay
 After=graphical-session.target
+PartOf=graphical-session.target
 StartLimitIntervalSec=0
 
 [Service]
@@ -10,4 +11,4 @@ Restart=always
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
