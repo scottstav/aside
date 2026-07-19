@@ -13,7 +13,7 @@ The main CLI. All subcommands talk to the daemon over a Unix socket.
 | `aside reply ID [TEXT]` | Continue a conversation by ID (prompts for input if no text given) |
 | `aside reply ID --mic` | Continue a conversation via voice capture |
 | `aside input` | Open the conversation picker in the overlay |
-| `aside view ID` | View a conversation in the overlay |
+| `aside view ID` | View a conversation in the overlay. The panel stays open and holds the keyboard only while focused — click it to reply or select/copy text, click another window to keep working beside it. Escape dismisses it only while it has focus. |
 | `aside move SLOT\|DIR\|reset` | Move the overlay: a slot (`top-left` … `bottom-right`), a directional step (`up`/`down`/`left`/`right`), or `reset` to the config position (session-only) |
 | `aside resize [--width SPEC] [--max-height SPEC] [--reset]` | Resize the overlay: `"+50"`/`"-50"` relative or `"450"` absolute; `--reset` restores config dimensions (session-only) |
 | `aside ls [-n LIMIT]` | List recent conversations (default: 20) |

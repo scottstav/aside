@@ -35,6 +35,8 @@ The **daemon** is the central process. It listens on a Unix socket for commands 
 
 The **overlay** is a GTK4 application using gtk4-layer-shell. It reads configuration from `~/.config/aside/config.toml` and receives streaming text, reply inputs, and conversation views over its own Unix socket. It handles streaming display, inline reply, full conversation history, and the conversation picker — all in a single process.
 
+Keyboard mode is per-state (policy in `aside/overlay/positioning.py`): reply and picker grab the keyboard exclusively (summon-type-dismiss), the conversation view uses on-demand keyboard (a persistent panel that holds the keyboard only while focused, so other applications stay usable beside it), and display-only states never take the keyboard.
+
 **Clients** (`aside` CLI) connect to the daemon socket to send commands. The CLI also sends display commands to the overlay socket (e.g. `aside input`, `aside view`, `aside reply`). `aside status` reads the status file directly for waybar integration.
 
 ## Socket protocol

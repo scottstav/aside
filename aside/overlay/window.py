@@ -27,6 +27,7 @@ from aside.overlay.positioning import (
     anchor_spec,
     apply_move_payload,
     apply_resize_payload,
+    keyboard_mode_for_state,
 )
 
 log = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ _LAYER_EDGES = {
     "bottom": Gtk4LayerShell.Edge.BOTTOM,
     "left": Gtk4LayerShell.Edge.LEFT,
     "right": Gtk4LayerShell.Edge.RIGHT,
+}
+
+_KEYBOARD_MODES = {
+    "exclusive": Gtk4LayerShell.KeyboardMode.EXCLUSIVE,
+    "on_demand": Gtk4LayerShell.KeyboardMode.ON_DEMAND,
+    "none": Gtk4LayerShell.KeyboardMode.NONE,
 }
 
 
@@ -226,16 +233,10 @@ class OverlayWindow(Gtk.Window):
         self._state = new_state
         log.debug("state: %s -> %s", old_state.value, new_state.value)
 
-        # Keyboard mode: EXCLUSIVE only for states with text input.
-        # NONE for display-only states so the overlay never steals focus.
-        if new_state in (OverlayState.REPLY, OverlayState.CONVO, OverlayState.PICKER):
-            Gtk4LayerShell.set_keyboard_mode(
-                self, Gtk4LayerShell.KeyboardMode.EXCLUSIVE
-            )
-        else:
-            Gtk4LayerShell.set_keyboard_mode(
-                self, Gtk4LayerShell.KeyboardMode.NONE
-            )
+        # Keyboard mode: policy lives in positioning.keyboard_mode_for_state.
+        Gtk4LayerShell.set_keyboard_mode(
+            self, _KEYBOARD_MODES[keyboard_mode_for_state(new_state.value)]
+        )
 
         # Widget visibility (only for main view states)
         if new_state in (
