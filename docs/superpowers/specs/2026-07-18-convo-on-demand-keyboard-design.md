@@ -1,3 +1,18 @@
+---
+type: spec
+validated:
+  sha: 19ed73bb7247df3a01c529d06b0fbc39f0d6118e
+  date: 2026-07-19T01:12:45Z
+  reviewers: [fact-check, solid-hygiene]
+  findings:
+    critical: 0
+    important: 0
+    medium: 0
+    low: 1
+    nitpick: 0
+  net_negative_remaining: 0
+---
+
 # CONVO on-demand keyboard — design
 
 **Date:** 2026-07-18
@@ -35,9 +50,36 @@ involves keyboard state; this change cannot affect it.
 
 ## Implementation
 
-One change, in `OverlayWindow._set_state` (`aside/overlay/window.py:229-238`).
+The state→mode *decision* goes into the pure module, following the
+pattern `positioning.py` established for move/resize: policy is plain
+GTK-free Python, `window.py` only applies it.
 
-Replace:
+**`aside/overlay/positioning.py`** — append:
+
+```python
+KEYBOARD_MODES = ("exclusive", "on_demand", "none")
+
+
+def keyboard_mode_for_state(state_value: str) -> str:
+    """Keyboard-mode policy per overlay state (state enum's .value string).
+
+    - "reply"/"picker": exclusive — summon-type-dismiss moments own the
+      keyboard.
+    - "convo": on_demand — persistent panel; keyboard only while focused,
+      so other apps stay usable alongside it.
+    - everything else: none — never steal focus.
+    """
+    if state_value in ("reply", "picker"):
+        return "exclusive"
+    if state_value == "convo":
+        return "on_demand"
+    return "none"
+```
+
+(Takes the enum's `.value` string, not `OverlayState` itself — importing
+the enum from `window.py` would drag GTK into the pure module.)
+
+**`OverlayWindow._set_state`** (`aside/overlay/window.py:229-238`) — replace:
 
 ```python
         # Keyboard mode: EXCLUSIVE only for states with text input.
@@ -55,19 +97,32 @@ Replace:
 with:
 
 ```python
-        # Keyboard mode per state:
-        #   REPLY/PICKER — EXCLUSIVE: summon-type-dismiss moments own the keyboard.
-        #   CONVO — ON_DEMAND: persistent panel; keyboard only while focused,
-        #     so other apps stay usable alongside it.
-        #   Everything else — NONE: never steal focus.
-        if new_state in (OverlayState.REPLY, OverlayState.PICKER):
-            mode = Gtk4LayerShell.KeyboardMode.EXCLUSIVE
-        elif new_state is OverlayState.CONVO:
-            mode = Gtk4LayerShell.KeyboardMode.ON_DEMAND
-        else:
-            mode = Gtk4LayerShell.KeyboardMode.NONE
-        Gtk4LayerShell.set_keyboard_mode(self, mode)
+        # Keyboard mode: policy lives in positioning.keyboard_mode_for_state.
+        Gtk4LayerShell.set_keyboard_mode(
+            self, _KEYBOARD_MODES[keyboard_mode_for_state(new_state.value)]
+        )
 ```
+
+plus a module-level mapping next to `_LAYER_EDGES`:
+
+```python
+_KEYBOARD_MODES = {
+    "exclusive": Gtk4LayerShell.KeyboardMode.EXCLUSIVE,
+    "on_demand": Gtk4LayerShell.KeyboardMode.ON_DEMAND,
+    "none": Gtk4LayerShell.KeyboardMode.NONE,
+}
+```
+
+and `keyboard_mode_for_state` added to the existing
+`from aside.overlay.positioning import ...` in `window.py`.
+
+> **Design note (2026-07-18, spec validation):** Reviewer feedback flagged
+> that extending the inline if/else would keep the state→mode policy fused
+> with the GTK call — the exact shape `positioning.py` was carved out to
+> avoid — leaving it untestable without a compositor. Extracted the policy
+> as a pure function (string token in, string token out, same trick as
+> `anchor_spec`'s config-key strings), so the mapping is pytest-covered
+> for all six states and `_set_state` shrinks to application only.
 
 Documentation: note the panel behavior in `docs/usage.md` (`aside view`
 row: panel keeps keyboard only while focused; click back to reply;
@@ -96,9 +151,12 @@ Escape dismisses only while focused) and the keyboard-mode table row in
 
 ## Testing
 
-- **pytest:** no new unit tests — the change is a GTK/layer-shell call
-  selected by state, not reachable without a compositor. Full suite must
-  stay green (426 tests).
+- **pytest:** `keyboard_mode_for_state` — all six state values map to the
+  expected token (`hidden/streaming/display → "none"`, `reply/picker →
+  "exclusive"`, `convo → "on_demand"`), plus unknown-string fallback to
+  `"none"`. The GTK application side (enum mapping + `set_keyboard_mode`
+  call) remains compositor-only, verified on the VM. Full suite must stay
+  green.
 - **VM (manual + `dev/vm-demo.sh` GIF):**
   1. `aside view <id>` → panel opens; `konsole` (or any app) focused →
      typing reaches that app while panel stays visible.
