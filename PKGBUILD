@@ -28,6 +28,8 @@ makedepends=(
 optdepends=(
     'portaudio: voice input (aside enable-stt)'
     'pipewire: voice input via pw-record'
+    'python-trafilatura: read_web tool — clean text extraction'
+    'python-playwright: read_web tool — JavaScript-rendered pages'
 )
 source=(
     "$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz"

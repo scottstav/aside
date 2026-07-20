@@ -15,7 +15,7 @@ Bind `aside query --mic` to a hotkey and start talking. Aside detects silence an
 
 Where the magic happens
 
-aside ships with a memory tool built in. To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
+aside ships with built-in tools: memory (save/recall across conversations) and read_web (fetch any URL and return its clean readable text — renders JavaScript pages via headless Chromium; install with `pip install aside-assistant[web]` + `playwright install chromium`). To add your own, just drop a Python file with a `TOOL_SPEC` + `run()` into a tool directory and the daemon picks it up automatically (requires restart). See `examples/tools/` for reference implementations.
 
 ## any LLM
 
