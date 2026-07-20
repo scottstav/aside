@@ -195,3 +195,22 @@ def apply_resize_payload(geometry: SessionGeometry, payload: dict) -> None:
     if width_spec is None and max_height_spec is None:
         raise ValueError("resize: requires width, max_height, or reset")
     geometry.resize(width_spec, max_height_spec)
+
+
+KEYBOARD_MODES = ("exclusive", "on_demand", "none")
+
+
+def keyboard_mode_for_state(state_value: str) -> str:
+    """Keyboard-mode policy per overlay state (state enum's .value string).
+
+    - "reply"/"picker": exclusive — summon-type-dismiss moments own the
+      keyboard.
+    - "convo": on_demand — persistent panel; keyboard only while focused,
+      so other apps stay usable alongside it.
+    - everything else: none — never steal focus.
+    """
+    if state_value in ("reply", "picker"):
+        return "exclusive"
+    if state_value == "convo":
+        return "on_demand"
+    return "none"
