@@ -54,19 +54,13 @@ The daemon listens on `$XDG_RUNTIME_DIR/aside.sock`. The CLI sends queries there
 
 ## Releasing
 
-When asked to release, do all of these steps:
+Releases are automated by `.github/workflows/release.yml` (python-semantic-release, configured in `pyproject.toml` under `[tool.semantic_release]`). Merging Conventional-Commit work to `master` is the release action:
 
-1. Bump version in `pyproject.toml` and `PKGBUILD`
-2. Commit, push, tag (`vX.Y.Z`), push tag
-3. Create GitHub release with `gh release create` — put breaking changes and migration notes here
-4. Get the sha256sum of the new tarball: `curl -sL "https://github.com/scottstav/aside/archive/vX.Y.Z.tar.gz" | sha256sum`
-5. Update `PKGBUILD` sha256sum and `.SRCINFO` (version + source + sha256sum), commit, push
-6. Clone AUR repo, copy PKGBUILD and .SRCINFO, commit, push:
-   ```bash
-   git clone ssh://aur@aur.archlinux.org/aside.git /tmp/aside-aur
-   cp PKGBUILD .SRCINFO /tmp/aside-aur/
-   cd /tmp/aside-aur && git add -A && git commit -m "update to vX.Y.Z" && git push
-   ```
+- `feat:` → minor bump, `fix:`/`perf:` → patch; while we're on 0.x, breaking changes also bump minor (`major_on_zero = false`). `docs:`/`chore:`/`build:`/`ci:` cut no release.
+- The workflow bumps `pyproject.toml` + `PKGBUILD`, commits `release: vX.Y.Z`, tags, publishes the GitHub release + CHANGELOG.md, fills the real tarball sha256 into `PKGBUILD`/`.SRCINFO` on master, and pushes the update to the AUR.
+- Needs the `AUR_SSH_PRIVATE_KEY` repo secret (private key for the AUR maintainer account). If the AUR job fails, the tag/GitHub release still exist — fix and re-run the job from the Actions UI.
+
+Manual fallback if the workflow is broken: bump both version fields, commit + tag `vX.Y.Z` + push, `gh release create`, sha256 the tarball (`curl -sL "https://github.com/scottstav/aside/archive/vX.Y.Z.tar.gz" | sha256sum`) into `PKGBUILD`/`.SRCINFO`, then clone `ssh://aur@aur.archlinux.org/aside.git`, copy `PKGBUILD` + `.SRCINFO` in, commit "update to vX.Y.Z", push.
 
 ## Important Notes
 

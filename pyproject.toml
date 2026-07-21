@@ -27,3 +27,18 @@ include = ["aside*"]
 [project.scripts]
 aside = "aside.cli:main"
 aside-overlay = "aside.overlay.app:main"
+
+[tool.semantic_release]
+# Runs from .github/workflows/release.yml on every push to master.
+# Conventional Commits decide the bump; these two files carry the version.
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["PKGBUILD:pkgver"]
+tag_format = "v{version}"
+commit_message = "release: v{version} [skip ci]"
+# Stay in 0.x: PSR v10 otherwise promotes the first release it cuts to
+# 1.0.0. Flip major_on_zero to true when 1.0 is a deliberate decision.
+allow_zero_version = true
+major_on_zero = false
+
+[tool.semantic_release.branches.main]
+match = "master"
