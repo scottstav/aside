@@ -1,0 +1,89 @@
+name: Release
+
+# Semantic-release on every push to master: Conventional Commits decide the
+# bump (feat → minor, fix → patch, BREAKING CHANGE → major; docs/chore/build
+# → no release). python-semantic-release bumps pyproject.toml + PKGBUILD's
+# pkgver, commits, tags vX.Y.Z, and creates the GitHub release. The aur job
+# then fills the real tarball checksum into PKGBUILD/.SRCINFO (it can't be
+# known before the tag exists — the tarball contains PKGBUILD itself),
+# mirrors that back to master, and publishes to the AUR.
+#
+# Requires the AUR_SSH_PRIVATE_KEY secret: a private key whose public half
+# is registered for the `aside` package's maintainer account on
+# aur.archlinux.org.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semrel.outputs.released }}
+      version: ${{ steps.semrel.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Semantic release
+        id: semrel
+        uses: python-semantic-release/python-semantic-release@v10.6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  aur:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release job just pushed the version-bump commit; master HEAD
+          # carries the bumped pkgver.
+          ref: master
+
+      - name: Fill tarball sha256 into PKGBUILD and .SRCINFO
+        run: |
+          version='${{ needs.release.outputs.version }}'
+          # Guard against a racing push: the checked-out PKGBUILD must be the
+          # one the release job bumped.
+          grep -q "^pkgver=${version}\$" PKGBUILD
+          url="https://github.com/scottstav/aside/archive/v${version}.tar.gz"
+          # Codeload can lag a freshly pushed tag by a few seconds.
+          sha=''
+          for _ in 1 2 3 4 5; do
+            sha=$(curl -sfL "$url" | sha256sum | cut -d' ' -f1) && break
+            sleep 15
+          done
+          test -n "$sha"
+          sed -i "s/^sha256sums=.*/sha256sums=('${sha}')/" PKGBUILD
+          sed -i \
+            -e "s/^\tpkgver = .*/\tpkgver = ${version}/" \
+            -e "s|^\tsource = .*|\tsource = aside-${version}.tar.gz::https://github.com/scottstav/aside/archive/v${version}.tar.gz|" \
+            -e "s/^\tsha256sums = .*/\tsha256sums = ${sha}/" \
+            .SRCINFO
+          git diff --stat
+
+      - name: Mirror checksum back to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "build: PKGBUILD sha256 and .SRCINFO for v${{ needs.release.outputs.version }} [skip ci]"
+          git push origin HEAD:master
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: aside
+          pkgbuild: ./PKGBUILD
+          commit_username: scottstav
+          commit_email: scottstavinoha@gmail.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: update to v${{ needs.release.outputs.version }}
