@@ -329,8 +329,10 @@ class TestKeyboardModeForState:
         assert keyboard_mode_for_state("reply") == "exclusive"
         assert keyboard_mode_for_state("picker") == "exclusive"
 
-    def test_convo_on_demand(self):
-        assert keyboard_mode_for_state("convo") == "on_demand"
+    def test_convo_exclusive_modal(self):
+        # Modal glance: on-demand is implementation-defined and verified
+        # broken (Hyprland pins; sway never focuses on click).
+        assert keyboard_mode_for_state("convo") == "exclusive"
 
     def test_display_states_none(self):
         assert keyboard_mode_for_state("hidden") == "none"
