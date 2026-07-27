@@ -203,14 +203,18 @@ KEYBOARD_MODES = ("exclusive", "on_demand", "none")
 def keyboard_mode_for_state(state_value: str) -> str:
     """Keyboard-mode policy per overlay state (state enum's .value string).
 
-    - "reply"/"picker": exclusive — summon-type-dismiss moments own the
-      keyboard.
-    - "convo": on_demand — persistent panel; keyboard only while focused,
-      so other apps stay usable alongside it.
+    - "reply"/"picker"/"convo": exclusive — modal, summon-type-dismiss
+      interactions own the keyboard (Escape closes, Enter sends).
     - everything else: none — never steal focus.
+
+    The conversation view deliberately does NOT use the layer-shell
+    on-demand mode: its semantics are implementation-defined and verified
+    inconsistent — Hyprland pins the keyboard to the surface
+    (hyprwm/Hyprland#2264) and sway never transfers focus on click,
+    leaving the panel read-only with a dead Escape. Exclusive behaves
+    identically everywhere. Persistent-presence use cases belong to real
+    windows, not layer surfaces.
     """
-    if state_value in ("reply", "picker"):
+    if state_value in ("reply", "picker", "convo"):
         return "exclusive"
-    if state_value == "convo":
-        return "on_demand"
     return "none"

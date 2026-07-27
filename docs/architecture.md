@@ -35,9 +35,9 @@ The **daemon** is the central process. It listens on a Unix socket for commands 
 
 The **overlay** is a GTK4 application using gtk4-layer-shell. It reads configuration from `~/.config/aside/config.toml` and receives streaming text, reply inputs, and conversation views over its own Unix socket. It handles streaming display, inline reply, full conversation history, and the conversation picker — all in a single process.
 
-Keyboard mode is per-state (policy in `aside/overlay/positioning.py`): reply and picker grab the keyboard exclusively (summon-type-dismiss), the conversation view uses on-demand keyboard (a persistent panel that holds the keyboard only while focused, so other applications stay usable beside it), and display-only states never take the keyboard.
+Keyboard mode is per-state (policy in `aside/overlay/positioning.py`): reply, picker, and the conversation view grab the keyboard exclusively — they are modal, summon-type-dismiss interactions where Escape closes and Enter sends — and display-only states never take the keyboard.
 
-On-demand keyboard requires layer-shell protocol v4 (Plasma 6, sway/wlroots, and other current compositors). On older compositors (e.g. Plasma 5.27's layer-shell v3), gtk4-layer-shell logs a warning and the conversation view falls back to the previous exclusive-grab behavior.
+The conversation view deliberately avoids the layer-shell on-demand keyboard mode: the protocol leaves its semantics implementation-defined, and in practice compositors disagree (Hyprland pins the keyboard to on-demand surfaces, hyprwm/Hyprland#2264; sway never transfers focus to them on click, leaving a read-only panel with a dead Escape). Exclusive and none behave identically on every compositor. Persistent side-by-side conversation surfaces are planned as regular windows, where focus semantics are specified.
 
 **Clients** (`aside` CLI) connect to the daemon socket to send commands. The CLI also sends display commands to the overlay socket (e.g. `aside input`, `aside view`, `aside reply`). `aside status` reads the status file directly for waybar integration.
 
