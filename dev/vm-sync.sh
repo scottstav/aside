@@ -48,7 +48,7 @@ else: exit(1)
 }
 
 VM_IP="$(get_vm_ip)" || { echo "ERROR: VM '$VM_NAME' is not running. Run: vmt up $VM_NAME"; exit 1; }
-SSH_OPTS="-o StrictHostKeyChecking=no -o LogLevel=ERROR -i $SSH_KEY"
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -i $SSH_KEY"
 SSH_CMD="ssh $SSH_OPTS ubuntu@$VM_IP"
 
 ssh_run() { $SSH_CMD "$@"; }
@@ -136,6 +136,9 @@ do_rebuild() {
 
 do_restart() {
     echo "=> restart services"
+    # Ensure the seat compositor is up (getty@tty1 doesn't always start on
+    # restored-snapshot boots); only kick it when the wayland socket is absent.
+    ssh_run 'ls /run/user/1000/wayland-0 >/dev/null 2>&1 || (sudo systemctl restart getty@tty1 && timeout 30 bash -c "until [ -e /run/user/1000/wayland-0 ]; do sleep 1; done")' 2>&1
     ssh_run "systemctl --user restart aside-daemon aside-overlay && sleep 3" 2>&1
     echo "=> services restarted"
 }

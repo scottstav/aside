@@ -18,16 +18,19 @@ python -m venv .venv --system-site-packages && source .venv/bin/activate && pip 
 
 ## VM Testing
 
-Use `dev/vm-sync.sh` for the dev loop. VM: `aside-ubuntu-kde` via `~/projects/vmt`.
+Fast loop — restore the golden snapshot (seconds, offline, deterministic):
 
 ```bash
 cd ~/projects/vmt && source .venv/bin/activate
-vmt up aside-ubuntu-kde
-vmt ssh aside-ubuntu-kde -- "cloud-init status --wait"
-dev/vm-sync.sh --setup          # one command: deps + rsync + install + start
-dev/vm-sync.sh                  # iterate: rsync + rebuild + restart
-vmt view aside-ubuntu-kde       # open SPICE viewer
+vmt restore aside-ubuntu-kde golden
+virsh -c qemu:///system start vmt-aside-ubuntu-kde   # NOT `vmt up` — up recreates the disk and DESTROYS the snapshot
+cd ~/projects/aside && dev/vm-sync.sh                # rsync + install + restart services
+vmt view aside-ubuntu-kde                            # optional SPICE viewer
 ```
+
+Rebuild the golden snapshot only if it is lost or must change (full provision,
+~15 min): `dev/vm-golden.sh`. A second golden exists for the AUR-package test
+bed: `vmt restore arch-sway golden`.
 
 ## Socket Protocol
 
