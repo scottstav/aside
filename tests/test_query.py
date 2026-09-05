@@ -537,3 +537,38 @@ class TestSendQueryOverlay:
         open_cmds = [m for m in sent if m.get("cmd") == "open"]
         assert len(open_cmds) == 1
         assert open_cmds[0]["conv_id"] == "abc-123-def"
+
+
+# ---------------------------------------------------------------------------
+# send_query re-reads the keyring when the startup load missed the key
+# ---------------------------------------------------------------------------
+
+
+class TestSendQueryEnsuresKey:
+    @mock.patch("aside.query.ensure_key_for_model")
+    @mock.patch("aside.query.litellm.completion")
+    @mock.patch("aside.query._connect_overlay")
+    def test_send_query_ensures_key_for_configured_model(
+        self, mock_connect, mock_completion, mock_ensure
+    ):
+        mock_completion.return_value = iter([
+            _make_chunk(content="hi"),
+            _make_usage_chunk(10, 5),
+        ])
+        mock_connect.return_value = None
+
+        store = mock.Mock()
+        store.get_or_create.return_value = {"id": "abc", "messages": []}
+        status = mock.Mock()
+        status.speak_enabled = False
+
+        send_query(
+            text="hello",
+            conversation_id=NEW_CONVERSATION,
+            config={"model": {"name": "anthropic/claude-sonnet-4-6"}},
+            store=store,
+            status=status,
+            usage_log=mock.Mock(),
+        )
+
+        mock_ensure.assert_called_once_with("anthropic/claude-sonnet-4-6")

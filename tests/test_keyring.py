@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from aside.keyring import _kwallet_available, _gnome_available
+from aside.keyring import _LOOKUP_TIMEOUT, _kwallet_available, _gnome_available
 
 
 class TestBackendDetection:
@@ -48,7 +48,7 @@ class TestGetKey:
             ["kwalletcli-getentry", "-f", "aside", "-e", "anthropic-api-key"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=_LOOKUP_TIMEOUT,
         )
 
     def test_gnome_fallback_when_kwallet_unavailable(self):
@@ -66,7 +66,7 @@ class TestGetKey:
             ["secret-tool", "lookup", "service", "aside", "provider", "openai"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=_LOOKUP_TIMEOUT,
         )
 
     def test_gnome_fallback_when_kwallet_fails(self):
@@ -130,7 +130,7 @@ class TestSetKey:
             input="sk-test-123",
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=_LOOKUP_TIMEOUT,
         )
 
     def test_falls_back_to_gnome(self):
@@ -153,7 +153,7 @@ class TestSetKey:
             input="sk-openai-456",
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=_LOOKUP_TIMEOUT,
         )
 
     def test_falls_back_to_env_file(self, tmp_path):
@@ -206,3 +206,54 @@ class TestLoadKeyringKeys:
             # Should not even attempt to look up anthropic
             for call in mock_get.call_args_list:
                 assert call[0][0] != "anthropic"
+
+
+# ---------------------------------------------------------------------------
+# Startup race recovery — a keyring timeout at boot must not be permanent
+# ---------------------------------------------------------------------------
+
+from aside.keyring import ensure_key_for_model
+
+
+class TestLookupTimeout:
+    def test_timeout_outlasts_keyring_cold_start(self):
+        """5s raced gnome-keyring's D-Bus activation and dropped the key."""
+        assert _LOOKUP_TIMEOUT >= 20
+
+
+class TestEnsureKeyForModel:
+    def test_noop_when_key_already_present(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-already-here")
+        with mock.patch("aside.keyring.get_key") as mock_get:
+            assert ensure_key_for_model("anthropic/claude-sonnet-4-6") is True
+        mock_get.assert_not_called()
+
+    def test_recovers_key_after_startup_timeout(self, monkeypatch):
+        """The boot lookup timed out; the first query re-reads the keyring."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+        with mock.patch("aside.keyring.get_key", return_value="sk-from-keyring") as mock_get:
+            assert ensure_key_for_model("anthropic/claude-sonnet-4-6") is True
+        mock_get.assert_called_once_with("anthropic")
+        assert os.environ["ANTHROPIC_API_KEY"] == "sk-from-keyring"
+
+    def test_false_when_keyring_still_has_nothing(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+        with mock.patch("aside.keyring.get_key", return_value=None):
+            assert ensure_key_for_model("anthropic/claude-sonnet-4-6") is False
+
+    def test_maps_provider_prefix_to_its_own_env_var(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "")
+        with mock.patch("aside.keyring.get_key", return_value="gem-key") as mock_get:
+            assert ensure_key_for_model("gemini/gemini-2.0-flash") is True
+        mock_get.assert_called_once_with("gemini")
+        assert os.environ["GEMINI_API_KEY"] == "gem-key"
+
+    def test_unknown_provider_is_noop(self):
+        with mock.patch("aside.keyring.get_key") as mock_get:
+            assert ensure_key_for_model("ollama/llama3") is False
+        mock_get.assert_not_called()
+
+    def test_bare_model_without_provider_prefix_is_noop(self):
+        with mock.patch("aside.keyring.get_key") as mock_get:
+            assert ensure_key_for_model("claude-sonnet-4-6") is False
+        mock_get.assert_not_called()

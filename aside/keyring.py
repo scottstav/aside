@@ -25,6 +25,11 @@ _PROVIDER_TO_ENV = {
 
 _ENV_TO_PROVIDER = {v: k for k, v in _PROVIDER_TO_ENV.items()}
 
+# Keyring lookups at login race the desktop keyring's own cold start: the
+# first secret-tool call has to D-Bus-activate gnome-keyring-daemon, which
+# regularly takes longer than a handful of seconds on a fresh boot.
+_LOOKUP_TIMEOUT = 30
+
 
 def _kwallet_available() -> bool:
     """Check if kwalletcli tools are installed."""
@@ -56,7 +61,7 @@ def get_key(provider: str) -> str | None:
                 ["kwalletcli-getentry", "-f", "aside", "-e", f"{provider}-api-key"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=_LOOKUP_TIMEOUT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 log.info("Retrieved %s key from KWallet", provider)
@@ -70,7 +75,7 @@ def get_key(provider: str) -> str | None:
                 ["secret-tool", "lookup", "service", "aside", "provider", provider],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=_LOOKUP_TIMEOUT,
             )
             if result.returncode == 0 and result.stdout.strip():
                 log.info("Retrieved %s key from GNOME Keyring", provider)
@@ -93,7 +98,7 @@ def set_key(provider: str, key: str) -> str:
                 input=key,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=_LOOKUP_TIMEOUT,
             )
             if result.returncode == 0:
                 log.info("Stored %s key in KWallet", provider)
@@ -113,7 +118,7 @@ def set_key(provider: str, key: str) -> str:
                 input=key,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=_LOOKUP_TIMEOUT,
             )
             if result.returncode == 0:
                 log.info("Stored %s key in GNOME Keyring", provider)
@@ -152,3 +157,27 @@ def load_keyring_keys() -> None:
         key = get_key(provider)
         if key:
             os.environ[env_var] = key
+
+
+def ensure_key_for_model(model: str) -> bool:
+    """Ensure the API key for *model*'s provider is in the environment.
+
+    ``load_keyring_keys()`` runs once at startup, where it races the desktop
+    keyring's cold start.  When that read times out the daemon would otherwise
+    stay keyless until the next restart, so queries call this to re-read the
+    keyring once it is actually up.
+
+    Returns True when the key is available, False otherwise.
+    """
+    provider = model.split("/", 1)[0] if "/" in model else ""
+    env_var = _PROVIDER_TO_ENV.get(provider)
+    if env_var is None:
+        return False
+    if os.environ.get(env_var):
+        return True
+    key = get_key(provider)
+    if not key:
+        return False
+    os.environ[env_var] = key
+    log.info("Loaded %s from keyring on demand", env_var)
+    return True

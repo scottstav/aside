@@ -19,6 +19,7 @@ from pathlib import Path
 import litellm
 
 from aside.config import resolve_socket_path
+from aside.keyring import ensure_key_for_model
 from aside.plugins import run_tool
 from aside.sentence_buffer import SentenceBuffer
 
@@ -459,6 +460,7 @@ def send_query(
         conv = store.get_or_create(resolved) if resolved else store.get_or_create()
 
     model = config.get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
+    ensure_key_for_model(model)
     timeout = config.get("model", {}).get("timeout", 30)
     system_prompt = _build_system_prompt()
 
