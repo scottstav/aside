@@ -5,7 +5,7 @@ SYSTEMD  := $(HOME)/.config/systemd/user
 APPS     := $(HOME)/.local/share/applications
 CONFIG   := $(HOME)/.config/aside
 
-.PHONY: all install dev system uninstall clean
+.PHONY: all install dev system uninstall clean release release-check
 
 all: install
 
@@ -44,6 +44,18 @@ system:
 	systemctl --user daemon-reload
 	systemctl --user restart aside-daemon aside-overlay
 	@echo "==> Switched to AUR build"
+
+# ---------------------------------------------------------------------------
+# Release: GitHub tag + release, AUR, and install here. See dev/release.sh.
+#   make release            patch bump
+#   make release V=0.9.0    explicit version
+#   make release-check      run the release gate only, publish nothing
+# ---------------------------------------------------------------------------
+release:
+	dev/release.sh $(V)
+
+release-check:
+	dev/release.sh --check
 
 # ---------------------------------------------------------------------------
 # Full install (non-AUR machines, VMs, etc.)

@@ -53,23 +53,19 @@ The daemon listens on `$XDG_RUNTIME_DIR/aside.sock`. The CLI sends queries there
 
 ## After Every Fix
 
-**Always run `make dev` after changing any code.** This reinstalls the Python package and restarts the systemd services so the fix is live on the user's machine immediately. Never commit a fix without installing it first.
+Run `make dev` while iterating so the change is live on this machine right away.
+
+A fix is done when it's released, not when it's on a branch. Once the tests pass, fast-forward it into master (no PR: there's no CI or reviewer for one to wait on) and run `make release`. Then `make system` if this machine was on the dev build, so it runs the released package.
 
 ## Releasing
 
-When asked to release, do all of these steps:
+`make release` (patch bump) or `make release V=0.9.0`. `make release-check` runs the gate alone and publishes nothing.
 
-1. Bump version in `pyproject.toml` and `PKGBUILD`
-2. Commit, push, tag (`vX.Y.Z`), push tag
-3. Create GitHub release with `gh release create` — put breaking changes and migration notes here
-4. Get the sha256sum of the new tarball: `curl -sL "https://github.com/scottstav/aside/archive/vX.Y.Z.tar.gz" | sha256sum`
-5. Update `PKGBUILD` sha256sum and `.SRCINFO` (version + source + sha256sum), commit, push
-6. Clone AUR repo, copy PKGBUILD and .SRCINFO, commit, push:
-   ```bash
-   git clone ssh://aur@aur.archlinux.org/aside.git /tmp/aside-aur
-   cp PKGBUILD .SRCINFO /tmp/aside-aur/
-   cd /tmp/aside-aur && git add -A && git commit -m "update to vX.Y.Z" && git push
-   ```
+`dev/release.sh` does every step: the test suite plus a live query through aside's own streaming code (`dev/smoke.py`) against the litellm that will actually ship, version bump, tag, GitHub release, tarball sha256 into `PKGBUILD`/`.SRCINFO`, a real `makepkg` build, install here (one pkexec prompt), then the AUR push. Nothing is published until the gate passes, and the AUR is pushed only after the package is installed and running here.
+
+The live query matters because the PKGBUILD installs litellm unpinned at build time, so every release is also a litellm upgrade, and the unit tests mock `litellm.completion`.
+
+Releases stay deliberate and local. Publishing from CI on every merge was tried and dropped (PR #12), so don't re-propose it.
 
 ## Important Notes
 
