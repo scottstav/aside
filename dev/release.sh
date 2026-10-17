@@ -41,6 +41,7 @@ die() {
     fi
     exit 1
 }
+trap 'die "unexpected failure at line $LINENO: $BASH_COMMAND"' ERR
 pyver() { "$1" -c 'import importlib.metadata as m; print(m.version("litellm"))'; }
 
 # ── version ────────────────────────────────────────────────────────────────
@@ -59,17 +60,19 @@ tag="v$version"
 step "Preflight: $current -> $version"
 [ "$(git rev-parse --abbrev-ref HEAD)" = master ] || die "not on master"
 git diff --quiet && git diff --cached --quiet || die "uncommitted changes"
-git fetch -q origin master --tags
+git fetch -q origin master
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] \
     || die "master and origin/master differ (pull or push first)"
-! git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "$tag already exists"
+! git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "$tag already exists locally"
+! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || die "$tag already exists on GitHub"
 prev=$(git describe --tags --abbrev=0)
 [ -n "$(git rev-list "$prev..HEAD")" ] || die "nothing to release since $prev"
 missing=$(pacman -T python-build python-wheel python-setuptools || true)
 [ -z "$missing" ] || die "missing makedepends: $missing"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
-ssh -o BatchMode=yes -o ConnectTimeout=10 aur@aur.archlinux.org list-repos 2>/dev/null \
-    | grep -qE '^\s*aside$' || die "no AUR ssh access to the aside package"
+aur_repos=$(ssh -o BatchMode=yes -o ConnectTimeout=10 aur@aur.archlinux.org list-repos 2>/dev/null) \
+    || die "can't reach the AUR over ssh"
+grep -qE '^\s*aside$' <<<"$aur_repos" || die "this AUR account doesn't maintain aside"
 pgrep -f polkit-gnome-authentication-agent-1 >/dev/null \
     || die "polkit agent isn't running (the install step needs its pkexec prompt)"
 
@@ -122,7 +125,7 @@ makepkg --printsrcinfo > .SRCINFO
 cp PKGBUILD "$tmp/pkg/"
 mkpkg() { (cd "$tmp/pkg" && BUILDDIR="$tmp/build" PKGDEST="$tmp/out" SRCDEST="$tmp/pkg" makepkg "$@"); }
 mkpkg -f --noconfirm || die "makepkg failed"
-pkgfile=$(mkpkg --packagelist | grep -v -- "-debug-" | head -1)
+pkgfile=$(mkpkg --packagelist | grep -v -- "-debug-" | sed -n 1p)
 [ -f "$pkgfile" ] || die "built package not found"
 
 step "Smoke the built package"
