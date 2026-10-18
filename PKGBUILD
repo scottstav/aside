@@ -44,7 +44,10 @@ build() {
     "$_pip" install --no-cache-dir --no-deps \
         "$srcdir/$pkgname-$pkgver/dist/aside_assistant-"*.whl
 
-    "$_pip" install --no-cache-dir litellm mistune
+    # Pinned: a new litellm ships only through a deliberate bump that passes
+    # the live query in dev/release.sh. Unpinned, 0.8.2 got 1.106.0, which
+    # imports mcp without installing it and broke every query.
+    "$_pip" install --no-cache-dir "litellm==1.93.0" mistune
 }
 
 package() {

@@ -65,7 +65,7 @@ Write the notes the way past releases read: a short title on the first line, the
 
 `dev/release.sh` does every step: the test suite plus a live query through aside's own streaming code (`dev/smoke.py`) against the litellm that will actually ship, version bump, tag, GitHub release, tarball sha256 into `PKGBUILD`/`.SRCINFO`, a real `makepkg` build, install here (one pkexec prompt), then the AUR push. Nothing is published until the gate passes, and the AUR is pushed only after the package is installed and running here.
 
-The live query matters because the PKGBUILD installs litellm unpinned at build time, so every release is also a litellm upgrade, and the unit tests mock `litellm.completion`. If the API refuses the account itself (bad key, spend limit), the live query is skipped with a warning, since that says nothing about the code. The test suite still gates the release.
+The live query matters because the unit tests mock `litellm.completion`. litellm is pinned in the PKGBUILD (`litellm==X.Y.Z`) so a release never picks up a new one silently: 0.8.2 shipped unpinned, got litellm 1.106.0, and every query died on a missing `mcp` module. Bump the pin deliberately. If the API refuses the account itself (bad key, spend limit) the live query is skipped with a warning, unless the pin changed since the last release: a new litellm ships only after a real query passes.
 
 Releases stay deliberate and local. Publishing from CI on every merge was tried and dropped (PR #12), so don't re-propose it.
 

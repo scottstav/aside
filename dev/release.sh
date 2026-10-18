@@ -10,12 +10,12 @@
 # is the body. Without it the notes are the commit subjects since last tag.
 #
 # Nothing public happens until the code passes the test suite and a live
-# query through aside's own streaming code (dev/smoke.py). Both run against
-# the litellm the package will actually ship: the PKGBUILD installs litellm
-# unpinned at build time, so every release is also a litellm upgrade that
-# the mocked unit tests can't see. If the API refuses the account itself (no
-# key, bad key, spend limit) the live query is skipped with a warning: that
-# says nothing about the code, and the test suite still gates the release.
+# query through aside's own streaming code (dev/smoke.py), both against the
+# litellm the PKGBUILD pins. The unit tests mock litellm.completion, so the
+# live query is the only check that a litellm version actually works. If the
+# API refuses the account itself (no key, bad key, spend limit) it is skipped
+# with a warning, unless the litellm pin changed since the last release: a
+# new litellm never ships without a real query passing.
 #
 # Order: preflight, gate, tag + GitHub release, build the real package from
 # the GitHub tarball, smoke the built package, install it here (one pkexec
@@ -53,7 +53,8 @@ smoke() {  # smoke <python> <smoke.py> <failure message>
     "$1" "$2" || rc=$?
     case $rc in
         0) ;;
-        2) echo "    live query skipped: the API refused this account, not the code" ;;
+        2) [ "$pin_changed" = 0 ] || die "$litellm_req is new since $prev and the live query couldn't run (the API refused this account). A litellm change only ships after a real query passes."
+           echo "    live query skipped: the API refused this account, not the code" ;;
         *) die "$3" ;;
     esac
 }
@@ -83,6 +84,12 @@ git fetch -q origin master
 prev=$(git describe --tags --abbrev=0)
 [ -n "$(git rev-list "$prev..HEAD")" ] || die "nothing to release since $prev"
 [ -z "${NOTES:-}" ] || [ -s "$NOTES" ] || die "NOTES file missing or empty: $NOTES"
+litellm_req=$(grep -m1 -oE 'litellm==[0-9][0-9.]*' PKGBUILD) \
+    || die "PKGBUILD must pin litellm (litellm==X.Y.Z)"
+prev_req=$(git show "$prev:PKGBUILD" | grep -m1 -oE 'litellm==[0-9][0-9.]*' || echo "unpinned litellm")
+pin_changed=0
+[ "$litellm_req" = "$prev_req" ] || pin_changed=1
+echo "    $litellm_req$([ "$pin_changed" = 1 ] && echo " (was $prev_req in $prev)")"
 missing=$(pacman -T python-build python-wheel python-setuptools || true)
 [ -z "$missing" ] || die "missing makedepends: $missing"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
@@ -101,10 +108,10 @@ mkdir -p "$tmp/src"
 git archive HEAD | tar -x -C "$tmp/src"
 python3 -m venv --system-site-packages "$tmp/venv"
 pip=("$tmp/venv/bin/pip" install -q --disable-pip-version-check)
-# Same resolution as the PKGBUILD's build(): aside without deps, then
-# litellm and mistune unpinned.
+# Same install as the PKGBUILD's build(): aside without deps, then the
+# pinned litellm and mistune.
 "${pip[@]}" --no-deps "$tmp/src"
-"${pip[@]}" litellm mistune pytest
+"${pip[@]}" "$litellm_req" mistune pytest
 gate_litellm=$(pyver "$tmp/venv/bin/python")
 echo "    litellm $gate_litellm"
 # The socket tests bind under pytest's tmp dir, and AF_UNIX paths cap at
