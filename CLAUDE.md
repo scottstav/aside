@@ -61,9 +61,11 @@ A fix is done when it's released, not when it's on a branch. Once the tests pass
 
 `make release` (patch bump) or `make release V=0.9.0`. `make release-check` runs the gate alone and publishes nothing.
 
+Write the notes the way past releases read: a short title on the first line, then what changed for the user and any upgrade steps. Keep the file outside the repo and pass it as `make release NOTES=path`.
+
 `dev/release.sh` does every step: the test suite plus a live query through aside's own streaming code (`dev/smoke.py`) against the litellm that will actually ship, version bump, tag, GitHub release, tarball sha256 into `PKGBUILD`/`.SRCINFO`, a real `makepkg` build, install here (one pkexec prompt), then the AUR push. Nothing is published until the gate passes, and the AUR is pushed only after the package is installed and running here.
 
-The live query matters because the PKGBUILD installs litellm unpinned at build time, so every release is also a litellm upgrade, and the unit tests mock `litellm.completion`.
+The live query matters because the PKGBUILD installs litellm unpinned at build time, so every release is also a litellm upgrade, and the unit tests mock `litellm.completion`. If the API refuses the account itself (bad key, spend limit), the live query is skipped with a warning, since that says nothing about the code. The test suite still gates the release.
 
 Releases stay deliberate and local. Publishing from CI on every merge was tried and dropped (PR #12), so don't re-propose it.
 

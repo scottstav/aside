@@ -5,6 +5,10 @@ that is about to ship. The unit tests mock litellm.completion, so this is
 the only check that catches a litellm upgrade changing stream chunks,
 tool-call deltas or usage reporting. Uses the model from your aside config
 and its key from the environment or keyring.
+
+Exit 0: passed. Exit 1: aside's code path is broken. Exit 2: skipped, because
+the API refused the account itself (no key, bad key, spend or rate limit),
+which says nothing about the code.
 """
 from __future__ import annotations
 
@@ -18,6 +22,22 @@ from aside.query import stream_response
 from aside.sentence_buffer import SentenceBuffer
 
 litellm.suppress_debug_info = True
+
+SKIPPED = 2
+ACCOUNT_ERRORS = tuple(
+    getattr(litellm, name)
+    for name in ("AuthenticationError", "PermissionDeniedError", "RateLimitError")
+    if hasattr(litellm, name)
+)
+ACCOUNT_MESSAGES = ("usage limit", "credit balance")
+
+
+def account_problem(e: Exception) -> bool:
+    """True when the API refused the account, not when aside's code failed."""
+    if isinstance(e, ACCOUNT_ERRORS):
+        return True
+    return isinstance(e, litellm.BadRequestError) and any(
+        m in str(e).lower() for m in ACCOUNT_MESSAGES)
 
 TOOL = {
     "type": "function",
@@ -46,8 +66,8 @@ def ask(model: str, prompt: str, tools: list[dict]):
 def main() -> int:
     model = load_config().get("model", {}).get("name", "anthropic/claude-sonnet-4-6")
     if not ensure_key_for_model(model):
-        print(f"smoke: no API key for {model} in the environment or keyring")
-        return 1
+        print(f"smoke: skipped, no API key for {model} in the environment or keyring")
+        return SKIPPED
 
     try:
         text, _, usage = ask(model, "Reply with the single word: ok", [])
@@ -62,8 +82,11 @@ def main() -> int:
         else:
             print(f"smoke: {model} never produced a parsed get_time tool call")
             return 1
-    except Exception as e:  # any provider or litellm failure fails the gate
+    except Exception as e:
         first = (str(e).splitlines() or [""])[0][:300]
+        if account_problem(e):
+            print(f"smoke: skipped, the API refused this account: {first}")
+            return SKIPPED
         print(f"smoke: {model}: {type(e).__name__}: {first}")
         return 1
 

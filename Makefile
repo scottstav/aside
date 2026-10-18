@@ -49,10 +49,11 @@ system:
 # Release: GitHub tag + release, AUR, and install here. See dev/release.sh.
 #   make release            patch bump
 #   make release V=0.9.0    explicit version
+#   make release NOTES=f    title on line 1, body after (else commit list)
 #   make release-check      run the release gate only, publish nothing
 # ---------------------------------------------------------------------------
 release:
-	dev/release.sh $(V)
+	NOTES="$(NOTES)" dev/release.sh $(V)
 
 release-check:
 	dev/release.sh --check

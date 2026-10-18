@@ -4,13 +4,18 @@
 #   dev/release.sh            # patch bump (0.8.1 -> 0.8.2)
 #   dev/release.sh 0.9.0      # explicit version
 #   dev/release.sh --check    # run the gate only, publish nothing
-#   make release [V=0.9.0]    # same as the first two
+#   make release [V=0.9.0] [NOTES=notes.md]
+#
+# NOTES: first line is the release title (shown after "vX.Y.Z: "), the rest
+# is the body. Without it the notes are the commit subjects since last tag.
 #
 # Nothing public happens until the code passes the test suite and a live
 # query through aside's own streaming code (dev/smoke.py). Both run against
 # the litellm the package will actually ship: the PKGBUILD installs litellm
 # unpinned at build time, so every release is also a litellm upgrade that
-# the mocked unit tests can't see.
+# the mocked unit tests can't see. If the API refuses the account itself (no
+# key, bad key, spend limit) the live query is skipped with a warning: that
+# says nothing about the code, and the test suite still gates the release.
 #
 # Order: preflight, gate, tag + GitHub release, build the real package from
 # the GitHub tarball, smoke the built package, install it here (one pkexec
@@ -20,6 +25,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+[ -z "${NOTES:-}" ] || NOTES=$(realpath -m -- "$NOTES")
 cd "$REPO"
 
 check_only=0
@@ -42,6 +48,15 @@ die() {
     exit 1
 }
 trap 'die "unexpected failure at line $LINENO: $BASH_COMMAND"' ERR
+smoke() {  # smoke <python> <smoke.py> <failure message>
+    local rc=0
+    "$1" "$2" || rc=$?
+    case $rc in
+        0) ;;
+        2) echo "    live query skipped: the API refused this account, not the code" ;;
+        *) die "$3" ;;
+    esac
+}
 pyver() { "$1" -c 'import importlib.metadata as m; print(m.version("litellm"))'; }
 
 # ── version ────────────────────────────────────────────────────────────────
@@ -67,6 +82,7 @@ git fetch -q origin master
 ! git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || die "$tag already exists on GitHub"
 prev=$(git describe --tags --abbrev=0)
 [ -n "$(git rev-list "$prev..HEAD")" ] || die "nothing to release since $prev"
+[ -z "${NOTES:-}" ] || [ -s "$NOTES" ] || die "NOTES file missing or empty: $NOTES"
 missing=$(pacman -T python-build python-wheel python-setuptools || true)
 [ -z "$missing" ] || die "missing makedepends: $missing"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
@@ -95,7 +111,7 @@ echo "    litellm $gate_litellm"
 # 108 bytes, so keep it short whatever TMPDIR the caller has.
 (cd "$tmp/src" && TMPDIR=/tmp "$tmp/venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
     || die "test suite failed"
-"$tmp/venv/bin/python" "$tmp/src/dev/smoke.py" || die "live smoke query failed"
+smoke "$tmp/venv/bin/python" "$tmp/src/dev/smoke.py" "live smoke query failed"
 
 if [ "$check_only" = 1 ]; then
     step "Gate passed. $tag is ready; run without --check to release it."
@@ -110,9 +126,15 @@ git commit -qam "release: $tag"
 git tag "$tag"
 git push -q origin master "$tag"
 published=1
-notes=$(git log --no-merges --format='- %s' "$prev..$tag~1" \
-    | grep -vE '^- (release|build)(\(|:)' || true)
-gh release create "$tag" --title "$tag" --notes "${notes:-Maintenance release.}" >/dev/null
+if [ -n "${NOTES:-}" ]; then
+    title="$tag: $(head -1 "$NOTES")"
+    notes=$(tail -n +2 "$NOTES" | sed '/./,$!d')
+else
+    title="$tag"
+    notes=$(git log --no-merges --format='- %s' "$prev..$tag~1" \
+        | grep -vE '^- (release|build)(\(|:)' || true)
+fi
+gh release create "$tag" --title "$title" --notes "${notes:-Maintenance release.}" >/dev/null
 
 # ── checksum + build exactly what the AUR will build ──────────────────────
 step "Build the package from the GitHub tarball"
@@ -142,7 +164,7 @@ if [ "$built_litellm" != "$gate_litellm" ]; then
     (cd "$tmp/build/aside/src/aside-$version" && TMPDIR=/tmp "$venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
         || die "test suite failed on the built package"
 fi
-"$venv/bin/python" "$REPO/dev/smoke.py" || die "live smoke failed on the built package"
+smoke "$venv/bin/python" "$REPO/dev/smoke.py" "live smoke failed on the built package"
 
 # ── install here, then the AUR ─────────────────────────────────────────────
 step "Install $tag here (approve the pkexec prompt)"
