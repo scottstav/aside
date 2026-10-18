@@ -10,7 +10,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
-    "litellm>=1.30.0",
+    "litellm==1.93.0",  # same pin as PKGBUILD; dev/release.sh checks they match
     "mistune>=3.0",
 ]
 

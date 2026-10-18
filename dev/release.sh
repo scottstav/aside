@@ -86,6 +86,9 @@ prev=$(git describe --tags --abbrev=0)
 [ -z "${NOTES:-}" ] || [ -s "$NOTES" ] || die "NOTES file missing or empty: $NOTES"
 litellm_req=$(grep -m1 -oE 'litellm==[0-9][0-9.]*' PKGBUILD) \
     || die "PKGBUILD must pin litellm (litellm==X.Y.Z)"
+py_req=$(grep -m1 -oE 'litellm==[0-9][0-9.]*' pyproject.toml) \
+    || die "pyproject.toml must pin litellm too, or make install gets whatever is newest"
+[ "$py_req" = "$litellm_req" ] || die "litellm pins differ: PKGBUILD $litellm_req, pyproject.toml $py_req"
 prev_req=$(git show "$prev:PKGBUILD" | grep -m1 -oE 'litellm==[0-9][0-9.]*' || echo "unpinned litellm")
 pin_changed=0
 [ "$litellm_req" = "$prev_req" ] || pin_changed=1
