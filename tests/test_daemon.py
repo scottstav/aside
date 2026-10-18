@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 import time
 from unittest import mock
@@ -39,7 +40,7 @@ def minimal_config(tmp_path):
 
 class TestMainStartupWiring:
     def test_main_calls_load_keyring_keys(self):
-        """main() should call load_keyring_keys between restore and cache."""
+        """main() reads the keyring first, then fills gaps from the cache."""
         call_order = []
 
         with mock.patch("aside.daemon._restore_api_keys", side_effect=lambda: call_order.append("restore")):
@@ -51,7 +52,28 @@ class TestMainStartupWiring:
                             from aside.daemon import main
                             main()
 
-        assert call_order == ["restore", "keyring", "cache"]
+        assert call_order == ["keyring", "restore", "cache"]
+
+    def test_rotated_keyring_key_beats_stale_runtime_cache(self, tmp_path):
+        """A key replaced in the keyring takes effect on the next restart.
+
+        The tmpfs cache used to be restored first, so a revoked key cached
+        there shadowed the new keyring key until the next reboot.
+        """
+        (tmp_path / "aside-api-keys").write_text(
+            json.dumps({"ANTHROPIC_API_KEY": "sk-revoked"}))
+
+        def fake_get_key(provider):
+            return "sk-rotated" if provider == "anthropic" else None
+
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(tmp_path)}):
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            with mock.patch("aside.keyring.get_key", side_effect=fake_get_key):
+                with mock.patch("aside.daemon.load_config", return_value={}):
+                    with mock.patch("aside.daemon.Daemon"):
+                        from aside.daemon import main
+                        main()
+            assert os.environ["ANTHROPIC_API_KEY"] == "sk-rotated"
 
 
 class TestDaemonConstruction:

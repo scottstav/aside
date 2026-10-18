@@ -550,11 +550,14 @@ def main() -> None:
     )
     if debug:
         log.info("Debug logging enabled")
-    _restore_api_keys()
-
+    # The keyring is the source of truth; the runtime cache only fills in
+    # keys it doesn't have (ones that came from the environment). Restoring
+    # the cache first let a revoked cached key shadow a rotated keyring key
+    # until the next reboot.
     from aside.keyring import load_keyring_keys
     load_keyring_keys()
 
+    _restore_api_keys()
     _cache_api_keys()
     config = load_config()
     Daemon(config).run()
