@@ -91,7 +91,9 @@ pip=("$tmp/venv/bin/pip" install -q --disable-pip-version-check)
 "${pip[@]}" litellm mistune pytest
 gate_litellm=$(pyver "$tmp/venv/bin/python")
 echo "    litellm $gate_litellm"
-(cd "$tmp/src" && "$tmp/venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
+# The socket tests bind under pytest's tmp dir, and AF_UNIX paths cap at
+# 108 bytes, so keep it short whatever TMPDIR the caller has.
+(cd "$tmp/src" && TMPDIR=/tmp "$tmp/venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
     || die "test suite failed"
 "$tmp/venv/bin/python" "$tmp/src/dev/smoke.py" || die "live smoke query failed"
 
@@ -137,7 +139,7 @@ if [ "$built_litellm" != "$gate_litellm" ]; then
     # PyPI moved during the release; re-run the suite on what actually ships
     echo "    litellm moved to $built_litellm during the build, re-running tests"
     "$venv/bin/pip" install -q --disable-pip-version-check pytest
-    (cd "$tmp/build/aside/src/aside-$version" && "$venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
+    (cd "$tmp/build/aside/src/aside-$version" && TMPDIR=/tmp "$venv/bin/python" -m pytest tests -q -p no:cacheprovider) \
         || die "test suite failed on the built package"
 fi
 "$venv/bin/python" "$REPO/dev/smoke.py" || die "live smoke failed on the built package"
